@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:installLocation="internalOnly">
+
+	<!-- Required permissions -->
+	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+	<application android:icon="@mipmap/ic_launcher"
+	    android:label="@string/app_name"
+		android:name=".MainApplication"
+		android:allowBackup="false"
+		android:usesCleartextTraffic="true">
+
+		<!-- Main React Native Activity -->
+		<activity android:name=".MainActivity"
+		    android:label="@string/app_name"
+			android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+			android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
+            android:exported="true">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+			</intent-filter>
+		</activity>
+
+		<!-- Agentforce Conversation Activity -->
+		<activity
+			android:name=".ServiceAgentConversationActivity"
+			android:theme="@style/Theme.Material3.DayNight"
+			android:exported="false" />
+		<!-- Override the FileProvider definitions from libraries -->
+		<provider
+			android:name="androidx.core.content.FileProvider"
+			android:authorities="${applicationId}.fileprovider"
+			android:exported="false"
+			android:grantUriPermissions="true"
+			tools:replace="android:authorities">
+			<meta-data
+				android:name="android.support.FILE_PROVIDER_PATHS"
+				android:resource="@xml/file_paths"
+				tools:replace="android:resource" />
+		</provider>
+
+		<provider
+			android:name="com.salesforce.android.agentforcesdkimpl.utils.AgentforcePDFFileProvider"
+			android:authorities="${applicationId}.pdffileprovider"
+			android:exported="false"
+			android:grantUriPermissions="true">
+			<meta-data
+				android:name="android.support.FILE_PROVIDER_PATHS"
+				android:resource="@xml/pdf_file_paths" />
+		</provider>
+        <activity android:name="com.facebook.react.devsupport.DevSettingsActivity"/>
+	</application>
+</manifest>

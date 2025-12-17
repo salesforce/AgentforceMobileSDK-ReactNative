@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>remoteAccessConsumerKey</key>
+	<string>3MVG9IbvNLVp_HkGnwoVFhiIYZuav_HHa13MLGDLfVAxH7BFP4KQJN6mqvyibtNO6UTPYeitDHy3wwJVYLUgC</string>
+	<key>oauthRedirectURI</key>
+	<string>https://login.salesforce.com/services/oauth2/success</string>
+	<key>oauthScopes</key>
+	<array>
+		<string>web</string>
+		<string>api</string>
+	</array>
+	<key>shouldAuthenticate</key>
+	<true/>
+</dict>
+</plist>
