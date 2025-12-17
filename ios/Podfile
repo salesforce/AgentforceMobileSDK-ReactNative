@@ -1,0 +1,74 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
+
+platform :ios, '17.0'
+prepare_react_native_project!
+use_modular_headers!
+
+use_frameworks!
+
+project 'ReactAgentforce.xcodeproj'
+target 'ReactAgentforce' do
+  source 'https://github.com/forcedotcom/SalesforceMobileSDK-iOS-Specs.git'
+  source 'https://github.com/livekit/podspecs.git'
+  source 'https://cdn.cocoapods.org/'
+
+  $config = use_native_modules!
+
+  use_react_native!(
+    :path => $config[:reactNativePath],
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  pod 'AgentforceSDK'
+  pod 'Messaging-InApp-Core', '1.9.3-Experimental' #AgentforceSDK uses a pre-release version of this for now
+  pod 'LiveKitClient' #This is required to ensure Cocoapods looks in the correct source location
+
+  pod 'DequeModule'
+  pod 'InternalCollectionsUtilities'
+  pod 'OrderedCollections'
+
+  pod 'Logging', '1.4.0'
+
+  # swift-markdown-ui from git repository
+  pod "swift-markdown-ui", :git => 'https://github.com/salesforce-misc/swift-markdown-ui.git', :branch => 'main'
+  pod "cmark_gfm", :git => 'https://github.com/salesforce-misc/swift-markdown-ui.git', :branch => 'main'
+
+end
+
+pre_install do |installer|
+  installer.pod_targets.each do |pod|
+    if pod.name.eql?('RNReanimated')
+      def pod.build_type
+        Pod::BuildType.static_library
+      end
+    end
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      # Set minimum deployment target for all pods
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
+      
+      # Enable module stability
+      config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
+      
+      # Disable code signing for frameworks
+      if defined?(target.product_type) && target.product_type == "com.apple.product-type.framework"
+        config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+      end
+    end
+  end
+
+  # React Native post-install
+  $config = use_native_modules!
+  
+  react_native_post_install(
+    installer,
+    $config[:reactNativePath],
+    :mac_catalyst_enabled => false
+  )
+end

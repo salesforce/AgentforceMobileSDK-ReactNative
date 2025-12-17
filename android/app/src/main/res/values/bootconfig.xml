@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+    <string name="remoteAccessConsumerKey">3MVG9IbvNLVp_HkGnwoVFhiIYZuav_HHa13MLGDLfVAxH7BFP4KQJN6mqvyibtNO6UTPYeitDHy3wwJVYLUgC</string>
+    <string name="oauthRedirectURI">https://login.salesforce.com/services/oauth2/success</string>
+    <string-array name="oauthScopes">
+        <item>api</item>
+		<item>web</item>
+    </string-array>
+</resources>
