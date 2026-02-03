@@ -88,18 +88,20 @@ npx react-native run-android
 
 ### Service Agent Settings
 
+Instructions for deploying [Enhanced Chat In-App available here.](https://help.salesforce.com/s/articleView?id=service.miaw_deployment_mobile.htm&type=5) This includes instructions on retrieving all these values.
+
 When you first launch the app, navigate to **Settings** and configure:
 
 1. **Service API URL** (required)
-   - Your Salesforce instance URL
-   - Example: `https://your-domain.my.salesforce.com`
+   - Your Salesforce Service Agent URL
+   - Example: `https://your-domain.my.salesforce-scrt.com`
 
 2. **Organization ID** (required)
-   - Your 15 or 18 character Salesforce Org ID
+   - Your 15 or 18 character Enhanced Chat Org ID
    - Example: `00D000000000000`
 
 3. **ES Developer Name** (required)
-   - The API name of your Einstein Service Agent
+   - The API name of your Enhanced Chat Service Agent
    - Example: `Your_Service_Agent_Name`
 
 4. **Save** the configuration
