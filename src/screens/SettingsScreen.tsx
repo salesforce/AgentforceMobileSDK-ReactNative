@@ -181,7 +181,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
           <View style={styles.fieldContainer}>
             <Text style={styles.label}>Service API URL</Text>
             <Text style={styles.hint}>
-              Your Salesforce instance URL (e.g., https://your-domain.my.salesforce.com)
+              Your Salesforce Service API URL (e.g., https://your-domain.my.salesforce-scrt.com)
             </Text>
             <TextInput
               style={styles.input}
@@ -200,7 +200,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
           <View style={styles.fieldContainer}>
             <Text style={styles.label}>Organization ID</Text>
             <Text style={styles.hint}>
-              Your 15 or 18 character Salesforce Org ID
+              Your 15 or 18 character Enhanced Chat Org ID
             </Text>
             <TextInput
               style={styles.input}
@@ -237,8 +237,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
         <View style={styles.infoBox}>
           <Text style={styles.infoIcon}>ℹ️</Text>
           <Text style={styles.infoText}>
-            You can find these values in your Salesforce Setup under Einstein
-            Service Agent configuration.
+            You can find these values in your Salesforce Setup under Enhanced
+            In-App Agent configuration. Link available in the ReadMe.
           </Text>
         </View>
 
