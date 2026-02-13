@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Components merged into host app's application -->
+    <application>
+        <activity
+            android:name="com.salesforce.android.reactagentforce.AgentforceConversationActivity"
+            android:theme="@style/Theme.Material3.DayNight"
+            android:exported="false" />
+    </application>
+</manifest>

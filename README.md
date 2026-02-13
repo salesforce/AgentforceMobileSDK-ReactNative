@@ -18,22 +18,20 @@ The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI plat
 
 ## 🏗️ Architecture
 
+This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `AgentforceSDK-ReactNative-Bridge/`) for all Agentforce functionality. The app has **no separate in-repo Agentforce native code**; the bridge provides the JS API and native modules.
+
 ### Android
-- **Native Layer**: Kotlin + Jetpack Compose
-- **Pattern**: Singleton `AgentforceClientHolder` for lifecycle management
-- **UI**: Native `ServiceAgentConversationActivity` with Compose
-- **SDK Integration**: Service Agent mode with simplified credential provider
+- **Agentforce**: Provided by the bridge library `react-native-agentforce` (in-repo at `AgentforceSDK-ReactNative-Bridge/android`). React Native autolinking registers the package; no manual registration in the app.
+- **App**: React Native shell; Agentforce conversation UI and SDK are in the bridge.
 
 ### iOS
-- **Native Layer**: Swift + SwiftUI
-- **Pattern**: Singleton `ServiceAgentManager` for lifecycle management
-- **UI**: Native `AgentforceConversationContainer` with SwiftUI
-- **SDK Integration**: Service Agent mode with simplified credential provider
+- **Agentforce**: Provided by the bridge pod `ReactNativeAgentforce` (in-repo at `AgentforceSDK-ReactNative-Bridge/ios`).
+- **App**: React Native shell; Agentforce conversation UI and SDK are in the bridge.
 
 ### JavaScript Layer (Common)
 - **Framework**: React Native + TypeScript
 - **Navigation**: React Navigation
-- **Bridge**: Native modules for SDK initialization and conversation launch
+- **Agentforce API**: `AgentforceService` from `react-native-agentforce` (bridge package)
 - **Screens**: Home, Settings, About
 
 ## 📋 Prerequisites
@@ -58,7 +56,7 @@ The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI plat
 ### 1. Clone and Install
 
 ```bash
-# Clone the repository
+# Clone the repository (bridge is in-repo; no submodules)
 git clone <repository-url>
 cd AgentforceSDK-ReactNative
 
@@ -69,8 +67,8 @@ npm install
 ### 2. iOS Setup
 
 ```bash
-# Run iOS setup script (installs pods)
-node installios.js
+# Install CocoaPods dependencies (includes bridge pod)
+cd ios && pod install && cd ..
 
 # Run on iOS
 npm run ios
@@ -117,33 +115,17 @@ When you first launch the app, navigate to **Settings** and configure:
 
 ```
 AgentforceSDK-ReactNative/
-├── src/                           # React Native JavaScript/TypeScript
+├── AgentforceSDK-ReactNative-Bridge/   # In-repo: JS API + native bridge
+├── src/                                # React Native JavaScript/TypeScript
 │   ├── screens/
-│   │   ├── HomeScreen.tsx         # Home screen with launch button
-│   │   ├── SettingsScreen.tsx    # Service Agent configuration
-│   │   └── AboutScreen.tsx        # App information
-│   ├── services/
-│   │   └── AgentforceService.ts  # Bridge wrapper for native modules
+│   │   ├── HomeScreen.tsx              # Home screen; uses AgentforceService from react-native-agentforce
+│   │   ├── SettingsScreen.tsx          # Service Agent configuration
+│   │   └── AboutScreen.tsx             # App information
 │   └── types/
-│       └── agentforce.types.ts   # TypeScript types
-├── android/                       # Android native code
-│   └── app/src/main/
-│       ├── java/.../agentforce/
-│       │   ├── AgentforceModule.kt              # RN bridge
-│       │   ├── AgentforceClientHolder.kt        # Singleton manager
-│       │   ├── ServiceAgentConversationActivity.kt  # Compose UI
-│       │   └── ServiceAgentCredentialProvider.kt    # Auth
-│       └── AndroidManifest.xml
-├── ios/                           # iOS native code
-│   └── ReactAgentforce/
-│       ├── Agentforce/
-│       │   ├── AgentforceModule.swift           # RN bridge
-│       │   ├── AgentforceModule.m               # ObjC bridge
-│       │   ├── ServiceAgentManager.swift        # Singleton manager
-│       │   └── ServiceAgentCredentialProvider.swift # Auth
-│       ├── AppDelegate.h
-│       └── AppDelegate.m
-└── App.tsx                        # Root component with navigation
+│       └── agentforce.types.ts         # TypeScript types
+├── android/                            # Android app; Agentforce from bridge library
+├── ios/                                # iOS app; Agentforce from bridge pod
+└── App.tsx                             # Root component with navigation
 ```
 
 ## 🔧 Development

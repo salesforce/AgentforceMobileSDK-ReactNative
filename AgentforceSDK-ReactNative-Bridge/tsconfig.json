@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "module": "commonjs",
+    "jsx": "react",
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*"]
+}

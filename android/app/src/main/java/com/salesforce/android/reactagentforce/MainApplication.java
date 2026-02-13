@@ -54,8 +54,7 @@ public class MainApplication extends Application implements ReactApplication {
 		protected List<ReactPackage> getPackages() {
 			@SuppressWarnings("UnnecessaryLocalVariable")
 			List<ReactPackage> packages = new PackageList(this).getPackages();
-			// Add our Service Agent package
-			packages.add(new ServiceAgentPackage());
+			// Agentforce is provided by react-native-agentforce bridge (autolinking)
 			return packages;
 		}
 

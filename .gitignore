@@ -23,7 +23,6 @@ project.xcworkspace
 **/.xcode.env.local
 
 # Gradle
-/build/
 /packages/rn-tester/build
 /packages/rn-tester/android/app/.cxx/
 /packages/rn-tester/android/app/build/
@@ -62,13 +61,22 @@ buck-out
 .watchmanconfig
 
 # Android
-.idea
+*.apk
+*.ap_
+*.dex
+*.class
+bin/
+build/
+gen/
+out/
+.idea/
 .gradle
 local.properties
 *.iml
 /packages/react-native/android/*
 !/packages/react-native/android/README.md
 .kotlin/
+/.claude
 
 # Node
 node_modules
@@ -113,6 +121,11 @@ package-lock.json
 vendor/
 
 # iOS / CocoaPods
+/ios/build
+/ios/Pods
+ios/.xcode.env
+/node_modules
+/ios/.claude
 /private/helloworld/ios/build/
 /private/helloworld/ios/Pods/
 /private/helloworld/ios/Podfile.lock

@@ -25,6 +25,9 @@ target 'ReactAgentforce' do
   pod 'Messaging-InApp-Core', '> 1.10.0'
   pod 'LiveKitClient' #This is required to ensure Cocoapods looks in the correct source location
 
+  # Agentforce React Native bridge (submodule) – Service Agent only (Core), no Mobile SDK
+  pod 'ReactNativeAgentforce', :path => '../AgentforceSDK-ReactNative-Bridge/ios'
+
   pod 'DequeModule'
   pod 'InternalCollectionsUtilities'
   pod 'OrderedCollections'

@@ -1,4 +1,7 @@
 rootProject.name = 'ReactAgentforce'
+// Agentforce React Native bridge (submodule) – provides JS API and native module
+include ':react-native-agentforce'
+project(':react-native-agentforce').projectDir = new File(rootProject.projectDir, '../AgentforceSDK-ReactNative-Bridge/android')
 include ':react-native-safe-area-context'
 project(':react-native-safe-area-context').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-safe-area-context/android')
 include ':react-native-gesture-handler'
