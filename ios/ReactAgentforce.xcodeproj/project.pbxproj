@@ -9,21 +9,16 @@
 /* Begin PBXBuildFile section */
 		13B07FBC1A68108700A75B9A /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB01A68108700A75B9A /* AppDelegate.m */; };
 		13B07FC11A68108700A75B9A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB71A68108700A75B9A /* main.m */; };
-		1573059EA6C2EC260B4C1887 /* ServiceAgentCredentialProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20F72A8016F083D01C9E075 /* ServiceAgentCredentialProvider.swift */; };
-		33641FB80EE6335D4D8AE6D3 /* AgentforceModule.m in Sources */ = {isa = PBXBuildFile; fileRef = EA72D6AC17220329D5E79222 /* AgentforceModule.m */; };
 		40DE9C0A9AEF3887E5BC6532 /* Pods_ReactAgentforce.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC49BC3E12368DD23B2654A2 /* Pods_ReactAgentforce.framework */; };
 		4F3AFF401DC2C79E006FF6B0 /* InitialViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F3AFF3E1DC2C79E006FF6B0 /* InitialViewController.m */; };
 		5F4AFF411DC2C79E006FF6B0 /* LandingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 5F4AFF401DC2C79E006FF6B0 /* LandingViewController.m */; };
 		69BE961B2AD535C8002E3F6C /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 69BE961A2AD535C8002E3F6C /* PrivacyInfo.xcprivacy */; };
-		8C7D9A866BFBDFAC51FF42B3 /* AgentforceModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC00A5A523812F220D5ED6D2 /* AgentforceModule.swift */; };
-		8DA5ADB858F9BE9DB439A2B8 /* ServiceAgentManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096CF1B19F5CB3E36AEDC53B /* ServiceAgentManager.swift */; };
 		B7168FBE1FACC7EB00A48DB5 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = B7168FBD1FACC7EB00A48DB5 /* LaunchScreen.storyboard */; };
 		B77BD8AF2113632C0036B284 /* bootconfig.plist in Resources */ = {isa = PBXBuildFile; fileRef = B77BD8AE2113632C0036B284 /* bootconfig.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		008F07F21AC5B25A0029DE68 /* main.jsbundle */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = main.jsbundle; sourceTree = "<group>"; };
-		096CF1B19F5CB3E36AEDC53B /* ServiceAgentManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ServiceAgentManager.swift; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* ReactAgentforce.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReactAgentforce.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FAF1A68108700A75B9A /* AppDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = AppDelegate.h; path = ReactAgentforce/AppDelegate.h; sourceTree = "<group>"; };
 		13B07FB01A68108700A75B9A /* AppDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = AppDelegate.m; path = ReactAgentforce/AppDelegate.m; sourceTree = "<group>"; };
@@ -38,11 +33,8 @@
 		69BE961A2AD535C8002E3F6C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = ReactAgentforce/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B7168FBD1FACC7EB00A48DB5 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = ReactAgentforce/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		B77BD8AE2113632C0036B284 /* bootconfig.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = bootconfig.plist; path = ReactAgentforce/bootconfig.plist; sourceTree = "<group>"; };
-		BC00A5A523812F220D5ED6D2 /* AgentforceModule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentforceModule.swift; sourceTree = "<group>"; };
 		C13CAF5BF69A7DBFCD4A7F25 /* Pods-ReactAgentforce.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ReactAgentforce.debug.xcconfig"; path = "Target Support Files/Pods-ReactAgentforce/Pods-ReactAgentforce.debug.xcconfig"; sourceTree = "<group>"; };
 		CC49BC3E12368DD23B2654A2 /* Pods_ReactAgentforce.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ReactAgentforce.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		EA72D6AC17220329D5E79222 /* AgentforceModule.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = AgentforceModule.m; sourceTree = "<group>"; };
-		F20F72A8016F083D01C9E075 /* ServiceAgentCredentialProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ServiceAgentCredentialProvider.swift; sourceTree = "<group>"; };
 		FDB1D0E42E770FA6003F916B /* ReactAgentforce-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ReactAgentforce-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -78,7 +70,6 @@
 				13B07FAF1A68108700A75B9A /* AppDelegate.h */,
 				13B07FB01A68108700A75B9A /* AppDelegate.m */,
 				FDB1D0E42E770FA6003F916B /* ReactAgentforce-Bridging-Header.h */,
-				FDB1D1222E79538D003F916B /* Agentforce */,
 			);
 			name = Classes;
 			sourceTree = "<group>";
@@ -131,18 +122,6 @@
 				CC49BC3E12368DD23B2654A2 /* Pods_ReactAgentforce.framework */,
 			);
 			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		FDB1D1222E79538D003F916B /* Agentforce */ = {
-			isa = PBXGroup;
-			children = (
-				096CF1B19F5CB3E36AEDC53B /* ServiceAgentManager.swift */,
-				F20F72A8016F083D01C9E075 /* ServiceAgentCredentialProvider.swift */,
-				BC00A5A523812F220D5ED6D2 /* AgentforceModule.swift */,
-				EA72D6AC17220329D5E79222 /* AgentforceModule.m */,
-			);
-			name = Agentforce;
-			path = ReactAgentforce/Agentforce;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -283,10 +262,6 @@
 				5F4AFF411DC2C79E006FF6B0 /* LandingViewController.m in Sources */,
 				13B07FBC1A68108700A75B9A /* AppDelegate.m in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
-				8DA5ADB858F9BE9DB439A2B8 /* ServiceAgentManager.swift in Sources */,
-				1573059EA6C2EC260B4C1887 /* ServiceAgentCredentialProvider.swift in Sources */,
-				8C7D9A866BFBDFAC51FF42B3 /* AgentforceModule.swift in Sources */,
-				33641FB80EE6335D4D8AE6D3 /* AgentforceModule.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

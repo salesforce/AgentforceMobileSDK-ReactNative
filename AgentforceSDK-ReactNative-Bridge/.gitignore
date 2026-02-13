@@ -1,0 +1,29 @@
+/ios/build
+/ios/Pods
+ios/.xcode.env
+/node_modules
+/mobile_sdk
+/ios/ReactAgentforce.xcworkspace/xcuserdata
+/ios/.claude
+/build
+ios/Frameworks/AgentforceSDK
+ios/Frameworks/AgentforceService
+
+# Android
+*.apk
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+build/
+.gradle/
+local.properties
+.idea/
+*.iml
+.navigation/
+/.claude
+
+# Employee config with auth for development
+src/config/employeeAgentConfig.local.ts

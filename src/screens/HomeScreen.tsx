@@ -33,7 +33,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import AgentforceService from '../services/AgentforceService';
+import { AgentforceService } from 'react-native-agentforce';
 
 interface HomeScreenProps {
   navigation: any;

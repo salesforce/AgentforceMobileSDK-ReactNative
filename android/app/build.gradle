@@ -111,8 +111,8 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
-    // Salesforce Agentforce SDK (Service Agent mode)
-    api("com.salesforce.android.agentforcesdk:agentforce-sdk:14.20.0-experimental")
+    // Agentforce bridge (submodule) – includes native module and Agentforce SDK dependency
+    implementation project(':react-native-agentforce')
 
     // Jetpack Compose (needed for ComposeView to display chat interface)
     def composeBom = platform('androidx.compose:compose-bom:2024.02.00')
