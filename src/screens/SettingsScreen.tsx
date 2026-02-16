@@ -34,7 +34,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import AgentforceService from '../services/AgentforceService';
+import { AgentforceService } from 'react-native-agentforce';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -104,6 +104,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
     setLoading(true);
     try {
       await AgentforceService.configure({
+        type: 'service',
         serviceApiURL: serviceApiURL.trim(),
         organizationId: organizationId.trim(),
         esDeveloperName: esDeveloperName.trim(),
@@ -187,7 +188,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
               style={styles.input}
               value={serviceApiURL}
               onChangeText={setServiceApiURL}
-              placeholder="https://your-domain.my.salesforce.com"
+              placeholder="https://your-domain.my.salesforce-scrt.com"
               placeholderTextColor="#999"
               autoCapitalize="none"
               autoCorrect={false}

@@ -1,0 +1,16 @@
+{
+  "name": "react-native-agentforce",
+  "version": "1.0.0",
+  "description": "Agentforce React Native bridge: JS API and native module for Service Agent and Employee Agent (auth bridge included; host app adds Mobile SDK).",
+  "main": "src/index.ts",
+  "react-native": "src/index.ts",
+  "scripts": {},
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}

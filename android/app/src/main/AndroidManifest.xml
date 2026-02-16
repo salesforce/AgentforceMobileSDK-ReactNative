@@ -27,11 +27,6 @@
 			</intent-filter>
 		</activity>
 
-		<!-- Agentforce Conversation Activity -->
-		<activity
-			android:name=".ServiceAgentConversationActivity"
-			android:theme="@style/Theme.Material3.DayNight"
-			android:exported="false" />
 		<!-- Override the FileProvider definitions from libraries -->
 		<provider
 			android:name="androidx.core.content.FileProvider"
