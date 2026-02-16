@@ -33,51 +33,86 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { AgentforceService } from 'react-native-agentforce';
+import {
+  AgentforceService,
+  isEmployeeAgentAuthSupported,
+  hasEmployeeAgentSession,
+  getEmployeeAgentCredentials,
+  EMPLOYEE_AGENT_CONFIG,
+  isEmployeeAgentConfigValid,
+} from 'react-native-agentforce';
 
 interface HomeScreenProps {
   navigation: any;
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const [isConfigured, setIsConfigured] = useState(false);
+  const [isServiceAgentConfigured, setIsServiceAgentConfigured] =
+    useState(false);
+  const [isEmployeeAgentConfigured, setIsEmployeeAgentConfigured] =
+    useState(false);
+  const [isEmployeeAgentAuthAvailable, setIsEmployeeAgentAuthAvailable] =
+    useState(false);
   const [isChecking, setIsChecking] = useState(true);
+  const [activeMode, setActiveMode] = useState<
+    'none' | 'service' | 'employee'
+  >('none');
 
   useEffect(() => {
-    checkConfiguration();
+    checkConfigurations();
   }, []);
 
-  // Refresh configuration status when screen gains focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      checkConfiguration();
+      checkConfigurations();
     });
     return unsubscribe;
   }, [navigation]);
 
-  const checkConfiguration = async () => {
+  const checkConfigurations = async () => {
     setIsChecking(true);
     try {
-      const configured = await AgentforceService.isConfigured();
-      setIsConfigured(configured);
+      const serviceConfig = await AgentforceService.getConfiguration();
+      const serviceConfigured = !!(
+        serviceConfig?.serviceApiURL &&
+        serviceConfig?.organizationId &&
+        serviceConfig?.esDeveloperName
+      );
+      setIsServiceAgentConfigured(serviceConfigured);
+
+      const authSupported = await isEmployeeAgentAuthSupported();
+      const fileConfigValid = isEmployeeAgentConfigValid();
+      setIsEmployeeAgentAuthAvailable(authSupported || fileConfigValid);
+
+      const hasSession = authSupported
+        ? await hasEmployeeAgentSession()
+        : false;
+      const employeeConfigured = hasSession || fileConfigValid;
+      setIsEmployeeAgentConfigured(employeeConfigured);
+
+      const configInfo = await AgentforceService.getConfigurationInfo();
+      if (configInfo?.configured && configInfo?.mode) {
+        setActiveMode(configInfo.mode as 'service' | 'employee');
+      } else {
+        setActiveMode('none');
+      }
     } catch (error) {
       console.error('Error checking configuration:', error);
-      setIsConfigured(false);
     } finally {
       setIsChecking(false);
     }
   };
 
-  const handleLaunchAgentforce = async () => {
-    if (!isConfigured) {
+  const handleLaunchServiceAgent = async () => {
+    if (!isServiceAgentConfigured) {
       Alert.alert(
         'Configuration Required',
-        'Please configure Service Agent settings before launching.',
+        'Please configure Service Agent settings first.',
         [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Configure',
-            onPress: () => navigation.navigate('Settings'),
+            onPress: () => navigation.navigate('Settings', { tab: 'service' }),
           },
         ]
       );
@@ -85,12 +120,70 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
 
     try {
+      if (activeMode !== 'service') {
+        const config = await AgentforceService.getConfiguration();
+        if (config) {
+          await AgentforceService.configure({
+            type: 'service',
+            serviceApiURL: config.serviceApiURL,
+            organizationId: config.organizationId,
+            esDeveloperName: config.esDeveloperName,
+          });
+          setActiveMode('service');
+        }
+      }
       await AgentforceService.launchConversation();
     } catch (error) {
       Alert.alert(
         'Error',
-        'Failed to launch Agentforce conversation. Please check your configuration.'
+        'Failed to launch Service Agent. Please check your configuration.'
       );
+      console.error('Launch error:', error);
+    }
+  };
+
+  const handleLaunchEmployeeAgent = async () => {
+    if (!isEmployeeAgentConfigured) {
+      Alert.alert(
+        'Configuration Required',
+        'Please sign in via Settings > Employee Agent to use Employee Agent.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'View Settings',
+            onPress: () => navigation.navigate('Settings', { tab: 'employee' }),
+          },
+        ]
+      );
+      return;
+    }
+
+    try {
+      if (activeMode !== 'employee') {
+        const storedAgentId = await AgentforceService.getEmployeeAgentId();
+        const agentId = storedAgentId?.trim() ?? '';
+        const creds = await getEmployeeAgentCredentials();
+        const config = creds
+          ? {
+              type: 'employee' as const,
+              instanceUrl: creds.instanceUrl,
+              organizationId: creds.organizationId,
+              userId: creds.userId,
+              agentId: agentId || undefined,
+              accessToken: creds.accessToken,
+            }
+          : { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId || undefined };
+        await AgentforceService.configure(config);
+        setActiveMode('employee');
+      }
+      await AgentforceService.launchConversation();
+    } catch (error: any) {
+      Alert.alert(
+        'Error',
+        error?.message ||
+          'Failed to launch Employee Agent. Token may be expired.'
+      );
+      console.error('Launch error:', error);
     }
   };
 
@@ -101,7 +194,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
             source={require('../../agentforce-icon.png')}
@@ -109,71 +201,91 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         </View>
 
-        {/* Title */}
-        <Text style={styles.title}>Agentforce Service Agent</Text>
+        <Text style={styles.title}>Agentforce</Text>
         <Text style={styles.subtitle}>
-          Your AI-powered assistant is ready to help
+          Choose an agent type to launch
         </Text>
 
-        {/* Feature Cards */}
-        <View style={styles.featuresContainer}>
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>💬</Text>
-            <Text style={styles.featureTitle}>Service Agent</Text>
-            <Text style={styles.featureDescription}>
-              Lightweight AI chat for customer support
+        {isChecking && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>
+              Checking configurations...
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.buttonsContainer}>
+          <TouchableOpacity
+            style={[
+              styles.launchButton,
+              styles.serviceAgentButton,
+              !isServiceAgentConfigured && styles.launchButtonDisabled,
+              activeMode === 'service' && styles.activeButton,
+            ]}
+            onPress={handleLaunchServiceAgent}
+            disabled={isChecking}
+          >
+            <Text style={styles.launchButtonIcon}>💬</Text>
+            <View style={styles.launchButtonContent}>
+              <Text style={styles.launchButtonTitle}>Service Agent</Text>
+              <Text style={styles.launchButtonSubtitle}>
+                {isServiceAgentConfigured
+                  ? activeMode === 'service'
+                    ? 'Active - Tap to launch'
+                    : 'Configured - Tap to launch'
+                  : 'Not configured'}
+              </Text>
+            </View>
+            {isServiceAgentConfigured && (
+              <Text style={styles.launchButtonArrow}>›</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.launchButton,
+              styles.employeeAgentButton,
+              !isEmployeeAgentConfigured && styles.launchButtonDisabled,
+              activeMode === 'employee' && styles.activeButtonEmployee,
+            ]}
+            onPress={handleLaunchEmployeeAgent}
+            disabled={isChecking}
+          >
+            <Text style={styles.launchButtonIcon}>👤</Text>
+            <View style={styles.launchButtonContent}>
+              <Text style={styles.launchButtonTitle}>Employee Agent</Text>
+              <Text style={styles.launchButtonSubtitle}>
+                {isEmployeeAgentConfigured
+                  ? activeMode === 'employee'
+                    ? 'Active - Tap to launch'
+                    : 'Configured - Tap to launch'
+                  : 'Sign in in Settings to configure'}
+              </Text>
+            </View>
+            {isEmployeeAgentConfigured && (
+              <Text style={styles.launchButtonArrow}>›</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.infoContainer}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardTitle}>Service Agent</Text>
+            <Text style={styles.infoCardDescription}>
+              Anonymous guest access for customer support. Configure via UI in
+              Settings.
             </Text>
           </View>
 
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>⚡</Text>
-            <Text style={styles.featureTitle}>Simple Setup</Text>
-            <Text style={styles.featureDescription}>
-              Just 3 configuration parameters
-            </Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>🚀</Text>
-            <Text style={styles.featureTitle}>Quick Setup</Text>
-            <Text style={styles.featureDescription}>
-              Configure once and start chatting
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardTitle}>Employee Agent</Text>
+            <Text style={styles.infoCardDescription}>
+              Authenticated access for internal users. Sign in via Settings to
+              use Employee Agent.
             </Text>
           </View>
         </View>
 
-        {/* Status */}
-        {isChecking ? (
-          <View style={styles.statusContainer}>
-            <Text style={styles.statusText}>Checking configuration...</Text>
-          </View>
-        ) : !isConfigured ? (
-          <View style={[styles.statusContainer, styles.statusWarning]}>
-            <Text style={styles.statusTextWarning}>
-              ⚠️ Configuration required
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.statusContainer, styles.statusSuccess]}>
-            <Text style={styles.statusTextSuccess}>✓ Ready to launch</Text>
-          </View>
-        )}
-
-        {/* Launch Button */}
-        <TouchableOpacity
-          style={[
-            styles.launchButton,
-            !isConfigured && styles.launchButtonDisabled,
-          ]}
-          onPress={handleLaunchAgentforce}
-          disabled={!isConfigured || isChecking}
-        >
-          <Text style={styles.launchButtonText}>
-            {isConfigured ? 'Launch Agentforce' : 'Configure First'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Settings Button */}
         <TouchableOpacity
           style={styles.settingsButton}
           onPress={() => navigation.navigate('Settings')}
@@ -181,7 +293,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <Text style={styles.settingsButtonText}>⚙️ Settings</Text>
         </TouchableOpacity>
 
-        {/* Platform Info */}
         <Text style={styles.platformText}>
           Running on {Platform.OS === 'ios' ? 'iOS' : 'Android'}
         </Text>
@@ -204,13 +315,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   logoContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -218,8 +329,8 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   logo: {
-    width: 80,
-    height: 80,
+    width: 70,
+    height: 70,
     resizeMode: 'contain',
   },
   title: {
@@ -233,98 +344,115 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 20,
-  },
-  featuresContainer: {
-    width: '100%',
     marginBottom: 24,
   },
-  featureCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+  loadingContainer: {
+    padding: 12,
+    backgroundColor: '#e7f3ff',
+    borderRadius: 8,
+    marginBottom: 16,
+    width: '100%',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#0070f3',
+  },
+  buttonsContainer: {
+    width: '100%',
+    gap: 16,
+    marginBottom: 24,
+  },
+  launchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 20,
-    marginBottom: 12,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 4,
   },
-  featureIcon: {
+  serviceAgentButton: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#7B1FA2',
+  },
+  employeeAgentButton: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#0176D3',
+  },
+  launchButtonDisabled: {
+    opacity: 0.5,
+    borderLeftColor: '#adb5bd',
+  },
+  activeButton: {
+    backgroundColor: '#f3e5f5',
+    borderLeftColor: '#7B1FA2',
+  },
+  activeButtonEmployee: {
+    backgroundColor: '#e7f3ff',
+    borderLeftColor: '#0176D3',
+  },
+  launchButtonIcon: {
     fontSize: 32,
-    marginBottom: 8,
+    marginRight: 16,
   },
-  featureTitle: {
+  launchButtonContent: {
+    flex: 1,
+  },
+  launchButtonTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#212529',
     marginBottom: 4,
   },
-  featureDescription: {
+  launchButtonSubtitle: {
     fontSize: 14,
     color: '#6c757d',
-    lineHeight: 20,
   },
-  statusContainer: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginBottom: 20,
+  launchButtonArrow: {
+    fontSize: 24,
+    color: '#7B1FA2',
+    fontWeight: '300',
+  },
+  infoContainer: {
     width: '100%',
-    alignItems: 'center',
-    backgroundColor: '#e7f3ff',
+    gap: 12,
+    marginBottom: 24,
   },
-  statusWarning: {
-    backgroundColor: '#fff3cd',
-  },
-  statusSuccess: {
-    backgroundColor: '#d1e7dd',
-  },
-  statusText: {
-    fontSize: 14,
-    color: '#0070f3',
-    fontWeight: '500',
-  },
-  statusTextWarning: {
-    fontSize: 14,
-    color: '#856404',
-    fontWeight: '500',
-  },
-  statusTextSuccess: {
-    fontSize: 14,
-    color: '#0f5132',
-    fontWeight: '500',
-  },
-  launchButton: {
-    backgroundColor: '#0176D3',
-    paddingHorizontal: 40,
-    paddingVertical: 16,
+  infoCard: {
+    backgroundColor: '#f8f9fa',
     borderRadius: 8,
-    width: '100%',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
   },
-  launchButtonDisabled: {
-    backgroundColor: '#ccc',
+  infoCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#495057',
+    marginBottom: 4,
   },
-  launchButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  infoCardDescription: {
+    fontSize: 13,
+    color: '#6c757d',
+    lineHeight: 18,
   },
   settingsButton: {
-    marginTop: 16,
-    padding: 12,
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
   },
   settingsButtonText: {
     fontSize: 16,
-    color: '#0176D3',
-    fontWeight: '600',
+    color: '#495057',
+    fontWeight: '500',
   },
   platformText: {
     marginTop: 20,
@@ -334,4 +462,3 @@ const styles = StyleSheet.create({
 });
 
 export default HomeScreen;
-

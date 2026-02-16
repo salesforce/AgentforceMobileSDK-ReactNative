@@ -67,8 +67,8 @@ npm install
 ### 2. iOS Setup
 
 ```bash
-# Install CocoaPods dependencies (includes bridge pod)
-cd ios && pod install && cd ..
+# Install CocoaPods dependencies
+node installios.js
 
 # Run on iOS
 npm run ios
@@ -76,9 +76,13 @@ npm run ios
 
 ### 3. Android Setup
 
+
+
 ```bash
-# Android setup is automatic with Gradle
-# Just run the app directly
+# If using Employee Agents
+node installandroid.js
+
+# Run on Android
 npx react-native run-android
 ```
 
@@ -110,6 +114,33 @@ When you first launch the app, navigate to **Settings** and configure:
 2. The SDK will initialize with your configuration
 3. Native conversation UI will appear
 4. Start chatting with your Service Agent!
+
+### Employee Agent
+
+#### 1. Configure Salesforce Connection
+
+##### Option A: Use Existing Demo Configuration
+The project comes with a demo configuration in `bootconfig.plist`. This includes:
+- Pre-configured OAuth consumer key
+- Redirect URI: `testsfdc:///mobilesdk/detect/oauth/done`
+- OAuth scopes: `web`, `api`
+
+##### Option B: Create Your Own Connected App
+1. In Salesforce Setup, create a new Connected App
+2. Enable OAuth settings with these scopes: `web`, `api`
+3. Set the callback URL to: `testsfdc:///mobilesdk/detect/oauth/done`
+4. Update `bootconfig.plist` with your consumer key
+
+#### 2. Configure Agent ID
+
+Add a default agentID in the Employee Agent settings tab
+
+#### 3. Testing the Conversation
+
+1. From the Home screen, tap **Launch Agentforce**
+2. The SDK will initialize with your configuration
+3. Native conversation UI will appear
+4. Start chatting with your Employee Agent!
 
 ## 📁 Project Structure
 
