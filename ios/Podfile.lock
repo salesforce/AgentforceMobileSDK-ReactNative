@@ -1,12 +1,12 @@
 PODS:
-  - AgentforceSDK (14.0.14):
+  - AgentforceSDK (14.13.1):
     - AgentforceService (~> 4)
     - SalesforceLogging
     - SalesforceNavigation
     - SalesforceNetwork
     - SalesforceUser
     - swift-markdown-ui
-  - AgentforceService (4.1.0):
+  - AgentforceService (4.7.1):
     - LiveKitClient
     - Messaging-InApp-Core (> 1.9.2)
     - SalesforceLogging
@@ -1538,8 +1538,8 @@ CHECKOUT OPTIONS:
     :git: https://github.com/salesforce-misc/swift-markdown-ui.git
 
 SPEC CHECKSUMS:
-  AgentforceSDK: 1c528c28689ad86a14b230d99e5f9d254f750737
-  AgentforceService: 5ba05e64ee74e942cf48e887d39710b075049e6b
+  AgentforceSDK: 226d1bb51474871d7b7d84ef6aad8a8cfb89ddc7
+  AgentforceService: a8108bf4fc36b7a3a885db17983ddf5b3ad9e1a1
   boost: d3f49c53809116a5d38da093a8aa78bf551aed09
   cmark_gfm: 2cde0544cfd03d9ad926d487961232dd7117984b
   DequeModule: 646e2f186357734310ba696172d271f0988d3fb8
