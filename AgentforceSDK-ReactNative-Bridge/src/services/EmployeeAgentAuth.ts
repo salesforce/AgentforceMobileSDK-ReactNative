@@ -19,6 +19,7 @@ export interface AuthCredentials {
 interface EmployeeAgentAuthBridgeSpec {
   isAuthSupported(): Promise<boolean>;
   getAuthCredentials(): Promise<AuthCredentials | null>;
+  refreshAuthCredentials(): Promise<AuthCredentials>;
   login(): Promise<AuthCredentials>;
   logout(): Promise<void>;
 }
@@ -90,6 +91,19 @@ export async function getEmployeeAgentCredentials(): Promise<AuthCredentials | n
   } catch {
     return null;
   }
+}
+
+/**
+ * Ask the Mobile SDK to refresh the current session and return new credentials.
+ * Use this when the Agentforce backend returns 401 (expired token) and the native layer
+ * emits onTokenRefreshNeeded. Returns the new access token and related fields.
+ * @throws if no session, no refresh token, or refresh fails
+ */
+export async function refreshEmployeeAgentCredentials(): Promise<AuthCredentials> {
+  if (!EmployeeAgentAuthBridge || typeof EmployeeAgentAuthBridge.refreshAuthCredentials !== 'function') {
+    throw new Error('Employee Agent auth refresh is not available. Add Mobile SDK (WithMobileSDK).');
+  }
+  return EmployeeAgentAuthBridge.refreshAuthCredentials();
 }
 
 /**

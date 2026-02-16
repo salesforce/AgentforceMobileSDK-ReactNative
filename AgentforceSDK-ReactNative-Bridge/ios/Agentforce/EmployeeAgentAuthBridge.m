@@ -57,6 +57,27 @@ RCT_EXPORT_METHOD(getAuthCredentials:(RCTPromiseResolveBlock)resolve
   resolve(creds ?: [NSNull null]);
 }
 
+RCT_EXPORT_METHOD(refreshAuthCredentials:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  SFUserAccount *currentUser = [SFUserAccountManager sharedInstance].currentUser;
+  if (!currentUser || !currentUser.credentials.refreshToken.length) {
+    reject(@"NO_SESSION", @"No logged-in user or refresh token available.", nil);
+    return;
+  }
+  [[SFUserAccountManager sharedInstance] refreshCredentials:currentUser.credentials
+                                                completion:^(SFOAuthInfo *authInfo, SFUserAccount *userAccount) {
+    NSDictionary *creds = [self credentialsDictionaryFromUserAccount:userAccount];
+    if (creds) {
+      resolve(creds);
+    } else {
+      reject(@"REFRESH_FAILED", @"Could not read credentials after refresh.", nil);
+    }
+  }
+                                                   failure:^(SFOAuthInfo *authInfo, NSError *error) {
+    reject(@"REFRESH_FAILED", error.localizedDescription ?: @"Token refresh failed.", error);
+  }];
+}
+
 RCT_EXPORT_METHOD(login:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
   dispatch_async(dispatch_get_main_queue(), ^{
@@ -103,6 +124,11 @@ RCT_EXPORT_METHOD(isAuthSupported:(RCTPromiseResolveBlock)resolve
 RCT_EXPORT_METHOD(getAuthCredentials:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
   resolve([NSNull null]);
+}
+
+RCT_EXPORT_METHOD(refreshAuthCredentials:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  reject(@"NOT_AVAILABLE", @"Token refresh requires Salesforce Mobile SDK.", nil);
 }
 
 RCT_EXPORT_METHOD(login:(RCTPromiseResolveBlock)resolve

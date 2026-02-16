@@ -52,10 +52,12 @@ class EmployeeAgentAuthBridge(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun isAuthSupported(promise: Promise) {
         try {
-            promise.resolve(true)
+            // Verify SDK is actually initialized, not just on the classpath
+            val sdkManager = SalesforceSDKManager.getInstance()
+            promise.resolve(sdkManager != null)
         } catch (e: Exception) {
-            Log.e(TAG, "isAuthSupported failed", e)
-            promise.reject("ERROR", e.message)
+            Log.w(TAG, "isAuthSupported: SDK not available", e)
+            promise.resolve(false)
         }
     }
 
@@ -74,6 +76,39 @@ class EmployeeAgentAuthBridge(reactContext: ReactApplicationContext) :
             }
         } catch (e: Exception) {
             Log.e(TAG, "getAuthCredentials failed", e)
+            promise.reject("ERROR", e.message)
+        }
+    }
+
+    /**
+     * Ask the Mobile SDK to refresh the current session and return updated credentials.
+     * Use this when the Agentforce backend returns 401 (e.g. expired token). getRestClient()
+     * causes the SDK to provide a RestClient, which may trigger an automatic token refresh.
+     */
+    @ReactMethod
+    fun refreshAuthCredentials(promise: Promise) {
+        try {
+            val activity = currentActivity
+            if (activity == null) {
+                promise.reject("NO_ACTIVITY", "No current activity for refresh")
+                return
+            }
+            val mgr = clientManager()
+            if (mgr == null) {
+                promise.reject("NOT_AVAILABLE", "Salesforce SDK not initialized")
+                return
+            }
+            mgr.getRestClient(activity, object : ClientManager.RestClientCallback {
+                override fun authenticatedRestClient(client: RestClient?) {
+                    if (client != null && client.authToken != null) {
+                        promise.resolve(credentialsFromRestClient(client))
+                    } else {
+                        promise.reject("REFRESH_FAILED", "No credentials after refresh")
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "refreshAuthCredentials failed", e)
             promise.reject("ERROR", e.message)
         }
     }

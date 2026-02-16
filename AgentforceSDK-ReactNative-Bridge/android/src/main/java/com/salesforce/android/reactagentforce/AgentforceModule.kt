@@ -310,8 +310,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             scope.launch {
                 try {
                     viewModel?.initializeAgentforce()
-                    delay(500)
-                    
+
                     val intent = Intent(activity, AgentforceConversationActivity::class.java)
                     activity.startActivity(intent)
                     promise.resolve(Arguments.createMap().apply {

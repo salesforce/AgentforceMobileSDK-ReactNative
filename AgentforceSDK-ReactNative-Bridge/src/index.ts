@@ -12,6 +12,7 @@ export {
   loginForEmployeeAgent,
   logoutEmployeeAgent,
   getEmployeeAgentCredentials,
+  refreshEmployeeAgentCredentials,
   isEmployeeAgentAuthReady,
 } from './services/EmployeeAgentAuth';
 export type { AuthCredentials } from './services/EmployeeAgentAuth';
