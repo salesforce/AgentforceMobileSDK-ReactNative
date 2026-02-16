@@ -114,6 +114,9 @@ dependencies {
     // Agentforce bridge (submodule) – includes native module and Agentforce SDK dependency
     implementation project(':react-native-agentforce')
 
+    // Salesforce Mobile SDK 13.1.1 (Employee Agent auth)
+    implementation("com.salesforce.mobilesdk:SalesforceReact:13.1.1")
+
     // Jetpack Compose (needed for ComposeView to display chat interface)
     def composeBom = platform('androidx.compose:compose-bom:2024.02.00')
     implementation composeBom

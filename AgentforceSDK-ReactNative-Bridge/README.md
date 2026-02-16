@@ -50,5 +50,3 @@ You must also configure **bootconfig** and perform **SDK initialization** (e.g. 
 Include the Salesforce Mobile SDK pods in your Podfile and perform **bootconfig** and **SDK initialization** as required for your app. The bridge’s Employee Agent auth layer relies on the SDK being initialized at runtime.
 
 ---
-
-For full integration steps (e.g. autolinking, registration), see `docs/AGENTFORCE_MODULE_EXTRACTION_PLAN.md` in the parent repo if available.

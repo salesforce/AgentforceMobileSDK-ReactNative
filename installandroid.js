@@ -4,6 +4,7 @@ var packageJson = require('./package.json');
 var execSync = require('child_process').execSync;
 var path = require('path');
 var fs = require('fs');
+var rimraf = require('rimraf');
 
 console.log('📦 Installing npm dependencies...');
 try {
@@ -20,8 +21,8 @@ try {
   console.warn('⚠️ build:force failed (optional if already built)');
 }
 
-console.log('📦 Installing iOS SDK dependencies (Mobile SDK 13.1.1)...');
-var sdkDependency = 'SalesforceMobileSDK-iOS';
+console.log('📦 Installing Android SDK dependencies (Mobile SDK 13.1.1)...');
+var sdkDependency = 'SalesforceMobileSDK-Android';
 var repoUrlWithBranch = packageJson.sdkDependencies && packageJson.sdkDependencies[sdkDependency];
 if (!repoUrlWithBranch) {
   console.error('❌ package.json must have sdkDependencies["' + sdkDependency + '"]');
@@ -36,41 +37,15 @@ if (fs.existsSync(targetDir)) {
 } else {
   execSync('git clone --branch ' + branch + ' --single-branch --depth 1 ' + repoUrl + ' ' + targetDir, { stdio: [0, 1, 2] });
   console.log('✅ Cloned ' + sdkDependency + ' @ ' + branch);
+  // Avoid Metro / RN confusion from nested package.json and test code
+  var hybridPath = path.join(targetDir, 'hybrid');
+  var testPath = path.join(targetDir, 'libs', 'test');
+  var reactPkgPath = path.join(targetDir, 'libs', 'SalesforceReact', 'package.json');
+  if (fs.existsSync(hybridPath)) { rimraf.sync(hybridPath); console.log('   Removed hybrid/'); }
+  if (fs.existsSync(testPath)) { rimraf.sync(testPath); console.log('   Removed libs/test/'); }
+  if (fs.existsSync(reactPkgPath)) { rimraf.sync(reactPkgPath); console.log('   Removed libs/SalesforceReact/package.json'); }
 }
 
-console.log('\n🔧 Configuring Node.js path for Xcode...');
-var nodePath = process.execPath;
-if (!nodePath || !fs.existsSync(nodePath)) {
-  try {
-    nodePath = execSync('which node', { encoding: 'utf-8' }).trim();
-  } catch (e) {
-    try {
-      nodePath = execSync('command -v node', { encoding: 'utf-8' }).trim();
-    } catch (e2) {
-      console.error('Could not find Node.js path. Set NODE_BINARY in ios/.xcode.env');
-      process.exit(1);
-    }
-  }
-}
-if (!fs.existsSync(nodePath)) {
-  console.error('Node path ' + nodePath + ' does not exist. Set NODE_BINARY in ios/.xcode.env');
-  process.exit(1);
-}
-console.log('   NODE_BINARY=' + nodePath);
-execSync('echo export NODE_BINARY=' + nodePath + ' > .xcode.env', { stdio: [0, 1, 2], cwd: 'ios' });
-console.log('✅ Created ios/.xcode.env');
-
-console.log('\n🍎 Installing CocoaPods dependencies...');
-try {
-  var env = { ...process.env };
-  delete env.NODE_EXTRA_CA_CERTS;
-  env.NODE_NO_WARNINGS = '1';
-  execSync('pod install', { stdio: [0, 1, 2], cwd: 'ios', env: env });
-  console.log('✅ CocoaPods installed');
-} catch (e) {
-  console.error('❌ pod install failed. Try: cd ios && pod install --repo-update');
-  process.exit(1);
-}
-
-console.log('\n✅ iOS setup complete!');
-console.log('   Run: npm run ios');
+console.log('\n✅ Android SDK clone complete.');
+console.log('   The app uses com.salesforce.mobilesdk:SalesforceReact:13.1.1 from Maven Central.');
+console.log('   Run: npm run android');

@@ -30,7 +30,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 
 type RootStackParamList = {
   Home: undefined;
-  Settings: undefined;
+  Settings: { tab?: 'service' | 'employee' } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

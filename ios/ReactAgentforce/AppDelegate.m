@@ -26,6 +26,7 @@
 #import <React/RCTBundleURLProvider.h>
 #import <React/RCTBridge.h>
 #import <React/RCTRootView.h>
+#import <SalesforceReact/SalesforceReactSDKManager.h>
 
 @interface AppDelegate ()
 @property (nonatomic, strong) RCTBridge *bridge;
@@ -36,6 +37,9 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
+  // Initialize Salesforce Mobile SDK (required for Employee Agent auth)
+  [SalesforceReactSDKManager initializeSDK];
+
   self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
   self.launchOptions = launchOptions;
   

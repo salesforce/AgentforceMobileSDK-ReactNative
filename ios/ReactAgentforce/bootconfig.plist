@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>remoteAccessConsumerKey</key>
-	<string>3MVG9IbvNLVp_HkGnwoVFhiIYZuav_HHa13MLGDLfVAxH7BFP4KQJN6mqvyibtNO6UTPYeitDHy3wwJVYLUgC</string>
+	<string>3MVG98dostKihXN53TYStBIiS8FC2a3tE3XhGId0hQ37iQjF0xe4fxMSb2mFaWZn9e3GiLs1q67TNlyRji.Xw</string>
 	<key>oauthRedirectURI</key>
-	<string>https://login.salesforce.com/services/oauth2/success</string>
+	<string>testsfdc:///mobilesdk/detect/oauth/done</string>
 	<key>oauthScopes</key>
 	<array>
 		<string>web</string>
