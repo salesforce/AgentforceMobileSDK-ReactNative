@@ -68,7 +68,7 @@ npm install
 
 ```bash
 # Install CocoaPods dependencies (includes bridge pod)
-cd ios && pod install && cd ..
+node installios.js
 
 # Run on iOS
 npm run ios
