@@ -30,8 +30,6 @@ import {
   StyleSheet,
   Alert,
   Image,
-  Platform,
-  ScrollView,
 } from 'react-native';
 import { AgentforceService } from 'react-native-agentforce';
 
@@ -94,14 +92,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
   };
 
+  const launchButtonSubtitle = isChecking
+    ? 'Checking...'
+    : isConfigured
+      ? 'Tap to launch'
+      : 'Not configured';
+
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Logo */}
+      <View style={styles.centerContent}>
         <View style={styles.logoContainer}>
           <Image
             source={require('../../agentforce-icon.png')}
@@ -109,83 +108,50 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         </View>
 
-        {/* Title */}
-        <Text style={styles.title}>Agentforce Service Agent</Text>
+        <Text style={styles.title}>Agentforce</Text>
         <Text style={styles.subtitle}>
-          Your AI-powered assistant is ready to help
+          Choose an agent type to launch
         </Text>
 
-        {/* Feature Cards */}
-        <View style={styles.featuresContainer}>
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>💬</Text>
-            <Text style={styles.featureTitle}>Service Agent</Text>
-            <Text style={styles.featureDescription}>
-              Lightweight AI chat for customer support
+        {isChecking && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>
+              Checking configurations...
             </Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>⚡</Text>
-            <Text style={styles.featureTitle}>Simple Setup</Text>
-            <Text style={styles.featureDescription}>
-              Just 3 configuration parameters
-            </Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <Text style={styles.featureIcon}>🚀</Text>
-            <Text style={styles.featureTitle}>Quick Setup</Text>
-            <Text style={styles.featureDescription}>
-              Configure once and start chatting
-            </Text>
-          </View>
-        </View>
-
-        {/* Status */}
-        {isChecking ? (
-          <View style={styles.statusContainer}>
-            <Text style={styles.statusText}>Checking configuration...</Text>
-          </View>
-        ) : !isConfigured ? (
-          <View style={[styles.statusContainer, styles.statusWarning]}>
-            <Text style={styles.statusTextWarning}>
-              ⚠️ Configuration required
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.statusContainer, styles.statusSuccess]}>
-            <Text style={styles.statusTextSuccess}>✓ Ready to launch</Text>
           </View>
         )}
 
-        {/* Launch Button */}
-        <TouchableOpacity
-          style={[
-            styles.launchButton,
-            !isConfigured && styles.launchButtonDisabled,
-          ]}
-          onPress={handleLaunchAgentforce}
-          disabled={!isConfigured || isChecking}
-        >
-          <Text style={styles.launchButtonText}>
-            {isConfigured ? 'Launch Agentforce' : 'Configure First'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.buttonsContainer}>
+          <TouchableOpacity
+            style={[
+              styles.launchButton,
+              styles.serviceAgentButton,
+              !isConfigured && styles.launchButtonDisabled,
+              isConfigured && styles.launchButtonEnabled,
+            ]}
+            onPress={handleLaunchAgentforce}
+            disabled={isChecking}
+          >
+            <Text style={styles.launchButtonIcon}>💬</Text>
+            <View style={styles.launchButtonContent}>
+              <Text style={styles.launchButtonTitle}>Service Agent</Text>
+              <Text style={styles.launchButtonSubtitle}>
+                {launchButtonSubtitle}
+              </Text>
+            </View>
+            {isConfigured && (
+              <Text style={styles.launchButtonArrow}>›</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
-        {/* Settings Button */}
         <TouchableOpacity
           style={styles.settingsButton}
           onPress={() => navigation.navigate('Settings')}
         >
           <Text style={styles.settingsButtonText}>⚙️ Settings</Text>
         </TouchableOpacity>
-
-        {/* Platform Info */}
-        <Text style={styles.platformText}>
-          Running on {Platform.OS === 'ios' ? 'iOS' : 'Android'}
-        </Text>
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -195,141 +161,108 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  scrollView: {
+  centerContent: {
     flex: 1,
-  },
-  content: {
-    padding: 20,
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingBottom: 40,
+    paddingHorizontal: 24,
+    paddingTop: 140,
   },
   logoContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    resizeMode: 'contain',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#212529',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6c757d',
-    textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 20,
-  },
-  featuresContainer: {
-    width: '100%',
-    marginBottom: 24,
-  },
-  featureCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 12,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
   },
-  featureIcon: {
-    fontSize: 32,
+  logo: {
+    width: 64,
+    height: 64,
+    resizeMode: 'contain',
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#212529',
+    textAlign: 'center',
     marginBottom: 8,
   },
-  featureTitle: {
+  subtitle: {
+    fontSize: 15,
+    color: '#6c757d',
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  loadingContainer: {
+    marginBottom: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6c757d',
+  },
+  buttonsContainer: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  launchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  serviceAgentButton: {
+    width: '100%',
+  },
+  launchButtonDisabled: {
+    opacity: 0.7,
+  },
+  launchButtonEnabled: {
+    borderWidth: 1,
+    borderColor: '#0176D3',
+  },
+  launchButtonIcon: {
+    fontSize: 32,
+    marginRight: 16,
+  },
+  launchButtonContent: {
+    flex: 1,
+  },
+  launchButtonTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#212529',
     marginBottom: 4,
   },
-  featureDescription: {
+  launchButtonSubtitle: {
     fontSize: 14,
     color: '#6c757d',
-    lineHeight: 20,
   },
-  statusContainer: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginBottom: 20,
-    width: '100%',
-    alignItems: 'center',
-    backgroundColor: '#e7f3ff',
-  },
-  statusWarning: {
-    backgroundColor: '#fff3cd',
-  },
-  statusSuccess: {
-    backgroundColor: '#d1e7dd',
-  },
-  statusText: {
-    fontSize: 14,
-    color: '#0070f3',
-    fontWeight: '500',
-  },
-  statusTextWarning: {
-    fontSize: 14,
-    color: '#856404',
-    fontWeight: '500',
-  },
-  statusTextSuccess: {
-    fontSize: 14,
-    color: '#0f5132',
-    fontWeight: '500',
-  },
-  launchButton: {
-    backgroundColor: '#0176D3',
-    paddingHorizontal: 40,
-    paddingVertical: 16,
-    borderRadius: 8,
-    width: '100%',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  launchButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  launchButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  launchButtonArrow: {
+    fontSize: 24,
+    color: '#0176D3',
+    fontWeight: '600',
   },
   settingsButton: {
-    marginTop: 16,
     padding: 12,
   },
   settingsButtonText: {
     fontSize: 16,
     color: '#0176D3',
     fontWeight: '600',
-  },
-  platformText: {
-    marginTop: 20,
-    fontSize: 12,
-    color: '#adb5bd',
   },
 });
 

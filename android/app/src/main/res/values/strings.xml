@@ -3,4 +3,6 @@
     <string name="account_type">com.salesforce.android.reactagentforce.login</string>
 	<string name="app_name">ReactAgentforce</string>
 	<string name="app_package">com.salesforce.android.reactagentforce</string>
+	<!-- Override AgentforceSDK 14.97.1 string that uses multiple % without positional format -->
+	<string name="af__audio_duration_format" formatted="false">%1$d:%2$02d</string>
 </resources>
