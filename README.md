@@ -11,6 +11,7 @@ The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI plat
 ## ✨ Features
 
 - **Service Agent Configuration** - Configure and initialize the SDK with Service Agent settings
+- **Employee Agent Configuration** - The bridge layer supports conversion to an Employee Agent configuration
 - **Full UI Experience** - Use the pre-built chat interface provided by the Agentforce SDK
 - **Cross-Platform** - Single codebase for both iOS and Android with native SDK integration
 - **Persistent Configuration** - Settings are saved and restored automatically
@@ -127,6 +128,14 @@ AgentforceSDK-ReactNative/
 ├── ios/                                # iOS app; Agentforce from bridge pod
 └── App.tsx                             # Root component with navigation
 ```
+
+### Employee Agent Settings
+
+#### Configure an External Client App
+Follow the instructions in the [Developer Guide](https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html#create-a-salesforce-app)
+
+#### Check out the Employee Agent Demo App
+Explore the [Employee Agent Demo App branch](https://github.com/salesforce/AgentforceMobileSDK-ReactNative/tree/employeeAgent)
 
 ## 🔧 Development
 
