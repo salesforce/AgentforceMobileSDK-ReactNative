@@ -119,16 +119,10 @@ When you first launch the app, navigate to **Settings** and configure:
 
 #### 1. Configure Salesforce Connection
 
-##### Option A: Use Existing Demo Configuration
-The project comes with a demo configuration in `bootconfig.plist`. This includes:
-- Pre-configured OAuth consumer key
-- Redirect URI: `testsfdc:///mobilesdk/detect/oauth/done`
-- OAuth scopes: `web`, `api`
+##### Create Your Own Connected App
 
-##### Option B: Create Your Own Connected App
-1. In Salesforce Setup, create a new Connected App
-2. Enable OAuth settings with these scopes: `web`, `api`
-3. Set the callback URL to: `testsfdc:///mobilesdk/detect/oauth/done`
+1. Follow the instructions in the [Developer Guide](https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html#create-a-salesforce-app)
+3. Set the callback URL in your bootconfig.plist
 4. Update `bootconfig.plist` with your consumer key
 
 #### 2. Configure Agent ID
