@@ -54,7 +54,7 @@ const App = (): JSX.Element => {
           name="Home"
           component={HomeScreen}
           options={{
-            title: 'Agentforce Service Agent',
+            title: 'Agentforce Mobile',
           }}
         />
         <Stack.Screen
