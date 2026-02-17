@@ -5,11 +5,11 @@ apply plugin: 'kotlinx-serialization'
 
 android {
     namespace = "com.salesforce.android.reactagentforce"
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         minSdkVersion 29
-        targetSdkVersion 35
+        targetSdkVersion 36
         versionCode 1
         versionName "1.0"
     }
@@ -41,14 +41,15 @@ repositories {
     google()
     mavenCentral()
     maven { url 'https://jitpack.io' }
-    maven { url 'https://opensource.salesforce.com/AgentforceMobileSDK-Android/agentforce-sdk-repository-experimental' }
+    maven { url 'https://opensource.salesforce.com/AgentforceMobileSDK-Android/agentforce-sdk-repository' }
+    maven { url 'https://s3.amazonaws.com/inapp.salesforce.com/public/android' }
     maven { url 'https://s3.amazonaws.com/salesforce-async-messaging-experimental/public/android' }
 }
 
 dependencies {
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
     implementation "com.facebook.react:react-android"
-    api "com.salesforce.android.agentforcesdk:agentforce-sdk:14.20.0-experimental"
+    api "com.salesforce.android.agentforcesdk:agentforce-sdk:14.97.1"
     // compileOnly: host app adds this for Employee Agent. Bridge compiles; host provides at runtime.
     compileOnly "com.salesforce.mobilesdk:SalesforceReact:13.1.1"
 
@@ -61,7 +62,7 @@ dependencies {
     implementation 'androidx.activity:activity-compose:1.8.2'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
 
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.2.0"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0"
 }
