@@ -24,7 +24,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-package com.salesforce.android.reactagentforce;
+package com.salesforce.android.reactagentforce.app;
 
 import android.app.Application;
 
@@ -47,7 +47,7 @@ public class MainApplication extends Application implements ReactApplication {
 	private final ReactNativeHost mReactNativeHost = new DefaultReactNativeHost(this) {
 		@Override
 		public boolean getUseDeveloperSupport() {
-			return com.salesforce.android.reactagentforce.BuildConfig.DEBUG;
+			return BuildConfig.DEBUG;
 		}
 
 		@Override

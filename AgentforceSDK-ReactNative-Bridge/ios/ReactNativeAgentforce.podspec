@@ -16,10 +16,10 @@ Pod::Spec.new do |s|
   s.version      = package["version"]
   s.summary      = "Agentforce React Native bridge"
   s.description  = package["description"]
-  s.homepage     = "https://git.soma.salesforce.com/robertson-waweru/AgentforceSDK-ReactNative-Bridge"
+  s.homepage     = "https://github.com/salesforce/AgentforceMobileSDK-ReactNative"
   s.license      = "BSD-3-Clause"
   s.author       = "Salesforce"
-  s.source       = { :git => "https://git.soma.salesforce.com/robertson-waweru/AgentforceSDK-ReactNative-Bridge.git", :tag => "v#{s.version}" }
+  s.source       = { :git => "https://github.com/salesforce/AgentforceMobileSDK-ReactNative.git", :tag => "v#{s.version}" }
   s.requires_arc = true
   s.platforms    = { :ios => "15.0" }
   s.swift_version = "5.0"
