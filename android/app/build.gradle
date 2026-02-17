@@ -71,7 +71,8 @@ def enableProguardInReleaseBuilds = false
 def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
-    namespace = "com.salesforce.android.reactagentforce"
+    // Use a distinct namespace from the bridge library to avoid duplicate BuildConfig (both would otherwise be com.salesforce.android.reactagentforce.BuildConfig).
+    namespace = "com.salesforce.android.reactagentforce.app"
     compileSdk rootProject.ext.compileSdk
 
     defaultConfig {
@@ -101,6 +102,12 @@ android {
         release {
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += 'META-INF/versions/9/OSGI-INF/MANIFEST.MF'
         }
     }
 }
