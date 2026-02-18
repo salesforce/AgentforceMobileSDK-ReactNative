@@ -38,13 +38,27 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 ## 📋 Prerequisites
 
 ### General
-- Node.js 18+ and npm/yarn
+- **Node.js** (LTS recommended; 18+ required, 20.19.4+ preferred). Install and verify:
+  - **macOS:** `brew install node` (requires [Homebrew](https://brew.sh)). Or use [nvm](https://github.com/nvm-sh/nvm): `nvm install --lts`.
+  - **Windows:** Install from [nodejs.org](https://nodejs.org/) or `choco install nodejs-lts`. Or use [nvm-windows](https://github.com/coreybutler/nvm-windows).
+  - **Linux:** Use your distro’s package manager or nvm. Run `node -v` to confirm.
+- **Watchman** (recommended for better performance and fewer filesystem issues). Install and verify:
+  - **macOS:** `brew install watchman`.
+  - **Windows/Linux:** Optional; see [Watchman](https://facebook.github.io/watchman/docs/install) if needed. Run `watchman -v` to confirm.
 - Git
 
 ### Android
 - Android Studio
 - Android SDK 24+
 - Gradle 8.0+
+- **JDK 17** (required for building; higher versions may cause issues). Recommended setup:
+  - **macOS:** Install [Azul Zulu JDK 17](https://www.azul.com/downloads/) (e.g. `brew install --cask zulu@17`), then set in `~/.zshrc` or `~/.bash_profile`:
+    ```bash
+    export JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home
+    ```
+  - **Windows:** Install JDK 17 (e.g. [Microsoft OpenJDK 17](https://learn.microsoft.com/en-us/java/openjdk/download) or `choco install microsoft-openjdk17`).
+  - **Linux:** Install OpenJDK 17 via your package manager.
+  - Run `java -version` to confirm. Full details: [React Native – Set up your environment (Android)](https://reactnative.dev/docs/set-up-your-environment?platform=android).
 
 ### iOS
 - macOS
