@@ -19,6 +19,7 @@ import {
   LegacyServiceAgentConfig,
   ConfigurationResult,
   ConfigurationInfo,
+  FeatureFlags,
   isServiceAgentConfig,
   isEmployeeAgentConfig,
   isLegacyConfig,
@@ -29,7 +30,7 @@ import { TokenDelegate } from '../types/TokenDelegate';
 const { AgentforceModule } = NativeModules;
 
 // Re-export types for convenience
-export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig };
+export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags };
 export type { TokenDelegate };
 
 /**
@@ -276,9 +277,12 @@ class AgentforceService {
       // Normalize config to ensure it has a type field
       const normalizedConfig = this.normalizeConfig(config);
 
+      // Merge stored feature flags into config if not provided (so native uses same defaults/stored)
+      const configWithFlags = await this.mergeFeatureFlagsIntoConfig(normalizedConfig);
+
       // Handle Employee Agent token requirements
-      if (isEmployeeAgentConfig(normalizedConfig)) {
-        await this.prepareEmployeeAgentConfig(normalizedConfig);
+      if (isEmployeeAgentConfig(configWithFlags)) {
+        await this.prepareEmployeeAgentConfig(configWithFlags);
       }
 
       // Call native module with the unified config object
@@ -287,19 +291,90 @@ class AgentforceService {
       
       if (Platform.OS === 'ios') {
         // iOS: Use the new unified method that accepts NSDictionary
-        result = await AgentforceModule.configureWithConfig(normalizedConfig);
+        result = await AgentforceModule.configureWithConfig(configWithFlags);
       } else {
         // Android: Use configure with ReadableMap
-        result = await AgentforceModule.configure(normalizedConfig);
+        result = await AgentforceModule.configure(configWithFlags);
       }
 
       console.log(
-        `[AgentforceService] Configured successfully (mode: ${normalizedConfig.type})`,
+        `[AgentforceService] Configured successfully (mode: ${configWithFlags.type})`,
       );
       return result?.success ?? true;
     } catch (error) {
       console.error('[AgentforceService] Configuration failed:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Merge stored feature flags into config if config does not already have featureFlags.
+   * So the native layer receives a single source of truth (config.featureFlags or stored).
+   */
+  private async mergeFeatureFlagsIntoConfig(
+    config: AgentConfig,
+  ): Promise<AgentConfig> {
+    if (config.featureFlags != null) {
+      return config;
+    }
+    const stored = await this.getFeatureFlags();
+    return { ...config, featureFlags: stored };
+  }
+
+  /**
+   * Get the current feature flags (from native storage).
+   * Used by the Feature Flags screen and when configuring without explicit featureFlags.
+   */
+  async getFeatureFlags(): Promise<FeatureFlags> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return {
+        enableMultiAgent: true,
+        enableMultiModalInput: false,
+        enablePDFUpload: false,
+        enableVoice: true,
+      };
+    }
+    if (!AgentforceModule?.getFeatureFlags) {
+      return {
+        enableMultiAgent: true,
+        enableMultiModalInput: false,
+        enablePDFUpload: false,
+        enableVoice: true,
+      };
+    }
+    try {
+      const flags = await AgentforceModule.getFeatureFlags();
+      return {
+        enableMultiAgent: flags?.enableMultiAgent ?? true,
+        enableMultiModalInput: flags?.enableMultiModalInput ?? false,
+        enablePDFUpload: flags?.enablePDFUpload ?? false,
+        enableVoice: flags?.enableVoice ?? true,
+      };
+    } catch {
+      return {
+        enableMultiAgent: true,
+        enableMultiModalInput: false,
+        enablePDFUpload: false,
+        enableVoice: true,
+      };
+    }
+  }
+
+  /**
+   * Save feature flags (persisted in native storage).
+   * Takes effect the next time configure() is called.
+   */
+  async setFeatureFlags(flags: FeatureFlags): Promise<void> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return;
+    }
+    if (!AgentforceModule?.setFeatureFlags) {
+      return;
+    }
+    try {
+      await AgentforceModule.setFeatureFlags(flags);
+    } catch (error) {
+      console.warn('[AgentforceService] Failed to save feature flags:', error);
     }
   }
 

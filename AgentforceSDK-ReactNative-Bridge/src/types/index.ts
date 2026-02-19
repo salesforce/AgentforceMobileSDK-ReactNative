@@ -9,6 +9,7 @@ export {
   ServiceAgentConfig,
   EmployeeAgentConfig,
   AgentConfig,
+  FeatureFlags,
   LegacyServiceAgentConfig,
   ConfigurationResult,
   ConfigurationInfo,

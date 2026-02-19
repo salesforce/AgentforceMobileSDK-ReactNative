@@ -268,29 +268,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.infoContainer}>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Service Agent</Text>
-            <Text style={styles.infoCardDescription}>
-              Anonymous guest access for customer support. Configure via UI in
-              Settings.
-            </Text>
-          </View>
-
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Employee Agent</Text>
-            <Text style={styles.infoCardDescription}>
-              Authenticated access for internal users. Sign in via Settings to
-              use Employee Agent.
-            </Text>
-          </View>
-        </View>
-
         <TouchableOpacity
           style={styles.settingsButton}
           onPress={() => navigation.navigate('Settings')}
         >
           <Text style={styles.settingsButtonText}>⚙️ Settings</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.settingsButton, styles.featureFlagsButton]}
+          onPress={() => navigation.navigate('FeatureFlags')}
+        >
+          <Text style={styles.settingsButtonText}>🚩 Feature Flags</Text>
         </TouchableOpacity>
 
         <Text style={styles.platformText}>
@@ -417,29 +406,6 @@ const styles = StyleSheet.create({
     color: '#7B1FA2',
     fontWeight: '300',
   },
-  infoContainer: {
-    width: '100%',
-    gap: 12,
-    marginBottom: 24,
-  },
-  infoCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  infoCardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#495057',
-    marginBottom: 4,
-  },
-  infoCardDescription: {
-    fontSize: 13,
-    color: '#6c757d',
-    lineHeight: 18,
-  },
   settingsButton: {
     padding: 16,
     backgroundColor: '#ffffff',
@@ -448,6 +414,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e9ecef',
+  },
+  featureFlagsButton: {
+    marginTop: 10,
   },
   settingsButtonText: {
     fontSize: 16,

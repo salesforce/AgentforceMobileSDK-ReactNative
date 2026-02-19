@@ -6,11 +6,24 @@
  */
 
 /**
+ * Feature flags for the Agentforce SDK (can be set in-app via Feature Flags screen).
+ */
+export interface FeatureFlags {
+  enableMultiAgent: boolean;
+  enableMultiModalInput: boolean;
+  enablePDFUpload: boolean;
+  enableVoice: boolean;
+}
+
+/**
  * Base configuration shared by all agent types
  */
 interface BaseAgentConfig {
   /** Salesforce Organization ID (15 or 18 character format) */
   organizationId: string;
+
+  /** Optional feature flags. If omitted, stored flags (or defaults) are used. */
+  featureFlags?: FeatureFlags;
 }
 
 /**
