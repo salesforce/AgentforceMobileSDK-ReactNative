@@ -27,10 +27,12 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import FeatureFlagsScreen from './src/screens/FeatureFlagsScreen';
 
 type RootStackParamList = {
   Home: undefined;
   Settings: { tab?: 'service' | 'employee' } | undefined;
+  FeatureFlags: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -62,6 +64,13 @@ const App = (): JSX.Element => {
           component={SettingsScreen}
           options={{
             title: 'Configuration',
+          }}
+        />
+        <Stack.Screen
+          name="FeatureFlags"
+          component={FeatureFlagsScreen}
+          options={{
+            title: 'Feature Flags',
           }}
         />
       </Stack.Navigator>

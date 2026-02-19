@@ -191,12 +191,14 @@ class AgentforceModule: RCTEventEmitter {
             displayName: config.userId
         )
         
-        // Feature flags: only multi-agent enabled (mirror Android SDK settings).
+        let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        saveFeatureFlagsToUserDefaults(flags)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
-            enableMultiModalInput: false,
-            enablePDFFileUpload: false,
-            multiAgent: true,
+            enableMultiModalInput: flags.enableMultiModalInput,
+            enablePDFFileUpload: flags.enablePDFUpload,
+            multiAgent: flags.enableMultiAgent,
             shouldBlockMicrophone: false,
+            enableVoice: flags.enableVoice,
             enableOnboarding: false,
             internalFlags: [:]
         )
@@ -480,6 +482,80 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         UserDefaults.standard.set(agentId, forKey: "EmployeeAgentId")
+        resolve(nil)
+    }
+    
+    private static let featureFlagKeys = (
+        enableMultiAgent: "AgentforceFF_enableMultiAgent",
+        enableMultiModalInput: "AgentforceFF_enableMultiModalInput",
+        enablePDFUpload: "AgentforceFF_enablePDFUpload",
+        enableVoice: "AgentforceFF_enableVoice"
+    )
+    
+    private struct FeatureFlags {
+        let enableMultiAgent: Bool
+        let enableMultiModalInput: Bool
+        let enablePDFUpload: Bool
+        let enableVoice: Bool
+    }
+    
+    private func getFeatureFlagsFromConfigOrUserDefaults(_ configDict: [String: Any]) -> FeatureFlags {
+        if let featureFlags = configDict["featureFlags"] as? [String: Any] {
+            return FeatureFlags(
+                enableMultiAgent: (featureFlags["enableMultiAgent"] as? NSNumber)?.boolValue ?? true,
+                enableMultiModalInput: (featureFlags["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false,
+                enablePDFUpload: (featureFlags["enablePDFUpload"] as? NSNumber)?.boolValue ?? false,
+                enableVoice: (featureFlags["enableVoice"] as? NSNumber)?.boolValue ?? true
+            )
+        }
+        let ud = UserDefaults.standard
+        return FeatureFlags(
+            enableMultiAgent: ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
+            enableMultiModalInput: ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
+            enablePDFUpload: ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
+            enableVoice: ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+        )
+    }
+    
+    private func saveFeatureFlagsToUserDefaults(_ flags: FeatureFlags) {
+        UserDefaults.standard.set(flags.enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
+        UserDefaults.standard.set(flags.enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
+        UserDefaults.standard.set(flags.enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
+        UserDefaults.standard.set(flags.enableVoice, forKey: Self.featureFlagKeys.enableVoice)
+    }
+    
+    @objc
+    func getFeatureFlags(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        let ud = UserDefaults.standard
+        resolve([
+            "enableMultiAgent": ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
+            "enableMultiModalInput": ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
+            "enablePDFUpload": ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
+            "enableVoice": ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+        ])
+    }
+
+    @objc
+    func setFeatureFlags(
+        _ flags: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let dict = flags as? [String: Any] else {
+            resolve(nil)
+            return
+        }
+        let enableMultiAgent = (dict["enableMultiAgent"] as? NSNumber)?.boolValue ?? true
+        let enableMultiModalInput = (dict["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false
+        let enablePDFUpload = (dict["enablePDFUpload"] as? NSNumber)?.boolValue ?? false
+        let enableVoice = (dict["enableVoice"] as? NSNumber)?.boolValue ?? true
+        UserDefaults.standard.set(enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
+        UserDefaults.standard.set(enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
+        UserDefaults.standard.set(enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
+        UserDefaults.standard.set(enableVoice, forKey: Self.featureFlagKeys.enableVoice)
         resolve(nil)
     }
     
