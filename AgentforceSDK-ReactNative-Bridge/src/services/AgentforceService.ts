@@ -25,21 +25,11 @@ import {
   isLegacyConfig,
 } from '../types/AgentConfig';
 
-import { TokenDelegate } from '../types/TokenDelegate';
-
 const { AgentforceModule } = NativeModules;
 
 // Re-export types for convenience
 export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags };
-export type { TokenDelegate };
 
-/**
- * Native module event names
- */
-const EVENTS = {
-  TOKEN_REFRESH_NEEDED: 'onTokenRefreshNeeded',
-  AUTHENTICATION_FAILURE: 'onAuthenticationFailure',
-} as const;
 
 /**
  * Service class for interacting with native Agentforce SDK.
@@ -73,154 +63,14 @@ const EVENTS = {
  */
 class AgentforceService {
   /**
-   * Token delegate for Employee Agent mode.
-   * Set this before configuring Employee Agent without accessToken.
-   */
-  private tokenDelegate: TokenDelegate | null = null;
-
-  /**
-   * Native event emitter for receiving events from native layer
-   */
-  private eventEmitter: NativeEventEmitter | null = null;
-
-  /**
-   * Subscription for token refresh events
-   */
-  private tokenRefreshSubscription: EmitterSubscription | null = null;
-
-  /**
-   * Subscription for authentication failure events
-   */
-  private authFailureSubscription: EmitterSubscription | null = null;
-
-  /**
    * Track if service has been initialized
    */
   private initialized: boolean = false;
 
   constructor() {
-    this.initializeEventEmitter();
+    this.initialized = true;
   }
 
-  /**
-   * Initialize the native event emitter and set up listeners
-   */
-  private initializeEventEmitter(): void {
-    if (!AgentforceModule) {
-      console.warn(
-        '[AgentforceService] Native module not available - events will not work',
-      );
-      return;
-    }
-
-    try {
-      this.eventEmitter = new NativeEventEmitter(AgentforceModule);
-      this.setupEventListeners();
-      this.initialized = true;
-    } catch (error) {
-      console.warn(
-        '[AgentforceService] Failed to initialize event emitter:',
-        error,
-      );
-    }
-  }
-
-  /**
-   * Set up listeners for native events
-   */
-  private setupEventListeners(): void {
-    if (!this.eventEmitter) return;
-
-    // Listen for token refresh requests from native layer
-    this.tokenRefreshSubscription = this.eventEmitter.addListener(
-      EVENTS.TOKEN_REFRESH_NEEDED,
-      this.handleTokenRefreshRequest.bind(this),
-    );
-
-    // Listen for authentication failure events
-    this.authFailureSubscription = this.eventEmitter.addListener(
-      EVENTS.AUTHENTICATION_FAILURE,
-      this.handleAuthenticationFailure.bind(this),
-    );
-  }
-
-  /**
-   * Handle token refresh request from native layer
-   */
-  private async handleTokenRefreshRequest(): Promise<void> {
-    console.log('[AgentforceService] Token refresh requested by native layer');
-
-    if (!this.tokenDelegate) {
-      console.error(
-        '[AgentforceService] Token refresh requested but no delegate registered',
-      );
-      return;
-    }
-
-    try {
-      const newToken = await this.tokenDelegate.refreshToken();
-      console.log('[AgentforceService] Token refreshed successfully');
-
-      // Provide the new token back to native layer
-      await AgentforceModule.provideRefreshedToken(newToken);
-    } catch (error) {
-      console.error('[AgentforceService] Token refresh failed:', error);
-
-      // Notify delegate of authentication failure
-      this.tokenDelegate.onAuthenticationFailure?.();
-    }
-  }
-
-  /**
-   * Handle authentication failure event from native layer
-   */
-  private handleAuthenticationFailure(event: { error?: string }): void {
-    console.error(
-      '[AgentforceService] Authentication failure:',
-      event?.error || 'Unknown error',
-    );
-
-    // Notify delegate if registered
-    this.tokenDelegate?.onAuthenticationFailure?.();
-  }
-
-  /**
-   * Register a token delegate for Employee Agent mode.
-   *
-   * The delegate is used to obtain and refresh OAuth tokens for authenticated
-   * access. Must be set before configuring an Employee Agent without a direct
-   * accessToken.
-   *
-   * @param delegate - Token delegate implementation
-   *
-   * @example
-   * ```typescript
-   * AgentforceService.setTokenDelegate({
-   *   getAccessToken: async () => myAuthService.getToken(),
-   *   refreshToken: async () => myAuthService.refreshToken(),
-   *   onAuthenticationFailure: () => navigation.navigate('Login'),
-   * });
-   * ```
-   */
-  setTokenDelegate(delegate: TokenDelegate): void {
-    this.tokenDelegate = delegate;
-    console.log('[AgentforceService] Token delegate registered');
-  }
-
-  /**
-   * Clear the registered token delegate
-   */
-  clearTokenDelegate(): void {
-    this.tokenDelegate = null;
-    console.log('[AgentforceService] Token delegate cleared');
-  }
-
-  /**
-   * Check if a token delegate is registered
-   */
-  hasTokenDelegate(): boolean {
-    return this.tokenDelegate !== null;
-  }
 
   /**
    * Configure the SDK with either Service or Employee agent settings.
@@ -279,11 +129,6 @@ class AgentforceService {
 
       // Merge stored feature flags into config if not provided (so native uses same defaults/stored)
       const configWithFlags = await this.mergeFeatureFlagsIntoConfig(normalizedConfig);
-
-      // Handle Employee Agent token requirements
-      if (isEmployeeAgentConfig(configWithFlags)) {
-        await this.prepareEmployeeAgentConfig(configWithFlags);
-      }
 
       // Call native module with the unified config object
       // iOS uses configureWithConfig, Android uses configure with object
@@ -402,36 +247,6 @@ class AgentforceService {
     return config;
   }
 
-  /**
-   * Prepare Employee Agent config by obtaining token if needed
-   */
-  private async prepareEmployeeAgentConfig(
-    config: EmployeeAgentConfig,
-  ): Promise<void> {
-    // If token is already provided, nothing to do
-    if (config.accessToken) {
-      return;
-    }
-
-    // Token must come from delegate
-    if (!this.tokenDelegate) {
-      throw new Error(
-        'Employee Agent requires either accessToken or a registered tokenDelegate. ' +
-          'Call setTokenDelegate() first or provide accessToken in config.',
-      );
-    }
-
-    // Get token from delegate
-    console.log('[AgentforceService] Getting token from delegate');
-    const token = await this.tokenDelegate.getAccessToken();
-
-    if (!token) {
-      throw new Error('Token delegate returned empty token');
-    }
-
-    // Mutate config to include the token
-    config.accessToken = token;
-  }
 
   /**
    * Launch the Agentforce conversation UI.
@@ -718,21 +533,12 @@ class AgentforceService {
   }
 
   /**
-   * Clean up event listeners and resources.
+   * Clean up resources.
    *
    * Call this when the service is no longer needed (e.g., app shutdown).
    */
   destroy(): void {
-    this.tokenRefreshSubscription?.remove();
-    this.tokenRefreshSubscription = null;
-
-    this.authFailureSubscription?.remove();
-    this.authFailureSubscription = null;
-
-    this.tokenDelegate = null;
-    this.eventEmitter = null;
     this.initialized = false;
-
     console.log('[AgentforceService] Service destroyed');
   }
 }

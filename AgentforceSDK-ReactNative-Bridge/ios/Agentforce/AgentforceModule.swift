@@ -22,43 +22,26 @@ class AgentforceModule: RCTEventEmitter {
     
     /// Unified credential provider for both Service and Employee agents
     private let credentialProvider = UnifiedCredentialProvider()
-    
+
     /// Agentforce client instance
     private var agentforceClient: AgentforceClient?
-    
+
     /// Current conversation
     private var currentConversation: AgentConversation?
-    
-    /// Simple token provider for Employee Agent mode
-    private var simpleTokenProvider: SimpleTokenProvider?
-    
+
     /// Current mode configuration
     private var currentMode: AgentMode?
     
-    /// Continuation for async token refresh
-    private var tokenRefreshContinuation: CheckedContinuation<String, Error>?
-    
-    /// Track if we have listeners registered
-    private var hasListeners = false
-    
     // MARK: - Module Setup
-    
+
     override static func requiresMainQueueSetup() -> Bool {
         return true
     }
-    
+
     override func supportedEvents() -> [String]! {
-        return ["onTokenRefreshNeeded", "onAuthenticationFailure"]
+        return []
     }
-    
-    override func startObserving() {
-        hasListeners = true
-    }
-    
-    override func stopObserving() {
-        hasListeners = false
-    }
-    
+
     // MARK: - Unified Configuration Method
     
     /// Configure the SDK with either Service or Employee agent settings.
@@ -148,32 +131,10 @@ class AgentforceModule: RCTEventEmitter {
         guard let config = EmployeeAgentModeConfig.from(dictionary: configDict) else {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
         }
-        
-        // Create simple token provider for delegate-based refresh
-        simpleTokenProvider = SimpleTokenProvider(
-            accessToken: config.accessToken,
-            organizationId: config.organizationId,
-            userId: config.userId
-        )
-        
-        // Set up refresh handler that calls back to JS
-        simpleTokenProvider?.setRefreshHandler { [weak self] in
-            guard let self = self else {
-                throw TokenError.refreshFailed("Module deallocated")
-            }
-            return try await self.requestTokenRefreshFromJS()
-        }
-        
-        // Set up auth failure handler
-        simpleTokenProvider?.setAuthFailureHandler { [weak self] in
-            self?.emitAuthenticationFailure(error: "Token refresh failed")
-        }
-        
-        // Configure unified credential provider for Employee Agent mode with delegate
-        credentialProvider.configure(
-            employeeAgent: config,
-            tokenProvider: simpleTokenProvider!
-        )
+
+        // Configure unified credential provider for Employee Agent mode
+        // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
+        credentialProvider.configure(employeeAgent: config)
         currentMode = .employee(config: config)
         
         // Persist employee agentId (editable in Settings tab)
@@ -406,28 +367,47 @@ class AgentforceModule: RCTEventEmitter {
             print("[AgentforceModule] ♻️ Reusing existing conversation")
             return existing
         }
-        
+
         // Start new conversation based on mode
         let conversation: AgentConversation
-        
+
         switch mode {
         case .service(let config):
             conversation = client.startAgentforceConversation(
                 forESDeveloperName: config.esDeveloperName
             )
-            
+
         case .employee(let config):
-            conversation = client.startAgentforceConversation(
-                forAgentId: config.agentId
-            )
+            // For Employee Agent, check if agentId is provided
+            if let agentId = config.agentId, !agentId.isEmpty {
+                // Specific agent ID provided - always use it
+                conversation = client.startAgentforceConversation(
+                    forAgentId: agentId
+                )
+                print("[AgentforceModule] 📝 Starting conversation for specific agent: \(agentId)")
+            } else {
+                // No agentId provided - check if multi-agent is enabled
+                let multiAgentEnabled = UserDefaults.standard.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : UserDefaults.standard.bool(forKey: Self.featureFlagKeys.enableMultiAgent)
+
+                if !multiAgentEnabled {
+                    // Multi-agent disabled but no agentId - this will likely fail at SDK level
+                    print("[AgentforceModule] ⚠️ WARNING: No agentId provided and multi-agent is disabled. Chat panel will likely fail.")
+                }
+
+                // Pass nil and let SDK handle it (will succeed if multi-agent enabled, fail otherwise)
+                conversation = client.startAgentforceConversation(
+                    forAgentId: nil
+                )
+                print("[AgentforceModule] 📝 Starting conversation with agentId=nil (multi-agent: \(multiAgentEnabled))")
+            }
         }
-        
+
         currentConversation = conversation
         switch mode {
         case .service(let config):
             print("[AgentforceModule] 📝 New conversation started (Service Agent) - esDeveloperName: \(config.esDeveloperName). Session start API will use serviceApiURL: \(config.serviceApiURL)")
         case .employee(let config):
-            print("[AgentforceModule] 📝 New conversation started (Employee Agent) - agentId: \(config.agentId ?? "nil (multi-agent)"). Session start API will use instanceUrl and credentials.")
+            print("[AgentforceModule] 📝 New conversation started (Employee Agent) - agentId: \(config.agentId ?? "multi-agent"). Session start API will use instanceUrl and credentials.")
         }
         return conversation
     }
@@ -505,7 +485,7 @@ class AgentforceModule: RCTEventEmitter {
                 enableMultiAgent: (featureFlags["enableMultiAgent"] as? NSNumber)?.boolValue ?? true,
                 enableMultiModalInput: (featureFlags["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false,
                 enablePDFUpload: (featureFlags["enablePDFUpload"] as? NSNumber)?.boolValue ?? false,
-                enableVoice: (featureFlags["enableVoice"] as? NSNumber)?.boolValue ?? true
+                enableVoice: (featureFlags["enableVoice"] as? NSNumber)?.boolValue ?? false
             )
         }
         let ud = UserDefaults.standard
@@ -513,7 +493,7 @@ class AgentforceModule: RCTEventEmitter {
             enableMultiAgent: ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
             enableMultiModalInput: ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
             enablePDFUpload: ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
-            enableVoice: ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+            enableVoice: ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
         )
     }
     
@@ -534,7 +514,7 @@ class AgentforceModule: RCTEventEmitter {
             "enableMultiAgent": ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
             "enableMultiModalInput": ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
             "enablePDFUpload": ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
-            "enableVoice": ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+            "enableVoice": ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
         ])
     }
 
@@ -551,7 +531,7 @@ class AgentforceModule: RCTEventEmitter {
         let enableMultiAgent = (dict["enableMultiAgent"] as? NSNumber)?.boolValue ?? true
         let enableMultiModalInput = (dict["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false
         let enablePDFUpload = (dict["enablePDFUpload"] as? NSNumber)?.boolValue ?? false
-        let enableVoice = (dict["enableVoice"] as? NSNumber)?.boolValue ?? true
+        let enableVoice = (dict["enableVoice"] as? NSNumber)?.boolValue ?? false
         UserDefaults.standard.set(enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
         UserDefaults.standard.set(enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
         UserDefaults.standard.set(enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
@@ -631,51 +611,6 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
     
-    // MARK: - Token Refresh (Employee Agent only)
-    
-    /// Called when token needs refresh - emits event to JS
-    private func requestTokenRefreshFromJS() async throws -> String {
-        return try await withCheckedThrowingContinuation { continuation in
-            // Emit event to JS to request token refresh
-            if hasListeners {
-                sendEvent(withName: "onTokenRefreshNeeded", body: nil)
-            }
-            
-            // Store continuation to be resolved when JS calls back
-            self.tokenRefreshContinuation = continuation
-        }
-    }
-    
-    /// Called by JS when it has a fresh token
-    @objc
-    func provideRefreshedToken(
-        _ token: String,
-        resolver resolve: @escaping RCTPromiseResolveBlock,
-        rejecter reject: @escaping RCTPromiseRejectBlock
-    ) {
-        guard credentialProvider.isEmployeeAgent else {
-            reject("INVALID_MODE", "Token refresh only valid for Employee Agent mode", nil)
-            return
-        }
-        
-        if let continuation = tokenRefreshContinuation {
-            simpleTokenProvider?.updateToken(token)
-            credentialProvider.updateToken(token)
-            continuation.resume(returning: token)
-            tokenRefreshContinuation = nil
-            resolve(["success": true])
-        } else {
-            reject("NO_PENDING_REFRESH", "No token refresh was pending", nil)
-        }
-    }
-    
-    /// Emit authentication failure event to JS
-    private func emitAuthenticationFailure(error: String) {
-        if hasListeners {
-            sendEvent(withName: "onAuthenticationFailure", body: ["error": error])
-        }
-    }
-    
     // MARK: - Cleanup
     
     private func cleanupClient() {
@@ -707,7 +642,6 @@ class AgentforceModule: RCTEventEmitter {
             await closeCurrentConversation()
             cleanupClient()
             currentMode = nil
-            simpleTokenProvider = nil
             credentialProvider.reset()
             ServiceAgentManager.shared.resetToDefaults()
             UserDefaults.standard.removeObject(forKey: "EmployeeAgentId")

@@ -55,7 +55,7 @@ const FeatureFlagsScreen: React.FC = () => {
         enableMultiAgent: true,
         enableMultiModalInput: false,
         enablePDFUpload: false,
-        enableVoice: true,
+        enableVoice: false,
       });
     } finally {
       setLoading(false);

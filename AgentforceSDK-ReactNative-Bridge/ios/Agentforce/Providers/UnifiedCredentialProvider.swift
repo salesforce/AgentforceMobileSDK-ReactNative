@@ -7,6 +7,11 @@
 import Foundation
 import AgentforceSDK
 import AgentforceService
+import SalesforceUser
+
+#if canImport(SalesforceSDKCore)
+import SalesforceSDKCore
+#endif
 
 /// Unified credential provider that handles both Service Agent and Employee Agent modes.
 /// Returns .OAuth credentials for both modes:
@@ -15,14 +20,11 @@ import AgentforceService
 class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
     
     // MARK: - Properties
-    
+
     /// Current operating mode
     private(set) var mode: AgentMode?
-    
-    /// Token provider for Employee Agent mode (nil for Service Agent)
-    private var tokenProvider: TokenProviding?
-    
-    /// Direct token storage for simple token cases
+
+    /// Direct token storage for simple token cases (fallback only)
     private var directToken: String?
     private var directOrgId: String?
     private var directUserId: String?
@@ -39,47 +41,31 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
     /// - Parameter config: Service Agent configuration
     func configure(serviceAgent config: ServiceAgentModeConfig) {
         self.mode = .service(config: config)
-        self.tokenProvider = nil
         self.directToken = ""  // Empty token for Service Agent
         self.directOrgId = config.organizationId
         self.directUserId = ""  // Empty userId for Service Agent
-        
+
         print("[UnifiedCredentialProvider] Configured for Service Agent mode")
     }
-    
-    /// Configure for Employee Agent mode with a token provider delegate
-    /// - Parameters:
-    ///   - config: Employee Agent configuration
-    ///   - tokenProvider: Token provider implementation
-    func configure(employeeAgent config: EmployeeAgentModeConfig, tokenProvider: TokenProviding) {
-        self.mode = .employee(config: config)
-        self.tokenProvider = tokenProvider
-        self.directToken = nil
-        self.directOrgId = nil
-        self.directUserId = nil
-        
-        print("[UnifiedCredentialProvider] Configured for Employee Agent mode with token provider")
-    }
-    
-    /// Configure for Employee Agent mode with a direct token (simpler testing scenario)
-    /// - Parameter config: Employee Agent configuration with accessToken
+
+    /// Configure for Employee Agent mode
+    /// - Parameter config: Employee Agent configuration
     func configure(employeeAgent config: EmployeeAgentModeConfig) {
         self.mode = .employee(config: config)
-        self.tokenProvider = nil
         self.directToken = config.accessToken
         self.directOrgId = config.organizationId
         self.directUserId = config.userId
-        
-        print("[UnifiedCredentialProvider] Configured for Employee Agent mode with direct token")
+
+        print("[UnifiedCredentialProvider] Configured for Employee Agent mode")
     }
     
     // MARK: - AgentforceAuthCredentialProviding
-    
+
     func getAuthCredentials() -> AgentforceAuthCredentials {
         guard let mode = mode else {
             fatalError("UnifiedCredentialProvider not configured. Call configure() first.")
         }
-        
+
         switch mode {
         case .service(let config):
             // Service Agent uses OAuth with EMPTY token (guest access)
@@ -88,25 +74,32 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
                 orgId: config.organizationId,
                 userId: ""
             )
-            
+
         case .employee(let config):
             // Employee Agent uses OAuth with REAL token
-            if let tokenProvider = tokenProvider {
-                // Delegate-based token
+            // Get fresh token from Mobile SDK each time (Mobile SDK handles refresh internally)
+            #if canImport(SalesforceSDKCore)
+            if let currentUser = UserAccountManager.shared.currentUserAccount,
+               let accessToken = currentUser.credentials.accessToken {
+                print("[UnifiedCredentialProvider] ✅ Fetched fresh token from Mobile SDK")
                 return .OAuth(
-                    authToken: tokenProvider.getAccessToken(),
-                    orgId: tokenProvider.getOrganizationId(),
-                    userId: tokenProvider.getUserId()
+                    authToken: accessToken,
+                    orgId: config.organizationId,
+                    userId: config.userId
                 )
-            } else if let token = directToken {
-                // Direct token
+            }
+            #endif
+
+            // Fallback to cached token if Mobile SDK not available
+            if let token = directToken {
+                print("[UnifiedCredentialProvider] ⚠️ Using cached token (Mobile SDK not available)")
                 return .OAuth(
                     authToken: token,
                     orgId: directOrgId ?? config.organizationId,
                     userId: directUserId ?? config.userId
                 )
             } else {
-                fatalError("Employee Agent mode requires either tokenProvider or directToken")
+                fatalError("Employee Agent mode requires either Mobile SDK or cached token")
             }
         }
     }
@@ -165,7 +158,6 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
     /// Reset the provider to unconfigured state
     func reset() {
         mode = nil
-        tokenProvider = nil
         directToken = nil
         directOrgId = nil
         directUserId = nil
