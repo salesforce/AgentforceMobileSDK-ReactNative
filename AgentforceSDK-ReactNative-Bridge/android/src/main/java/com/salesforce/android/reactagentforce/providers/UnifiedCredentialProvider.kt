@@ -11,6 +11,7 @@ import com.salesforce.android.reactagentforce.delegates.TokenProvider
 import com.salesforce.android.reactagentforce.models.AgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
+import com.salesforce.androidsdk.app.SalesforceSDKManager
 
 /**
  * Unified credential provider that handles both Service Agent and Employee Agent modes.
@@ -96,6 +97,24 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
             
             is AgentMode.Employee -> {
                 // Employee Agent uses OAuth with REAL token
+                // Get fresh token from Mobile SDK each time (Mobile SDK handles refresh internally)
+                try {
+                    val currentToken = SalesforceSDKManager.getInstance()
+                        ?.userAccountManager?.currentUser?.authToken
+
+                    if (currentToken != null) {
+                        Log.d(TAG, "✅ Fetched fresh token from Mobile SDK")
+                        return AgentforceAuthCredentials.OAuth(
+                            authToken = currentToken,
+                            orgId = currentMode.config.organizationId,
+                            userId = currentMode.config.userId
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to get fresh token from Mobile SDK, falling back to cached", e)
+                }
+
+                // Fallback to cached token if Mobile SDK not available
                 val provider = tokenProvider
                 if (provider != null) {
                     // Delegate-based token
@@ -107,7 +126,7 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
                 } else {
                     // Direct token
                     val token = directToken
-                        ?: throw IllegalStateException("Employee Agent mode requires either tokenProvider or directToken")
+                        ?: throw IllegalStateException("Employee Agent mode requires either Mobile SDK or cached token")
                     AgentforceAuthCredentials.OAuth(
                         authToken = token,
                         orgId = directOrgId ?: currentMode.config.organizationId,

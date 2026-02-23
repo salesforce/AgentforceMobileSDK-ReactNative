@@ -150,11 +150,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     if (!validateServiceInputs()) return;
     setLoading(true);
     try {
+      // Get current feature flags to preserve user settings
+      const featureFlags = await AgentforceService.getFeatureFlags();
+
       await AgentforceService.configure({
         type: 'service',
         serviceApiURL: serviceApiURL.trim(),
         organizationId: organizationId.trim(),
         esDeveloperName: esDeveloperName.trim(),
+        featureFlags,
       });
       Alert.alert(
         'Success',
@@ -194,23 +198,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       const creds = await loginForEmployeeAgent();
       const agentIdToUse = employeeAgentId.trim();
       await AgentforceService.setEmployeeAgentId(agentIdToUse);
-      AgentforceService.setTokenDelegate({
-        getAccessToken: async () => {
-          const c = await getEmployeeAgentCredentials();
-          if (!c?.accessToken) throw new Error('Not logged in');
-          return c.accessToken;
-        },
-        refreshToken: async () => {
-          const c = await refreshEmployeeAgentCredentials();
-          if (!c?.accessToken)
-            throw new Error('Token refresh did not return an access token');
-          return c.accessToken;
-        },
-        onAuthenticationFailure: () => {
-          setEmployeeLoggedIn(false);
-          Alert.alert('Session Expired', 'Please sign in again.');
-        },
-      });
+
+      // Get current feature flags to preserve user settings
+      const featureFlags = await AgentforceService.getFeatureFlags();
+
       await AgentforceService.configure({
         type: 'employee',
         instanceUrl: creds.instanceUrl,
@@ -218,6 +209,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         userId: creds.userId,
         agentId: agentIdToUse || undefined,
         accessToken: creds.accessToken,
+        featureFlags,
       });
       setEmployeeLoggedIn(true);
       Alert.alert(
@@ -245,7 +237,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const handleLogoutEmployeeAgent = async () => {
     try {
       await logoutEmployeeAgent();
-      AgentforceService.clearTokenDelegate();
       setEmployeeLoggedIn(false);
       Alert.alert('Signed Out', 'You have been signed out.');
     } catch (e) {

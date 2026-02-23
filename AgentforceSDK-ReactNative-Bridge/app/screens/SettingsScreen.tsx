@@ -176,22 +176,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       const creds = await loginForEmployeeAgent();
       const agentIdToUse = employeeAgentId.trim();
       await AgentforceService.setEmployeeAgentId(agentIdToUse);
-      AgentforceService.setTokenDelegate({
-        getAccessToken: async () => {
-          const c = await getEmployeeAgentCredentials();
-          if (!c?.accessToken) throw new Error('Not logged in');
-          return c.accessToken;
-        },
-        refreshToken: async () => {
-          const c = await getEmployeeAgentCredentials();
-          if (!c?.accessToken) throw new Error('Not logged in');
-          return c.accessToken;
-        },
-        onAuthenticationFailure: () => {
-          setEmployeeLoggedIn(false);
-          Alert.alert('Session Expired', 'Please sign in again.');
-        },
-      });
       await AgentforceService.configure({
         type: 'employee',
         instanceUrl: creds.instanceUrl,
@@ -221,7 +205,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   const handleLogoutEmployeeAgent = async () => {
     try {
       await logoutEmployeeAgent();
-      AgentforceService.clearTokenDelegate();
       setEmployeeLoggedIn(false);
       Alert.alert('Signed Out', 'You have been signed out.');
     } catch (e) {

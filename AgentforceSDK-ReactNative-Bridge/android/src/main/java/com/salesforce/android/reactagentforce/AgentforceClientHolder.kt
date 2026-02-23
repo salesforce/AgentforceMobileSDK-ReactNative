@@ -36,7 +36,12 @@ object AgentforceClientHolder {
     @Volatile
     var agentId: String? = null
         private set
-    
+
+    /** Agent Label for Employee Agent mode (display name) */
+    @Volatile
+    var agentLabel: String? = null
+        private set
+
     /** ES Developer Name for Service Agent mode */
     @Volatile
     var esDeveloperName: String? = null
@@ -68,9 +73,11 @@ object AgentforceClientHolder {
             is AgentMode.Service -> {
                 esDeveloperName = mode.config.esDeveloperName
                 agentId = null
+                agentLabel = null
             }
             is AgentMode.Employee -> {
                 agentId = mode.config.agentId
+                agentLabel = mode.config.agentLabel
                 esDeveloperName = null
             }
         }
@@ -106,6 +113,7 @@ object AgentforceClientHolder {
         isConfigured = false
         currentMode = null
         agentId = null
+        agentLabel = null
         esDeveloperName = null
     }
     

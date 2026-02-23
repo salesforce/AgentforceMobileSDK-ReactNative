@@ -24,12 +24,8 @@ import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSetti
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
-import com.salesforce.android.reactagentforce.providers.SimpleTokenProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
 import kotlinx.coroutines.*
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 /**
  * React Native bridge module for Agentforce SDK.
@@ -58,19 +54,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // Legacy ViewModel for Service Agent backward compatibility
     private var viewModel: ServiceAgentViewModel? = null
-    
+
     // Unified credential provider for both modes
     private val credentialProvider = UnifiedCredentialProvider()
-    
+
     // Current mode configuration
     private var currentMode: LocalAgentMode? = null
-    
-    // Simple token provider for Employee Agent mode
-    private var simpleTokenProvider: SimpleTokenProvider? = null
-    
-    // Continuation for async token refresh
-    private var tokenRefreshContinuation: Continuation<String>? = null
-    
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -204,27 +194,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         }
         
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
-        
-        // Create simple token provider for delegate-based refresh
-        simpleTokenProvider = SimpleTokenProvider(
-            accessToken = employeeConfig.accessToken,
-            organizationId = employeeConfig.organizationId,
-            userId = employeeConfig.userId,
-            instanceUrl = employeeConfig.instanceUrl
-        )
-        
-        // Set up refresh handler that calls back to JS
-        simpleTokenProvider?.setRefreshHandler {
-            requestTokenRefreshFromJS()
-        }
-        
-        // Set up auth failure handler
-        simpleTokenProvider?.setAuthFailureHandler {
-            emitAuthenticationFailure("Token refresh failed")
-        }
-        
+
         // Configure unified credential provider for Employee Agent mode
-        credentialProvider.configure(employeeConfig, simpleTokenProvider!!)
+        // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
+        credentialProvider.configure(employeeConfig)
         currentMode = LocalAgentMode.Employee(employeeConfig)
         
         // Persist employee agentId (editable in Settings tab)
@@ -524,46 +497,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     }
 
     // MARK: - Token Refresh (Employee Agent only)
-
-    private suspend fun requestTokenRefreshFromJS(): String {
-        return suspendCoroutine { continuation ->
-            tokenRefreshContinuation = continuation
-            
-            // Emit event to JS
-            reactApplicationContext
-                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                .emit("onTokenRefreshNeeded", null)
-        }
-    }
-
-    @ReactMethod
-    fun provideRefreshedToken(token: String, promise: Promise) {
-        if (!credentialProvider.isEmployeeAgent) {
-            promise.reject("INVALID_MODE", "Token refresh only valid for Employee Agent mode")
-            return
-        }
-        
-        val continuation = tokenRefreshContinuation
-        if (continuation != null) {
-            simpleTokenProvider?.updateToken(token)
-            credentialProvider.updateToken(token)
-            continuation.resume(token)
-            tokenRefreshContinuation = null
-            promise.resolve(Arguments.createMap().apply {
-                putBoolean("success", true)
-            })
-        } else {
-            promise.reject("NO_PENDING_REFRESH", "No token refresh was pending")
-        }
-    }
-
-    private fun emitAuthenticationFailure(error: String) {
-        reactApplicationContext
-            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit("onAuthenticationFailure", Arguments.createMap().apply {
-                putString("error", error)
-            })
-    }
 
     // MARK: - Cleanup
 

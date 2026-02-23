@@ -17,10 +17,3 @@ export {
   isEmployeeAgentConfig,
   isLegacyConfig,
 } from './AgentConfig';
-
-// Token delegate types
-export {
-  TokenDelegate,
-  TokenRefreshEvent,
-  AuthenticationFailureEvent,
-} from './TokenDelegate';
