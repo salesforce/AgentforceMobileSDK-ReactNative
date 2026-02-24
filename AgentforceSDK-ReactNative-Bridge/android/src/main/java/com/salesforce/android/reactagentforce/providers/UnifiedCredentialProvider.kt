@@ -7,7 +7,6 @@ package com.salesforce.android.reactagentforce.providers
 import android.util.Log
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentialProvider
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentials
-import com.salesforce.android.reactagentforce.delegates.TokenProvider
 import com.salesforce.android.reactagentforce.models.AgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
@@ -28,11 +27,8 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
     /** Current operating mode */
     var mode: AgentMode? = null
         private set
-    
-    /** Token provider for Employee Agent mode (null for Service Agent) */
-    private var tokenProvider: TokenProvider? = null
-    
-    /** Direct token storage for simple token cases */
+
+    /** Direct token storage for simple token cases (fallback only) */
     @Volatile
     private var directToken: String? = null
     private var directOrgId: String? = null
@@ -44,41 +40,24 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
      */
     fun configure(serviceAgent: ServiceAgentModeConfig) {
         this.mode = AgentMode.Service(serviceAgent)
-        this.tokenProvider = null
         this.directToken = ""  // Empty token for Service Agent
         this.directOrgId = serviceAgent.organizationId
         this.directUserId = ""  // Empty userId for Service Agent
-        
+
         Log.d(TAG, "Configured for Service Agent mode")
     }
-    
+
     /**
-     * Configure for Employee Agent mode with a token provider delegate
+     * Configure for Employee Agent mode
      * @param config Employee Agent configuration
-     * @param tokenProvider Token provider implementation
-     */
-    fun configure(employeeAgent: EmployeeAgentModeConfig, tokenProvider: TokenProvider) {
-        this.mode = AgentMode.Employee(employeeAgent)
-        this.tokenProvider = tokenProvider
-        this.directToken = null
-        this.directOrgId = null
-        this.directUserId = null
-        
-        Log.d(TAG, "Configured for Employee Agent mode with token provider")
-    }
-    
-    /**
-     * Configure for Employee Agent mode with a direct token (simpler testing scenario)
-     * @param config Employee Agent configuration with accessToken
      */
     fun configure(employeeAgent: EmployeeAgentModeConfig) {
         this.mode = AgentMode.Employee(employeeAgent)
-        this.tokenProvider = null
         this.directToken = employeeAgent.accessToken
         this.directOrgId = employeeAgent.organizationId
         this.directUserId = employeeAgent.userId
-        
-        Log.d(TAG, "Configured for Employee Agent mode with direct token")
+
+        Log.d(TAG, "Configured for Employee Agent mode")
     }
     
     override fun getAuthCredentials(): AgentforceAuthCredentials {
@@ -97,42 +76,38 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
             
             is AgentMode.Employee -> {
                 // Employee Agent uses OAuth with REAL token
-                // Get fresh token from Mobile SDK each time (Mobile SDK handles refresh internally)
+                // Get fresh credentials from Mobile SDK each time (Mobile SDK handles refresh internally)
                 try {
-                    val currentToken = SalesforceSDKManager.getInstance()
-                        ?.userAccountManager?.currentUser?.authToken
+                    val currentUser = SalesforceSDKManager.getInstance()
+                        ?.userAccountManager?.currentUser
 
-                    if (currentToken != null) {
-                        Log.d(TAG, "✅ Fetched fresh token from Mobile SDK")
-                        return AgentforceAuthCredentials.OAuth(
-                            authToken = currentToken,
-                            orgId = currentMode.config.organizationId,
-                            userId = currentMode.config.userId
-                        )
+                    if (currentUser != null) {
+                        val authToken = currentUser.authToken
+                        val orgId = currentUser.orgId
+                        val userId = currentUser.userId
+
+                        if (authToken != null && orgId != null && userId != null) {
+                            Log.d(TAG, "✅ Fetched fresh credentials from Mobile SDK - OrgId: $orgId, UserId: $userId")
+                            return AgentforceAuthCredentials.OAuth(
+                                authToken = authToken,
+                                orgId = orgId,
+                                userId = userId
+                            )
+                        }
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to get fresh token from Mobile SDK, falling back to cached", e)
+                    Log.w(TAG, "Failed to get fresh credentials from Mobile SDK, falling back to cached", e)
                 }
 
                 // Fallback to cached token if Mobile SDK not available
-                val provider = tokenProvider
-                if (provider != null) {
-                    // Delegate-based token
-                    AgentforceAuthCredentials.OAuth(
-                        authToken = provider.getAccessToken(),
-                        orgId = provider.getOrganizationId(),
-                        userId = provider.getUserId()
-                    )
-                } else {
-                    // Direct token
-                    val token = directToken
-                        ?: throw IllegalStateException("Employee Agent mode requires either Mobile SDK or cached token")
-                    AgentforceAuthCredentials.OAuth(
-                        authToken = token,
-                        orgId = directOrgId ?: currentMode.config.organizationId,
-                        userId = directUserId ?: currentMode.config.userId
-                    )
-                }
+                val token = directToken
+                    ?: throw IllegalStateException("Employee Agent mode requires either Mobile SDK or cached token")
+                Log.d(TAG, "⚠️ Using cached credentials (Mobile SDK not available)")
+                AgentforceAuthCredentials.OAuth(
+                    authToken = token,
+                    orgId = directOrgId ?: currentMode.config.organizationId,
+                    userId = directUserId ?: currentMode.config.userId
+                )
             }
         }
     }
@@ -175,7 +150,6 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
      */
     fun reset() {
         mode = null
-        tokenProvider = null
         directToken = null
         directOrgId = null
         directUserId = null

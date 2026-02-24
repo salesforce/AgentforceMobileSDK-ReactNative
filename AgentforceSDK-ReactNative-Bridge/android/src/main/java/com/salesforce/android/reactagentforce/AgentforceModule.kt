@@ -211,6 +211,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 // Create AgentforceConfiguration for FullConfig mode
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 saveFeatureFlagsToPrefs(flags)
+                Log.d(TAG, "🚩 Feature Flags - multiAgent: ${flags.enableMultiAgent}, multiModal: ${flags.enableMultiModalInput}, PDF: ${flags.enablePDFUpload}, voice: ${flags.enableVoice}")
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
@@ -514,7 +515,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         AgentforceClientHolder.clear()
         viewModel?.resetConfiguration()
         currentMode = null
-        simpleTokenProvider = null
         credentialProvider.reset()
         employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
         promise.resolve(Arguments.createMap().apply {
