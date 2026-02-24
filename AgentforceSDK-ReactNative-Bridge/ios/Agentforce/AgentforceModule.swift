@@ -13,6 +13,10 @@ import AgentforceSDK
 import AgentforceService
 import SalesforceUser
 
+#if canImport(SalesforceSDKCore)
+import SalesforceSDKCore
+#endif
+
 /// React Native bridge module for Agentforce SDK
 /// Supports both Service Agent (guest) and Employee Agent (authenticated) modes
 @objc(AgentforceModule)
@@ -136,24 +140,41 @@ class AgentforceModule: RCTEventEmitter {
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
         credentialProvider.configure(employeeAgent: config)
         currentMode = .employee(config: config)
-        
+
         // Persist employee agentId (editable in Settings tab)
         UserDefaults.standard.set(config.agentId ?? "", forKey: "EmployeeAgentId")
-        
+
         // Clean up any existing client
         cleanupClient()
-        
+
+        // Get orgId and userId from Mobile SDK if available (more reliable than config)
+        var userId = config.userId
+        var organizationId = config.organizationId
+
+        #if canImport(SalesforceSDKCore)
+        if let currentUser = UserAccountManager.shared.currentUserAccount {
+            if let mobileUserId = currentUser.credentials.userId {
+                userId = mobileUserId
+            }
+            if let mobileOrgId = currentUser.credentials.organizationId {
+                organizationId = mobileOrgId
+            }
+            print("[AgentforceModule] 📱 Using credentials from Mobile SDK - OrgId: \(organizationId), UserId: \(userId)")
+        }
+        #endif
+
         // Create User for FullConfig mode (SDK 14.x). We use .fullConfig(AgentforceConfiguration)
         // instead of .employeeAgent so we can set feature flags explicitly (e.g. multiAgent only).
         let user = User(
-            userId: config.userId,
-            org: Org(id: config.organizationId),
-            username: config.userId,
-            displayName: config.userId
+            userId: userId,
+            org: Org(id: organizationId),
+            username: userId,
+            displayName: userId
         )
         
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
         saveFeatureFlagsToUserDefaults(flags)
+        print("[AgentforceModule] 🚩 Feature Flags - multiAgent: \(flags.enableMultiAgent), multiModal: \(flags.enableMultiModalInput), PDF: \(flags.enablePDFUpload), voice: \(flags.enableVoice)")
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
@@ -285,6 +306,8 @@ class AgentforceModule: RCTEventEmitter {
                 resolve(["success": true])
             } catch {
                 print("[AgentforceModule] ❌ Launch failed: \(error)")
+                print("[AgentforceModule] ❌ Error details: \((error as NSError).domain) code: \((error as NSError).code)")
+                print("[AgentforceModule] ❌ Full error: \(error)")
                 let desc = (error as NSError).localizedDescription
                 let hint = desc.contains("sessionId")
                     ? " Session start failed (400 = config; 500 = server/org). See docs/TROUBLESHOOTING.md."

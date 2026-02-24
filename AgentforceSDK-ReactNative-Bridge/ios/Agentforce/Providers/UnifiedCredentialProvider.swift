@@ -77,22 +77,24 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
 
         case .employee(let config):
             // Employee Agent uses OAuth with REAL token
-            // Get fresh token from Mobile SDK each time (Mobile SDK handles refresh internally)
+            // Get fresh credentials from Mobile SDK each time (Mobile SDK handles refresh internally)
             #if canImport(SalesforceSDKCore)
             if let currentUser = UserAccountManager.shared.currentUserAccount,
-               let accessToken = currentUser.credentials.accessToken {
-                print("[UnifiedCredentialProvider] ✅ Fetched fresh token from Mobile SDK")
+               let accessToken = currentUser.credentials.accessToken,
+               let orgId = currentUser.credentials.organizationId,
+               let userId = currentUser.credentials.userId {
+                print("[UnifiedCredentialProvider] ✅ Fetched fresh credentials from Mobile SDK - OrgId: \(orgId), UserId: \(userId)")
                 return .OAuth(
                     authToken: accessToken,
-                    orgId: config.organizationId,
-                    userId: config.userId
+                    orgId: orgId,
+                    userId: userId
                 )
             }
             #endif
 
             // Fallback to cached token if Mobile SDK not available
             if let token = directToken {
-                print("[UnifiedCredentialProvider] ⚠️ Using cached token (Mobile SDK not available)")
+                print("[UnifiedCredentialProvider] ⚠️ Using cached credentials (Mobile SDK not available)")
                 return .OAuth(
                     authToken: token,
                     orgId: directOrgId ?? config.organizationId,
