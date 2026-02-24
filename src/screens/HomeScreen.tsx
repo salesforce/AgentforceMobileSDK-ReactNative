@@ -120,20 +120,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
 
     try {
-      // Always reconfigure service agent to ensure fresh conversation with current settings
-      const config = await AgentforceService.getConfiguration();
-      if (config) {
-        // Get current feature flags to preserve user settings
-        const featureFlags = await AgentforceService.getFeatureFlags();
+      // Only reconfigure if switching from another mode or first launch
+      if (activeMode !== 'service') {
+        const config = await AgentforceService.getConfiguration();
+        if (config) {
+          // Get current feature flags to preserve user settings
+          const featureFlags = await AgentforceService.getFeatureFlags();
 
-        await AgentforceService.configure({
-          type: 'service',
-          serviceApiURL: config.serviceApiURL,
-          organizationId: config.organizationId,
-          esDeveloperName: config.esDeveloperName,
-          featureFlags,
-        });
-        setActiveMode('service');
+          await AgentforceService.configure({
+            type: 'service',
+            serviceApiURL: config.serviceApiURL,
+            organizationId: config.organizationId,
+            esDeveloperName: config.esDeveloperName,
+            featureFlags,
+          });
+          setActiveMode('service');
+        }
       }
 
       await AgentforceService.launchConversation();
