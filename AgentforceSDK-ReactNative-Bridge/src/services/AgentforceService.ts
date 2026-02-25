@@ -176,7 +176,7 @@ class AgentforceService {
         enableMultiAgent: true,
         enableMultiModalInput: false,
         enablePDFUpload: false,
-        enableVoice: true,
+        enableVoice: false,
       };
     }
     if (!AgentforceModule?.getFeatureFlags) {
@@ -184,7 +184,7 @@ class AgentforceService {
         enableMultiAgent: true,
         enableMultiModalInput: false,
         enablePDFUpload: false,
-        enableVoice: true,
+        enableVoice: false,
       };
     }
     try {
@@ -193,14 +193,14 @@ class AgentforceService {
         enableMultiAgent: flags?.enableMultiAgent ?? true,
         enableMultiModalInput: flags?.enableMultiModalInput ?? false,
         enablePDFUpload: flags?.enablePDFUpload ?? false,
-        enableVoice: flags?.enableVoice ?? true,
+        enableVoice: flags?.enableVoice ?? false,
       };
     } catch {
       return {
         enableMultiAgent: true,
         enableMultiModalInput: false,
         enablePDFUpload: false,
-        enableVoice: true,
+        enableVoice: false,
       };
     }
   }

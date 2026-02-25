@@ -423,14 +423,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 enableMultiAgent = featureFlagsMap.hasKey("enableMultiAgent") && featureFlagsMap.getBoolean("enableMultiAgent"),
                 enableMultiModalInput = featureFlagsMap.hasKey("enableMultiModalInput") && featureFlagsMap.getBoolean("enableMultiModalInput"),
                 enablePDFUpload = featureFlagsMap.hasKey("enablePDFUpload") && featureFlagsMap.getBoolean("enablePDFUpload"),
-                enableVoice = !featureFlagsMap.hasKey("enableVoice") || featureFlagsMap.getBoolean("enableVoice")
+                enableVoice = featureFlagsMap.hasKey("enableVoice") && featureFlagsMap.getBoolean("enableVoice")
             )
         } else {
             FeatureFlags(
                 enableMultiAgent = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true),
                 enableMultiModalInput = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false),
                 enablePDFUpload = featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false),
-                enableVoice = featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, true)
+                enableVoice = featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false)
             )
         }
     }
@@ -450,7 +450,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putBoolean("enableMultiAgent", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true))
             putBoolean("enableMultiModalInput", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false))
             putBoolean("enablePDFUpload", featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
-            putBoolean("enableVoice", featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, true))
+            putBoolean("enableVoice", featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false))
         })
     }
 
@@ -460,7 +460,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             .putBoolean(KEY_ENABLE_MULTI_AGENT, flags.hasKey("enableMultiAgent") && flags.getBoolean("enableMultiAgent"))
             .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, flags.hasKey("enableMultiModalInput") && flags.getBoolean("enableMultiModalInput"))
             .putBoolean(KEY_ENABLE_PDF_UPLOAD, flags.hasKey("enablePDFUpload") && flags.getBoolean("enablePDFUpload"))
-            .putBoolean(KEY_ENABLE_VOICE, !flags.hasKey("enableVoice") || flags.getBoolean("enableVoice"))
+            .putBoolean(KEY_ENABLE_VOICE, flags.hasKey("enableVoice") && flags.getBoolean("enableVoice"))
             .apply()
         promise.resolve(null)
     }
