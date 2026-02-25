@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
- * Copyright 2025 Salesforce.com.
- * All Rights Reserved.
- * Company Confidential.
+ * Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
  -->
-<network-security-config xmlns:tools="http://schemas.android.com/tools">
-    <base-config cleartextTrafficPermitted="true"
-        tools:ignore="InsecureBaseConfiguration">
+<network-security-config>
+    <!-- Production: only trust system CAs, no cleartext -->
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
-            <!-- Trust preinstalled CAs -->
             <certificates src="system" />
-            <!-- Additionally trust user added CAs -->
-            <certificates src="user" />
         </trust-anchors>
     </base-config>
+
+    <!-- Development only: allow cleartext to localhost / Android emulator host -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
 </network-security-config>
