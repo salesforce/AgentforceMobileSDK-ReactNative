@@ -31,7 +31,10 @@ public class AgentforceVoiceDelegate: AgentforceUIDelegate {
             guard let self = self else { return }
 
             // Get the topmost presented view controller to present voice UI on top
-            let topViewController = self.getTopMostViewController()
+            guard let topViewController = self.getTopMostViewController() else {
+                print("[AgentforceVoiceDelegate] ❌ Could not find a view controller to present voice UI")
+                return
+            }
 
             guard let voiceView = try? client.createAgentforceVoiceView(
                 conversation: conversation,
@@ -57,7 +60,7 @@ public class AgentforceVoiceDelegate: AgentforceUIDelegate {
     }
 
     /// Get the topmost presented view controller in the view hierarchy
-    private func getTopMostViewController() -> UIViewController {
+    private func getTopMostViewController() -> UIViewController? {
         var topController = presentingViewController
 
         // If no presenting view controller was set, start from the root
@@ -73,7 +76,7 @@ public class AgentforceVoiceDelegate: AgentforceUIDelegate {
             topController = presentedViewController
         }
 
-        return topController ?? UIViewController()
+        return topController
     }
 
     // MARK: - Optional AgentforceUIDelegate methods (default implementations)
