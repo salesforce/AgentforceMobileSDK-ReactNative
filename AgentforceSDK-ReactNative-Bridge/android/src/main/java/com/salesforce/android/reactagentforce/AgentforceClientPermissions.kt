@@ -32,10 +32,12 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.salesforce.android.mobile.interfaces.permission.Permissions
 import kotlinx.coroutines.CompletableDeferred
+import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-class AgentforceClientPermissions(private var activity: Activity) : Permissions {
+class AgentforceClientPermissions(activity: Activity) : Permissions {
+    private val activityRef = WeakReference(activity)
     var requestCode: AtomicInteger = AtomicInteger(0)
 
     companion object {
@@ -56,10 +58,13 @@ class AgentforceClientPermissions(private var activity: Activity) : Permissions 
     }
 
     override fun hasPermission(permission: String): Boolean {
+        val activity = activityRef.get() ?: return false
         return ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
     }
 
     override suspend fun requestPermissions(permissions: Array<String>, reason: String?): Boolean {
+        val activity = activityRef.get() ?: return false
+
         // Check if all permissions are already granted
         val allGranted = permissions.all { hasPermission(it) }
         if (allGranted) {
@@ -81,6 +86,7 @@ class AgentforceClientPermissions(private var activity: Activity) : Permissions 
     }
 
     override fun shouldShowRequestPermissionRationale(permission: String): Boolean {
+        val activity = activityRef.get() ?: return false
         return ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
     }
 }
