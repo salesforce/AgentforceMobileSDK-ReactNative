@@ -44,7 +44,6 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
         this.directOrgId = serviceAgent.organizationId
         this.directUserId = ""  // Empty userId for Service Agent
 
-        Log.d(TAG, "Configured for Service Agent mode")
     }
 
     /**
@@ -57,7 +56,6 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
         this.directOrgId = employeeAgent.organizationId
         this.directUserId = employeeAgent.userId
 
-        Log.d(TAG, "Configured for Employee Agent mode")
     }
     
     override fun getAuthCredentials(): AgentforceAuthCredentials {
@@ -87,7 +85,6 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
                         val userId = currentUser.userId
 
                         if (authToken != null && orgId != null && userId != null) {
-                            Log.d(TAG, "✅ Fetched fresh credentials from Mobile SDK - OrgId: $orgId, UserId: $userId")
                             return AgentforceAuthCredentials.OAuth(
                                 authToken = authToken,
                                 orgId = orgId,
@@ -102,7 +99,6 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
                 // Fallback to cached token if Mobile SDK not available
                 val token = directToken
                     ?: throw IllegalStateException("Employee Agent mode requires either Mobile SDK or cached token")
-                Log.d(TAG, "⚠️ Using cached credentials (Mobile SDK not available)")
                 AgentforceAuthCredentials.OAuth(
                     authToken = token,
                     orgId = directOrgId ?: currentMode.config.organizationId,
@@ -122,7 +118,6 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
             return
         }
         this.directToken = newToken
-        Log.d(TAG, "Token updated")
     }
     
     /** Check if currently in Employee Agent mode */
@@ -153,6 +148,5 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
         directToken = null
         directOrgId = null
         directUserId = null
-        Log.d(TAG, "Reset to unconfigured state")
     }
 }

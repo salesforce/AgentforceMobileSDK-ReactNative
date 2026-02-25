@@ -23,7 +23,7 @@ import SalesforceSDKCore
 class AgentforceModule: RCTEventEmitter {
     
     // MARK: - Properties
-    
+
     /// Unified credential provider for both Service and Employee agents
     private let credentialProvider = UnifiedCredentialProvider()
 
@@ -35,6 +35,9 @@ class AgentforceModule: RCTEventEmitter {
 
     /// Current mode configuration
     private var currentMode: AgentMode?
+
+    /// Voice delegate for handling voice interactions
+    private var voiceDelegate: AgentforceVoiceDelegate?
     
     // MARK: - Module Setup
 
@@ -95,8 +98,6 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("serviceApiURL must be a valid URL (e.g. https://your-site.salesforce.com)")
         }
         
-        print("[AgentforceModule] 📍 Service Agent config - serviceApiURL: \(config.serviceApiURL), organizationId: \(config.organizationId), esDeveloperName: \(config.esDeveloperName)")
-        
         // Configure unified credential provider for Service Agent mode
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
@@ -125,8 +126,6 @@ class AgentforceModule: RCTEventEmitter {
             credentialProvider: credentialProvider,
             mode: .serviceAgent(sdkServiceConfig)
         )
-        
-        print("[AgentforceModule] ✅ Service Agent configured - Org: \(config.organizationId). If you see 'Start session failed with 400' or keyNotFound(sessionId), check serviceApiURL, organizationId, and esDeveloperName match your org/site.")
     }
     
     // MARK: - Employee Agent Configuration
@@ -159,7 +158,6 @@ class AgentforceModule: RCTEventEmitter {
             if let mobileOrgId = currentUser.credentials.organizationId {
                 organizationId = mobileOrgId
             }
-            print("[AgentforceModule] 📱 Using credentials from Mobile SDK - OrgId: \(organizationId), UserId: \(userId)")
         }
         #endif
 
@@ -173,8 +171,6 @@ class AgentforceModule: RCTEventEmitter {
         )
         
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
-        saveFeatureFlagsToUserDefaults(flags)
-        print("[AgentforceModule] 🚩 Feature Flags - multiAgent: \(flags.enableMultiAgent), multiModal: \(flags.enableMultiModalInput), PDF: \(flags.enablePDFUpload), voice: \(flags.enableVoice)")
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
@@ -200,8 +196,6 @@ class AgentforceModule: RCTEventEmitter {
             credentialProvider: credentialProvider,
             mode: .fullConfig(fullConfiguration)
         )
-        
-        print("[AgentforceModule] ✅ Employee Agent configured - Org: \(config.organizationId), User: \(config.userId)")
     }
     
     // MARK: - Legacy Configuration Method (Backward Compatibility)
@@ -260,10 +254,17 @@ class AgentforceModule: RCTEventEmitter {
                 // Try new unified path first
                 if let client = agentforceClient, let mode = currentMode {
                     let conversation = try getOrCreateConversation(client: client, mode: mode)
-                    
+
+                    // Create voice delegate to handle voice button taps
+                    let delegate = AgentforceVoiceDelegate(
+                        agentforceClient: client,
+                        presentingViewController: nil // Will find topmost VC automatically
+                    )
+                    self.voiceDelegate = delegate
+
                     let chatView = try client.createAgentforceChatView(
                         conversation: conversation,
-                        delegate: nil,
+                        delegate: delegate,
                         showTopBar: true,
                         onContainerClose: { [weak self] in
                             Task { @MainActor in
@@ -271,7 +272,7 @@ class AgentforceModule: RCTEventEmitter {
                             }
                         }
                     )
-                    
+
                     presentConversationView(chatView)
                     resolve(["success": true])
                     return
@@ -288,12 +289,19 @@ class AgentforceModule: RCTEventEmitter {
                 guard let client = ServiceAgentManager.shared.getClient() else {
                     throw ServiceAgentError.sdkNotInitialized
                 }
-                
+
                 let conversation = ServiceAgentManager.shared.startConversation()
-                
+
+                // Create voice delegate to handle voice button taps
+                let delegate = AgentforceVoiceDelegate(
+                    agentforceClient: client,
+                    presentingViewController: nil // Will find topmost VC automatically
+                )
+                self.voiceDelegate = delegate
+
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: nil,
+                    delegate: delegate,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
@@ -331,10 +339,17 @@ class AgentforceModule: RCTEventEmitter {
                 // Try new unified path first
                 if let client = agentforceClient, let mode = currentMode {
                     let conversation = try getOrCreateConversation(client: client, mode: mode, forceNew: true)
-                    
+
+                    // Create voice delegate to handle voice button taps
+                    let delegate = AgentforceVoiceDelegate(
+                        agentforceClient: client,
+                        presentingViewController: nil // Will find topmost VC automatically
+                    )
+                    self.voiceDelegate = delegate
+
                     let chatView = try client.createAgentforceChatView(
                         conversation: conversation,
-                        delegate: nil,
+                        delegate: delegate,
                         showTopBar: true,
                         onContainerClose: { [weak self] in
                             Task { @MainActor in
@@ -359,12 +374,19 @@ class AgentforceModule: RCTEventEmitter {
                 guard let client = ServiceAgentManager.shared.getClient() else {
                     throw ServiceAgentError.sdkNotInitialized
                 }
-                
+
                 let conversation = await ServiceAgentManager.shared.startNewConversation()
-                
+
+                // Create voice delegate to handle voice button taps
+                let delegate = AgentforceVoiceDelegate(
+                    agentforceClient: client,
+                    presentingViewController: nil // Will find topmost VC automatically
+                )
+                self.voiceDelegate = delegate
+
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: nil,
+                    delegate: delegate,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
@@ -387,7 +409,6 @@ class AgentforceModule: RCTEventEmitter {
     private func getOrCreateConversation(client: AgentforceClient, mode: AgentMode, forceNew: Bool = false) throws -> AgentConversation {
         // Return existing if available and not forcing new
         if !forceNew, let existing = currentConversation {
-            print("[AgentforceModule] ♻️ Reusing existing conversation")
             return existing
         }
 
@@ -407,7 +428,6 @@ class AgentforceModule: RCTEventEmitter {
                 conversation = client.startAgentforceConversation(
                     forAgentId: agentId
                 )
-                print("[AgentforceModule] 📝 Starting conversation for specific agent: \(agentId)")
             } else {
                 // No agentId provided - check if multi-agent is enabled
                 let multiAgentEnabled = UserDefaults.standard.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : UserDefaults.standard.bool(forKey: Self.featureFlagKeys.enableMultiAgent)
@@ -421,17 +441,10 @@ class AgentforceModule: RCTEventEmitter {
                 conversation = client.startAgentforceConversation(
                     forAgentId: nil
                 )
-                print("[AgentforceModule] 📝 Starting conversation with agentId=nil (multi-agent: \(multiAgentEnabled))")
             }
         }
 
         currentConversation = conversation
-        switch mode {
-        case .service(let config):
-            print("[AgentforceModule] 📝 New conversation started (Service Agent) - esDeveloperName: \(config.esDeveloperName). Session start API will use serviceApiURL: \(config.serviceApiURL)")
-        case .employee(let config):
-            print("[AgentforceModule] 📝 New conversation started (Employee Agent) - agentId: \(config.agentId ?? "multi-agent"). Session start API will use instanceUrl and credentials.")
-        }
         return conversation
     }
     
@@ -439,7 +452,6 @@ class AgentforceModule: RCTEventEmitter {
         if let conversation = currentConversation {
             do {
                 try await conversation.closeConversation()
-                print("[AgentforceModule] 📪 Conversation closed")
             } catch {
                 print("[AgentforceModule] ⚠️ Error closing conversation: \(error)")
             }
@@ -533,12 +545,13 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         let ud = UserDefaults.standard
-        resolve([
+        let flags = [
             "enableMultiAgent": ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
-            "enableMultiModalInput": ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
-            "enablePDFUpload": ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
+            "enableMultiModalInput": ud.object(forKey: Self.featureFlagKeys.enableMultiModalInput) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
+            "enablePDFUpload": ud.object(forKey: Self.featureFlagKeys.enablePDFUpload) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
             "enableVoice": ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
-        ])
+        ]
+        resolve(flags)
     }
 
     @objc
@@ -555,10 +568,12 @@ class AgentforceModule: RCTEventEmitter {
         let enableMultiModalInput = (dict["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false
         let enablePDFUpload = (dict["enablePDFUpload"] as? NSNumber)?.boolValue ?? false
         let enableVoice = (dict["enableVoice"] as? NSNumber)?.boolValue ?? false
+
         UserDefaults.standard.set(enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
         UserDefaults.standard.set(enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
         UserDefaults.standard.set(enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
         UserDefaults.standard.set(enableVoice, forKey: Self.featureFlagKeys.enableVoice)
+
         resolve(nil)
     }
     
@@ -685,7 +700,6 @@ class AgentforceModule: RCTEventEmitter {
         hostingController.modalPresentationStyle = .fullScreen
         hostingController.modalTransitionStyle = .coverVertical
         
-        print("[AgentforceModule] 🚀 Presenting conversation view")
         rootViewController.present(hostingController, animated: true)
     }
     
@@ -697,7 +711,6 @@ class AgentforceModule: RCTEventEmitter {
         }
         
         if rootViewController.presentedViewController != nil {
-            print("[AgentforceModule] 📪 Dismissing conversation view")
             rootViewController.dismiss(animated: true)
         }
     }

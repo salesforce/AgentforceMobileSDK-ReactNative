@@ -33,6 +33,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Switch,
+  ActivityIndicator,
 } from 'react-native';
 import {
   AgentforceService,
@@ -43,8 +45,30 @@ import {
   getEmployeeAgentCredentials,
   refreshEmployeeAgentCredentials,
 } from 'react-native-agentforce';
+import type { FeatureFlags } from 'react-native-agentforce';
 
-type TabType = 'service' | 'employee';
+type TabType = 'service' | 'employee' | 'features';
+
+const FLAG_KEYS: (keyof FeatureFlags)[] = [
+  'enableMultiAgent',
+  'enableMultiModalInput',
+  'enablePDFUpload',
+  'enableVoice',
+];
+
+const FLAG_LABELS: Record<keyof FeatureFlags, string> = {
+  enableMultiAgent: 'Multi-agent',
+  enableMultiModalInput: 'Multi-modal input',
+  enablePDFUpload: 'PDF upload',
+  enableVoice: 'Voice',
+};
+
+const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
+  enableMultiAgent: 'Allow switching between multiple agents',
+  enableMultiModalInput: 'Enable image/file input in addition to text',
+  enablePDFUpload: 'Allow PDF file uploads',
+  enableVoice: 'Enable immersive voice',
+};
 
 interface SettingsScreenProps {
   navigation: any;
@@ -69,10 +93,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [authSupported, setAuthSupported] = useState(false);
   const [employeeLoggedIn, setEmployeeLoggedIn] = useState(false);
 
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(null);
+  const [savingFlags, setSavingFlags] = useState(false);
+
   useEffect(() => {
     loadSavedConfiguration();
     loadStoredEmployeeAgentId();
     checkAuthStatus();
+    loadFeatureFlags();
   }, []);
 
   useEffect(() => {
@@ -244,13 +272,44 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
+  const loadFeatureFlags = async () => {
+    try {
+      const stored = await AgentforceService.getFeatureFlags();
+      setFeatureFlags(stored);
+    } catch (e) {
+      console.error('Failed to load feature flags:', e);
+      setFeatureFlags({
+        enableMultiAgent: true,
+        enableMultiModalInput: false,
+        enablePDFUpload: false,
+        enableVoice: false,
+      });
+    }
+  };
+
+  const handleToggleFeatureFlag = async (
+    key: keyof FeatureFlags,
+    value: boolean
+  ) => {
+    if (featureFlags == null) return;
+    const next = { ...featureFlags, [key]: value };
+    setFeatureFlags(next);
+    setSavingFlags(true);
+    try {
+      await AgentforceService.setFeatureFlags(next);
+    } catch (e) {
+      console.error('Failed to save feature flags:', e);
+      setFeatureFlags(featureFlags);
+    } finally {
+      setSavingFlags(false);
+    }
+  };
+
+
   const renderTabs = () => (
     <View style={styles.tabContainer}>
       <TouchableOpacity
-        style={[
-          styles.tab,
-          activeTab === 'service' && styles.activeTab,
-        ]}
+        style={[styles.tab, activeTab === 'service' && styles.activeTab]}
         onPress={() => setActiveTab('service')}
       >
         <Text
@@ -259,7 +318,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             activeTab === 'service' && styles.activeTabText,
           ]}
         >
-          💬 Service Agent
+          Service
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -275,7 +334,23 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             activeTab === 'employee' && styles.activeTabTextEmployee,
           ]}
         >
-          👤 Employee Agent
+          Employee
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[
+          styles.tab,
+          activeTab === 'features' && styles.activeTabFeatures,
+        ]}
+        onPress={() => setActiveTab('features')}
+      >
+        <Text
+          style={[
+            styles.tabText,
+            activeTab === 'features' && styles.activeTabTextFeatures,
+          ]}
+        >
+          Flags
         </Text>
       </TouchableOpacity>
     </View>
@@ -450,7 +525,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <Text style={styles.label}>Agent ID</Text>
           <Text style={styles.hint}>
             Optional. Leave blank for multi-agent (SDK uses first available
-            agent from org).
+            agent from org). Changes apply when you next launch Employee Agent.
           </Text>
           <TextInput
             style={styles.input}
@@ -470,15 +545,65 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     </ScrollView>
   );
 
+  const renderFeatureFlagsTab = () => {
+    if (featureFlags == null) {
+      return (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#28a745" />
+          <Text style={styles.loadingText}>Loading feature flags...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView
+        style={styles.tabContent}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Feature Flags</Text>
+          <Text style={styles.description}>
+            Toggle SDK features. Changes are saved immediately and apply to new conversations.
+          </Text>
+          {savingFlags && <Text style={styles.savingText}>Saving…</Text>}
+        </View>
+
+        <View style={styles.formContainer}>
+          {FLAG_KEYS.map((key, index) => (
+            <View
+              key={key}
+              style={[
+                styles.flagRow,
+                index < FLAG_KEYS.length - 1 && styles.flagRowBorder,
+              ]}
+            >
+              <View style={styles.flagLabelBlock}>
+                <Text style={styles.label}>{FLAG_LABELS[key]}</Text>
+                <Text style={styles.hint}>{FLAG_HINTS[key]}</Text>
+              </View>
+              <Switch
+                value={featureFlags[key]}
+                onValueChange={(value) => handleToggleFeatureFlag(key, value)}
+                trackColor={{ false: '#ced4da', true: '#28a745' }}
+                thumbColor="#ffffff"
+                disabled={savingFlags}
+              />
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {renderTabs()}
-      {activeTab === 'service'
-        ? renderServiceAgentTab()
-        : renderEmployeeAgentTab()}
+      {activeTab === 'service' && renderServiceAgentTab()}
+      {activeTab === 'employee' && renderEmployeeAgentTab()}
+      {activeTab === 'features' && renderFeatureFlagsTab()}
     </KeyboardAvoidingView>
   );
 };
@@ -509,6 +634,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#0176D3',
     backgroundColor: '#e7f3ff',
   },
+  activeTabFeatures: {
+    borderBottomColor: '#28a745',
+    backgroundColor: '#e8f5e9',
+  },
   tabText: {
     fontSize: 15,
     fontWeight: '500',
@@ -520,6 +649,10 @@ const styles = StyleSheet.create({
   },
   activeTabTextEmployee: {
     color: '#0176D3',
+    fontWeight: '600',
+  },
+  activeTabTextFeatures: {
+    color: '#28a745',
     fontWeight: '600',
   },
   tabContent: {
@@ -681,6 +814,31 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
+  savingText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#28a745',
+  },
+  flagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
+  flagRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f4',
+  },
+  flagLabelBlock: {
+    flex: 1,
+    marginRight: 16,
   },
 });
 

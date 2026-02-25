@@ -136,7 +136,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .build()
                 
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
-                saveFeatureFlagsToPrefs(flags)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
@@ -172,7 +171,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 AgentforceClientHolder.setClient(client)
                 AgentforceClientHolder.setMode(LocalAgentMode.Service(serviceConfig))
                 
-                Log.d(TAG, "✅ Service Agent configured successfully")
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                     putString("mode", "service")
@@ -210,8 +208,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             try {
                 // Create AgentforceConfiguration for FullConfig mode
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
-                saveFeatureFlagsToPrefs(flags)
-                Log.d(TAG, "🚩 Feature Flags - multiAgent: ${flags.enableMultiAgent}, multiModal: ${flags.enableMultiModalInput}, PDF: ${flags.enablePDFUpload}, voice: ${flags.enableVoice}")
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
@@ -247,7 +243,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 AgentforceClientHolder.setClient(client)
                 AgentforceClientHolder.setMode(LocalAgentMode.Employee(employeeConfig))
                 
-                Log.d(TAG, "✅ Employee Agent configured successfully")
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                     putString("mode", "employee")
