@@ -165,35 +165,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
 
     try {
-      if (activeMode !== 'employee') {
-        const storedAgentId = await AgentforceService.getEmployeeAgentId();
-        const agentId = storedAgentId?.trim() ?? '';
-        const creds = await getEmployeeAgentCredentials();
+      // Always read the latest agentID from settings
+      const storedAgentId = await AgentforceService.getEmployeeAgentId();
+      const agentId = storedAgentId?.trim() ?? '';
+      const creds = await getEmployeeAgentCredentials();
 
-        // Get current feature flags to preserve user settings
-        const featureFlags = await AgentforceService.getFeatureFlags();
+      // Get current feature flags to preserve user settings
+      const featureFlags = await AgentforceService.getFeatureFlags();
 
-        console.log('[HomeScreen] Configuring Employee Agent:', {
-          agentId: agentId || undefined,
-          hasAccessToken: !!creds?.accessToken,
-          featureFlags,
-        });
+      // Always reconfigure to pick up latest agentID and credentials
+      const config = creds
+        ? {
+            type: 'employee' as const,
+            instanceUrl: creds.instanceUrl,
+            organizationId: creds.organizationId,
+            userId: creds.userId,
+            agentId: agentId || undefined,
+            accessToken: creds.accessToken,
+            featureFlags,
+          }
+        : { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId || undefined, featureFlags };
+      await AgentforceService.configure(config);
+      setActiveMode('employee');
 
-        const config = creds
-          ? {
-              type: 'employee' as const,
-              instanceUrl: creds.instanceUrl,
-              organizationId: creds.organizationId,
-              userId: creds.userId,
-              agentId: agentId || undefined,
-              accessToken: creds.accessToken,
-              featureFlags,
-            }
-          : { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId || undefined, featureFlags };
-        await AgentforceService.configure(config);
-        setActiveMode('employee');
-      }
-      console.log('[HomeScreen] Launching Employee Agent conversation');
       await AgentforceService.launchConversation();
     } catch (error: any) {
       Alert.alert(
@@ -243,7 +237,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             onPress={handleLaunchServiceAgent}
             disabled={isChecking}
           >
-            <Text style={styles.launchButtonIcon}>💬</Text>
             <View style={styles.launchButtonContent}>
               <Text style={styles.launchButtonTitle}>Service Agent</Text>
               <Text style={styles.launchButtonSubtitle}>
@@ -269,7 +262,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             onPress={handleLaunchEmployeeAgent}
             disabled={isChecking}
           >
-            <Text style={styles.launchButtonIcon}>👤</Text>
             <View style={styles.launchButtonContent}>
               <Text style={styles.launchButtonTitle}>Employee Agent</Text>
               <Text style={styles.launchButtonSubtitle}>
@@ -290,14 +282,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           style={styles.settingsButton}
           onPress={() => navigation.navigate('Settings')}
         >
-          <Text style={styles.settingsButtonText}>⚙️ Settings</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.settingsButton, styles.featureFlagsButton]}
-          onPress={() => navigation.navigate('FeatureFlags')}
-        >
-          <Text style={styles.settingsButtonText}>🚩 Feature Flags</Text>
+          <Text style={styles.settingsButtonText}>Settings</Text>
         </TouchableOpacity>
 
         <Text style={styles.platformText}>
@@ -402,10 +387,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#e7f3ff',
     borderLeftColor: '#0176D3',
   },
-  launchButtonIcon: {
-    fontSize: 32,
-    marginRight: 16,
-  },
   launchButtonContent: {
     flex: 1,
   },
@@ -432,9 +413,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e9ecef',
-  },
-  featureFlagsButton: {
-    marginTop: 10,
   },
   settingsButtonText: {
     fontSize: 16,

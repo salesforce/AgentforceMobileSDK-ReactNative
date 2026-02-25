@@ -45,7 +45,6 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
         self.directOrgId = config.organizationId
         self.directUserId = ""  // Empty userId for Service Agent
 
-        print("[UnifiedCredentialProvider] Configured for Service Agent mode")
     }
 
     /// Configure for Employee Agent mode
@@ -56,7 +55,6 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
         self.directOrgId = config.organizationId
         self.directUserId = config.userId
 
-        print("[UnifiedCredentialProvider] Configured for Employee Agent mode")
     }
     
     // MARK: - AgentforceAuthCredentialProviding
@@ -79,22 +77,24 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
             // Employee Agent uses OAuth with REAL token
             // Get fresh credentials from Mobile SDK each time (Mobile SDK handles refresh internally)
             #if canImport(SalesforceSDKCore)
-            if let currentUser = UserAccountManager.shared.currentUserAccount,
-               let accessToken = currentUser.credentials.accessToken,
-               let orgId = currentUser.credentials.organizationId,
-               let userId = currentUser.credentials.userId {
-                print("[UnifiedCredentialProvider] ✅ Fetched fresh credentials from Mobile SDK - OrgId: \(orgId), UserId: \(userId)")
-                return .OAuth(
-                    authToken: accessToken,
-                    orgId: orgId,
-                    userId: userId
-                )
+            do {
+                if let currentUser = UserAccountManager.shared.currentUserAccount,
+                   let accessToken = currentUser.credentials.accessToken,
+                   let orgId = currentUser.credentials.organizationId,
+                   let userId = currentUser.credentials.userId {
+                    return .OAuth(
+                        authToken: accessToken,
+                        orgId: orgId,
+                        userId: userId
+                    )
+                }
+            } catch {
+                print("[UnifiedCredentialProvider] ⚠️ Failed to get credentials from Mobile SDK, falling back to cached token: \(error.localizedDescription)")
             }
             #endif
 
             // Fallback to cached token if Mobile SDK not available
             if let token = directToken {
-                print("[UnifiedCredentialProvider] ⚠️ Using cached credentials (Mobile SDK not available)")
                 return .OAuth(
                     authToken: token,
                     orgId: directOrgId ?? config.organizationId,
@@ -112,11 +112,9 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
     /// - Parameter newToken: The new access token
     func updateToken(_ newToken: String) {
         guard case .employee = mode else {
-            print("[UnifiedCredentialProvider] Warning: updateToken called but not in Employee Agent mode")
             return
         }
         self.directToken = newToken
-        print("[UnifiedCredentialProvider] Token updated")
     }
     
     // MARK: - Mode Queries
@@ -163,6 +161,5 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
         directToken = nil
         directOrgId = nil
         directUserId = nil
-        print("[UnifiedCredentialProvider] Reset to unconfigured state")
     }
 }
