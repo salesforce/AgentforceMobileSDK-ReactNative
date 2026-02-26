@@ -160,7 +160,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setFeatureFlagSettings(featureFlagSettings)
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
+<<<<<<< HEAD
                     .setNavigation(bridgeNavigation)
+=======
+>>>>>>> 2097a0a (@W-21304538 Merge employee agent hide UI (#19))
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
                 val agentforceConfig = agentforceConfigBuilder.build()
 
@@ -234,7 +237,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setFeatureFlagSettings(featureFlagSettings)
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
+<<<<<<< HEAD
                     .setNavigation(bridgeNavigation)
+=======
+>>>>>>> 2097a0a (@W-21304538 Merge employee agent hide UI (#19))
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
                 val agentforceConfig = agentforceConfigBuilder.build()
 

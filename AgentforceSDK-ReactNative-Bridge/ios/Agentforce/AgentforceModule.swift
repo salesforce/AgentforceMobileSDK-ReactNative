@@ -127,12 +127,15 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("serviceApiURL must be a valid URL (e.g. https://your-site.salesforce.com)")
         }
         
+<<<<<<< HEAD
         // Only cleanup if switching from Employee mode
         if case .employee = currentMode {
             print("[AgentforceModule] ⚠️ Switching from Employee to Service mode - cleaning up")
             cleanupClient()
         }
 
+=======
+>>>>>>> 2097a0a (@W-21304538 Merge employee agent hide UI (#19))
         // Configure unified credential provider for Service Agent mode
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
@@ -178,12 +181,15 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
         }
 
+<<<<<<< HEAD
         // Only cleanup if switching from Service mode
         if case .service = currentMode {
             print("[AgentforceModule] ⚠️ Switching from Service to Employee mode - cleaning up")
             cleanupClient()
         }
 
+=======
+>>>>>>> 2097a0a (@W-21304538 Merge employee agent hide UI (#19))
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
         credentialProvider.configure(employeeAgent: config)
@@ -192,6 +198,12 @@ class AgentforceModule: RCTEventEmitter {
         // Persist employee agentId (editable in Settings tab)
         UserDefaults.standard.set(config.agentId ?? "", forKey: "EmployeeAgentId")
 
+<<<<<<< HEAD
+=======
+        // Clean up any existing client
+        cleanupClient()
+
+>>>>>>> 2097a0a (@W-21304538 Merge employee agent hide UI (#19))
         // Get orgId and userId from Mobile SDK if available (more reliable than config)
         var userId = config.userId
         var organizationId = config.organizationId
@@ -644,6 +656,83 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
     
+    private static let featureFlagKeys = (
+        enableMultiAgent: "AgentforceFF_enableMultiAgent",
+        enableMultiModalInput: "AgentforceFF_enableMultiModalInput",
+        enablePDFUpload: "AgentforceFF_enablePDFUpload",
+        enableVoice: "AgentforceFF_enableVoice"
+    )
+    
+    private struct FeatureFlags {
+        let enableMultiAgent: Bool
+        let enableMultiModalInput: Bool
+        let enablePDFUpload: Bool
+        let enableVoice: Bool
+    }
+    
+    private func getFeatureFlagsFromConfigOrUserDefaults(_ configDict: [String: Any]) -> FeatureFlags {
+        if let featureFlags = configDict["featureFlags"] as? [String: Any] {
+            return FeatureFlags(
+                enableMultiAgent: (featureFlags["enableMultiAgent"] as? NSNumber)?.boolValue ?? true,
+                enableMultiModalInput: (featureFlags["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false,
+                enablePDFUpload: (featureFlags["enablePDFUpload"] as? NSNumber)?.boolValue ?? false,
+                enableVoice: (featureFlags["enableVoice"] as? NSNumber)?.boolValue ?? false
+            )
+        }
+        let ud = UserDefaults.standard
+        return FeatureFlags(
+            enableMultiAgent: ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
+            enableMultiModalInput: ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
+            enablePDFUpload: ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
+            enableVoice: ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+        )
+    }
+    
+    private func saveFeatureFlagsToUserDefaults(_ flags: FeatureFlags) {
+        UserDefaults.standard.set(flags.enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
+        UserDefaults.standard.set(flags.enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
+        UserDefaults.standard.set(flags.enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
+        UserDefaults.standard.set(flags.enableVoice, forKey: Self.featureFlagKeys.enableVoice)
+    }
+    
+    @objc
+    func getFeatureFlags(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        let ud = UserDefaults.standard
+        let flags = [
+            "enableMultiAgent": ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
+            "enableMultiModalInput": ud.object(forKey: Self.featureFlagKeys.enableMultiModalInput) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
+            "enablePDFUpload": ud.object(forKey: Self.featureFlagKeys.enablePDFUpload) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
+            "enableVoice": ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+        ]
+        resolve(flags)
+    }
+
+    @objc
+    func setFeatureFlags(
+        _ flags: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let dict = flags as? [String: Any] else {
+            resolve(nil)
+            return
+        }
+        let enableMultiAgent = (dict["enableMultiAgent"] as? NSNumber)?.boolValue ?? true
+        let enableMultiModalInput = (dict["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false
+        let enablePDFUpload = (dict["enablePDFUpload"] as? NSNumber)?.boolValue ?? false
+        let enableVoice = (dict["enableVoice"] as? NSNumber)?.boolValue ?? false
+
+        UserDefaults.standard.set(enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
+        UserDefaults.standard.set(enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
+        UserDefaults.standard.set(enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
+        UserDefaults.standard.set(enableVoice, forKey: Self.featureFlagKeys.enableVoice)
+
+        resolve(nil)
+    }
+    
     /// Get current configuration values (legacy format for backward compatibility)
     @objc
     func getConfiguration(
@@ -715,6 +804,7 @@ class AgentforceModule: RCTEventEmitter {
             resolve(initialized)
         }
     }
+<<<<<<< HEAD
 
     // MARK: - Logging
 
@@ -764,6 +854,9 @@ class AgentforceModule: RCTEventEmitter {
         sendEvent(withName: "onNavigationRequest", body: payload)
     }
 
+=======
+    
+>>>>>>> 2097a0a (@W-21304538 Merge employee agent hide UI (#19))
     // MARK: - Cleanup
     
     private func cleanupClient() {

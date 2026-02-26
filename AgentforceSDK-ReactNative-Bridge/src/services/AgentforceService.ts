@@ -105,9 +105,10 @@ class AgentforceService {
   private initialized: boolean = false;
 
   constructor() {
-    this.initializeEventEmitter();
+    this.initialized = true;
   }
 
+<<<<<<< HEAD
   /**
    * Initialize the native event emitter
    */
@@ -130,6 +131,8 @@ class AgentforceService {
     }
   }
 
+=======
+>>>>>>> 2097a0a (@W-21304538 Merge employee agent hide UI (#19))
 
   /**
    * Register a logger delegate to receive log messages from the native Agentforce SDK.
