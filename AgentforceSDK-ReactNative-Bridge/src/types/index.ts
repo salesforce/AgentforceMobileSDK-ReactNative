@@ -23,3 +23,6 @@ export {
   TokenRefreshEvent,
   AuthenticationFailureEvent,
 } from './TokenDelegate';
+
+// Logger delegate types
+export { LoggerDelegate, LogLevel } from './LoggerDelegate';
