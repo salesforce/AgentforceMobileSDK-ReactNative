@@ -95,9 +95,10 @@ import SalesforceCache
           )
       }
 
-      // Create feature flag settings with multi-agent enabled
+      // Create feature flag settings with multi-agent and voice enabled for development
       let featureFlagSettings = AgentforceFeatureFlagSettings(
-          multiAgent: true  // Enable multi-agent mode
+          multiAgent: true,
+          enableVoice: true
       )
 
       // Create configuration with all required parameters

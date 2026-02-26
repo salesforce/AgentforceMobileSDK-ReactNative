@@ -1,0 +1,10 @@
+--- a/node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/tasks/BundleHermesCTask.kt
++++ b/node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/tasks/BundleHermesCTask.kt
+@@ -126,6 +126,7 @@ abstract class BundleHermesCTask : DefaultTask() {
+   internal fun resolveCompilerSourceMap(bundleAssetName: String) =
+       File(jsIntermediateSourceMapsDir.get().asFile, "$bundleAssetName.compiler.map")
+
++  @Suppress("DEPRECATION")
+   private fun runCommand(command: List<Any>) {
+     project.exec {
+       it.workingDir(root.get().asFile)

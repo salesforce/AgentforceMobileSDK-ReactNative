@@ -36,9 +36,16 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
         private const val KEY_SERVICE_API_URL = "serviceApiURL"
         private const val KEY_ORGANIZATION_ID = "organizationId"
         private const val KEY_ES_DEVELOPER_NAME = "esDeveloperName"
+        // Same as AgentforceModule so Service Agent uses the same feature flags
+        private const val FEATURE_FLAGS_PREFS_NAME = "AgentforceFeatureFlags"
+        private const val KEY_ENABLE_MULTI_AGENT = "enableMultiAgent"
+        private const val KEY_ENABLE_MULTI_MODAL_INPUT = "enableMultiModalInput"
+        private const val KEY_ENABLE_PDF_UPLOAD = "enablePDFUpload"
+        private const val KEY_ENABLE_VOICE = "enableVoice"
     }
     
     private val prefs: SharedPreferences = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val featureFlagsPrefs: SharedPreferences = application.getSharedPreferences(FEATURE_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
 
     // Service Agent configuration
     private val _serviceApiURL = MutableStateFlow("")
@@ -169,12 +176,15 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
                     }
                 }
 
-                // Feature flag settings: multi-agent only for now
+                // Use same feature flags as AgentforceModule (from shared prefs)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
-                    .enableMultiAgent(true)
-                    .enableMultiModalInput(false)
-                    .enablePDFUpload(false)
+                    .enableMultiAgent(featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true))
+                    .enableMultiModalInput(featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false))
+                    .enablePDFUpload(featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
+                    .enableVoice(false) // Voice off for Service Agent
                     .build()
+
+                val cameraUriProvider = AgentforceClientCameraUriProvider(getApplication())
 
                 // Service Agent mode configuration
                 val serviceAgentMode = AgentforceMode.ServiceAgent(
@@ -198,6 +208,7 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
                         )
                         .setApplication(getApplication())
                         .setFeatureFlagSettings(featureFlagSettings)
+                        .setCameraUriProvider(cameraUriProvider)
                         .build()
                 )
 

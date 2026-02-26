@@ -6,11 +6,24 @@
  */
 
 /**
+ * Feature flags for the Agentforce SDK (can be set in-app via Feature Flags screen).
+ */
+export interface FeatureFlags {
+  enableMultiAgent: boolean;
+  enableMultiModalInput: boolean;
+  enablePDFUpload: boolean;
+  enableVoice: boolean;
+}
+
+/**
  * Base configuration shared by all agent types
  */
 interface BaseAgentConfig {
   /** Salesforce Organization ID (15 or 18 character format) */
   organizationId: string;
+
+  /** Optional feature flags. If omitted, stored flags (or defaults) are used. */
+  featureFlags?: FeatureFlags;
 }
 
 /**
@@ -44,11 +57,10 @@ export interface ServiceAgentConfig extends BaseAgentConfig {
  * Employee Agent configuration (authenticated access)
  *
  * Used for internal employee apps where users are authenticated with Salesforce.
- * Requires a valid OAuth token provided either directly or via TokenDelegate.
+ * Requires a valid OAuth token provided directly in the config.
  *
  * @example
  * ```typescript
- * // With direct token
  * const config: EmployeeAgentConfig = {
  *   type: 'employee',
  *   instanceUrl: 'https://myorg.my.salesforce.com',
@@ -56,17 +68,6 @@ export interface ServiceAgentConfig extends BaseAgentConfig {
  *   userId: '005xx0000001234',
  *   agentId: '0Xxxx0000001234',
  *   accessToken: 'your_oauth_token_here',
- * };
- *
- * // With token delegate (set delegate first)
- * AgentforceService.setTokenDelegate(myDelegate);
- * const config: EmployeeAgentConfig = {
- *   type: 'employee',
- *   instanceUrl: 'https://myorg.my.salesforce.com',
- *   organizationId: '00Dxx0000001234',
- *   userId: '005xx0000001234',
- *   agentId: '0Xxxx0000001234',
- *   // accessToken not needed - delegate provides it
  * };
  * ```
  */
@@ -88,7 +89,7 @@ export interface EmployeeAgentConfig extends BaseAgentConfig {
 
   /**
    * OAuth access token for authentication.
-   * Either provide this directly or register a TokenDelegate before configuring.
+   * The native SDK will fetch fresh tokens from the Mobile SDK automatically.
    */
   accessToken?: string;
 }
