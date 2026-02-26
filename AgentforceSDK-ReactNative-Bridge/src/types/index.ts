@@ -17,3 +17,6 @@ export {
   isEmployeeAgentConfig,
   isLegacyConfig,
 } from './AgentConfig';
+
+// Logger delegate types
+export { LoggerDelegate, LogLevel } from './LoggerDelegate';

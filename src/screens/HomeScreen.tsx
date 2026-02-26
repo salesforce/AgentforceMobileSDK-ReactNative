@@ -40,12 +40,26 @@ import {
   getEmployeeAgentCredentials,
   EMPLOYEE_AGENT_CONFIG,
   isEmployeeAgentConfigValid,
+  LoggerDelegate,
+  LogLevel,
 } from 'react-native-agentforce';
 import { UI_FEATURES } from '../config/UIFeatures';
 
 interface HomeScreenProps {
   navigation: any;
 }
+
+// Sample logger delegate — forwards Agentforce SDK logs to console
+const agentforceLogger: LoggerDelegate = {
+  onLog(level: LogLevel, message: string, error?: string) {
+    const prefix = `[Agentforce ${level.toUpperCase()}]`;
+    if (error) {
+      console.log(`${prefix} ${message} | ${error}`);
+    } else {
+      console.log(`${prefix} ${message}`);
+    }
+  },
+};
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [isServiceAgentConfigured, setIsServiceAgentConfigured] =
@@ -60,7 +74,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   >('none');
 
   useEffect(() => {
+    // Register logger delegate so SDK logs are forwarded to JS
+    AgentforceService.setLoggerDelegate(agentforceLogger);
     checkConfigurations();
+
+    return () => {
+      AgentforceService.clearLoggerDelegate();
+    };
   }, []);
 
   useEffect(() => {
