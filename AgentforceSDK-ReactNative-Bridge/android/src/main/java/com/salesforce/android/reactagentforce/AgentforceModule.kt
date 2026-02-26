@@ -63,6 +63,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Continuation for async token refresh
     private var tokenRefreshContinuation: Continuation<String>? = null
     
+    // Bridge logger for forwarding SDK logs to JS
+    private val bridgeLogger = BridgeLogger(reactContext)
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -149,8 +152,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setSalesforceDomain(serviceConfig.serviceApiURL)
                     .setApplication(reactApplicationContext.applicationContext as Application)
                     .setFeatureFlagSettings(featureFlagSettings)
+                    .setLogger(bridgeLogger)
                     .build()
-                
+
                 val sdkMode = AgentforceMode.ServiceAgent(
                     serviceAgentConfiguration = sdkServiceConfig,
                     agentforceConfiguration = agentforceConfig
@@ -232,8 +236,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setSalesforceDomain(employeeConfig.instanceUrl)
                     .setApplication(reactApplicationContext.applicationContext as Application)
                     .setFeatureFlagSettings(featureFlagSettings)
+                    .setLogger(bridgeLogger)
                     .build()
-                
+
                 // Use FullConfig mode for Employee Agent
                 val sdkMode = AgentforceMode.FullConfig(
                     agentforceConfiguration = agentforceConfig
@@ -483,6 +488,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             .emit("onAuthenticationFailure", Arguments.createMap().apply {
                 putString("error", error)
             })
+    }
+
+    // MARK: - Log Forwarding
+
+    @ReactMethod
+    fun enableLogForwarding(enabled: Boolean, promise: Promise) {
+        bridgeLogger.forwardingEnabled = enabled
+        Log.d(TAG, "Log forwarding ${if (enabled) "enabled" else "disabled"}")
+        promise.resolve(true)
     }
 
     // MARK: - Cleanup
