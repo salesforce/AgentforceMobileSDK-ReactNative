@@ -16,6 +16,85 @@ The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI plat
 - **Persistent Configuration** - Settings are saved and restored automatically
 - **Conversation Continuity** - Conversations persist across app launches
 
+## 🔧 Advanced Features (Hidden by Default)
+
+This sample app includes **full support for Employee Agents, Voice features, and Feature Flags**, but these UI elements are **hidden by default** to provide a simpler out-of-the-box experience focused on Service Agents.
+
+### What's Included (But Hidden)
+
+All the code and infrastructure for advanced features is present:
+- ✅ **Employee Agent Support** - Complete native implementation with auth integration
+- ✅ **Voice Features** - Immersive voice conversation capabilities
+- ✅ **Camera Permissions** - Photo capture and multimodal input support
+- ✅ **Feature Flags** - Runtime configuration for voice, multi-agent, PDF upload, etc.
+- ✅ **Token Provider Architecture** - For custom authentication implementations
+- ✅ **Kotlin Build Patches** - Android build optimization patches
+
+### Enabling Advanced Features
+
+To show Employee Agent and Feature Flags UI, edit `src/config/UIFeatures.ts`:
+
+```typescript
+export const UI_FEATURES = {
+  SHOW_EMPLOYEE_AGENT: true,      // Shows Employee Agent UI
+  SHOW_FEATURE_FLAGS_TAB: true,   // Shows Feature Flags settings tab
+} as const;
+```
+
+**What This Enables:**
+- **SHOW_EMPLOYEE_AGENT = true**:
+  - Adds "Employee Agent" launch button to HomeScreen
+  - Adds "Employee" tab to SettingsScreen for auth configuration
+  - Requires Mobile SDK authentication setup
+
+- **SHOW_FEATURE_FLAGS_TAB = true**:
+  - Adds "Flags" tab to SettingsScreen
+  - Allows toggling voice, multi-agent, PDF upload, etc. via UI
+
+### Programmatic Access
+
+Even with UI hidden, all features remain accessible programmatically:
+
+```typescript
+import {
+  AgentforceService,
+  isEmployeeAgentAuthSupported,
+  loginForEmployeeAgent,
+  getEmployeeAgentCredentials,
+} from 'react-native-agentforce';
+
+// Configure employee agent programmatically
+const config = {
+  type: 'employee',
+  instanceUrl: 'https://your-instance.my.salesforce.com',
+  organizationId: 'your-org-id',
+  userId: 'your-user-id',
+  agentId: 'your-agent-id',
+  accessToken: 'your-access-token',
+  featureFlags: {
+    enableVoice: true,
+    enableMultiAgent: true,
+  },
+};
+await AgentforceService.configure(config);
+
+// Set feature flags programmatically
+await AgentforceService.setFeatureFlags({
+  enableVoice: true,
+  enableMultiModalInput: true,
+  enablePDFUpload: true,
+});
+```
+
+### Why Hidden by Default?
+
+1. **Simpler First Experience** - Service Agents work without additional auth setup
+2. **Flexible Integration** - Consumers can add their own auth UI and flows
+3. **No MobileSDK Dependency in Default UI** - Easier to understand and modify
+4. **Cleaner Starting Point** - Focus on core concepts first
+
+For full Employee Agent setup including Mobile SDK integration, see the `employeeAgent` branch or refer to the bridge documentation.
+
 ## 🏗️ Architecture
 
 This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `AgentforceSDK-ReactNative-Bridge/`) for all Agentforce functionality. The app has **no separate in-repo Agentforce native code**; the bridge provides the JS API and native modules.
