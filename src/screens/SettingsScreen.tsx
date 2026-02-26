@@ -46,6 +46,7 @@ import {
   refreshEmployeeAgentCredentials,
 } from 'react-native-agentforce';
 import type { FeatureFlags } from 'react-native-agentforce';
+import { UI_FEATURES } from '../config/UIFeatures';
 
 type TabType = 'service' | 'employee' | 'features';
 
@@ -321,38 +322,42 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           Service
         </Text>
       </TouchableOpacity>
-      <TouchableOpacity
-        style={[
-          styles.tab,
-          activeTab === 'employee' && styles.activeTabEmployee,
-        ]}
-        onPress={() => setActiveTab('employee')}
-      >
-        <Text
+      {UI_FEATURES.SHOW_EMPLOYEE_AGENT && (
+        <TouchableOpacity
           style={[
-            styles.tabText,
-            activeTab === 'employee' && styles.activeTabTextEmployee,
+            styles.tab,
+            activeTab === 'employee' && styles.activeTabEmployee,
           ]}
+          onPress={() => setActiveTab('employee')}
         >
-          Employee
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[
-          styles.tab,
-          activeTab === 'features' && styles.activeTabFeatures,
-        ]}
-        onPress={() => setActiveTab('features')}
-      >
-        <Text
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'employee' && styles.activeTabTextEmployee,
+            ]}
+          >
+            Employee
+          </Text>
+        </TouchableOpacity>
+      )}
+      {UI_FEATURES.SHOW_FEATURE_FLAGS_TAB && (
+        <TouchableOpacity
           style={[
-            styles.tabText,
-            activeTab === 'features' && styles.activeTabTextFeatures,
+            styles.tab,
+            activeTab === 'features' && styles.activeTabFeatures,
           ]}
+          onPress={() => setActiveTab('features')}
         >
-          Flags
-        </Text>
-      </TouchableOpacity>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'features' && styles.activeTabTextFeatures,
+            ]}
+          >
+            Flags
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -602,8 +607,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     >
       {renderTabs()}
       {activeTab === 'service' && renderServiceAgentTab()}
-      {activeTab === 'employee' && renderEmployeeAgentTab()}
-      {activeTab === 'features' && renderFeatureFlagsTab()}
+      {UI_FEATURES.SHOW_EMPLOYEE_AGENT &&
+        activeTab === 'employee' &&
+        renderEmployeeAgentTab()}
+      {UI_FEATURES.SHOW_FEATURE_FLAGS_TAB &&
+        activeTab === 'features' &&
+        renderFeatureFlagsTab()}
     </KeyboardAvoidingView>
   );
 };

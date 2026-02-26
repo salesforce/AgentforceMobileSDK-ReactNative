@@ -41,6 +41,7 @@ import {
   EMPLOYEE_AGENT_CONFIG,
   isEmployeeAgentConfigValid,
 } from 'react-native-agentforce';
+import { UI_FEATURES } from '../config/UIFeatures';
 
 interface HomeScreenProps {
   navigation: any;
@@ -215,7 +216,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         <Text style={styles.title}>Agentforce</Text>
         <Text style={styles.subtitle}>
-          Choose an agent type to launch
+          {UI_FEATURES.SHOW_EMPLOYEE_AGENT
+            ? 'Choose an agent type to launch'
+            : 'Service Agent'}
         </Text>
 
         {isChecking && (
@@ -252,30 +255,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.launchButton,
-              styles.employeeAgentButton,
-              !isEmployeeAgentConfigured && styles.launchButtonDisabled,
-              activeMode === 'employee' && styles.activeButtonEmployee,
-            ]}
-            onPress={handleLaunchEmployeeAgent}
-            disabled={isChecking}
-          >
-            <View style={styles.launchButtonContent}>
-              <Text style={styles.launchButtonTitle}>Employee Agent</Text>
-              <Text style={styles.launchButtonSubtitle}>
-                {isEmployeeAgentConfigured
-                  ? activeMode === 'employee'
-                    ? 'Active - Tap to launch'
-                    : 'Configured - Tap to launch'
-                  : 'Sign in in Settings to configure'}
-              </Text>
-            </View>
-            {isEmployeeAgentConfigured && (
-              <Text style={styles.launchButtonArrow}>›</Text>
-            )}
-          </TouchableOpacity>
+          {UI_FEATURES.SHOW_EMPLOYEE_AGENT && (
+            <TouchableOpacity
+              style={[
+                styles.launchButton,
+                styles.employeeAgentButton,
+                !isEmployeeAgentConfigured && styles.launchButtonDisabled,
+                activeMode === 'employee' && styles.activeButtonEmployee,
+              ]}
+              onPress={handleLaunchEmployeeAgent}
+              disabled={isChecking}
+            >
+              <View style={styles.launchButtonContent}>
+                <Text style={styles.launchButtonTitle}>Employee Agent</Text>
+                <Text style={styles.launchButtonSubtitle}>
+                  {isEmployeeAgentConfigured
+                    ? activeMode === 'employee'
+                      ? 'Active - Tap to launch'
+                      : 'Configured - Tap to launch'
+                    : 'Sign in in Settings to configure'}
+                </Text>
+              </View>
+              {isEmployeeAgentConfigured && (
+                <Text style={styles.launchButtonArrow}>›</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         <TouchableOpacity
