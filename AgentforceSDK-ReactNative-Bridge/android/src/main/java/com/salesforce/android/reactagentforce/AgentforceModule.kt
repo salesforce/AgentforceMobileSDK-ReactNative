@@ -24,12 +24,8 @@ import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSetti
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
-import com.salesforce.android.reactagentforce.providers.SimpleTokenProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
 import kotlinx.coroutines.*
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 /**
  * React Native bridge module for Agentforce SDK.
@@ -43,26 +39,28 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         private const val MODULE_NAME = "AgentforceModule"
         private const val EMPLOYEE_PREFS_NAME = "EmployeeAgentPrefs"
         private const val KEY_EMPLOYEE_AGENT_ID = "employeeAgentId"
+        private const val FEATURE_FLAGS_PREFS_NAME = "AgentforceFeatureFlags"
+        private const val KEY_ENABLE_MULTI_AGENT = "enableMultiAgent"
+        private const val KEY_ENABLE_MULTI_MODAL_INPUT = "enableMultiModalInput"
+        private const val KEY_ENABLE_PDF_UPLOAD = "enablePDFUpload"
+        private const val KEY_ENABLE_VOICE = "enableVoice"
     }
 
     private val employeePrefs: SharedPreferences
         get() = reactApplicationContext.getSharedPreferences(EMPLOYEE_PREFS_NAME, Context.MODE_PRIVATE)
 
+    private val featureFlagsPrefs: SharedPreferences
+        get() = reactApplicationContext.getSharedPreferences(FEATURE_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
+
     // Legacy ViewModel for Service Agent backward compatibility
     private var viewModel: ServiceAgentViewModel? = null
-    
+
     // Unified credential provider for both modes
     private val credentialProvider = UnifiedCredentialProvider()
-    
+
     // Current mode configuration
     private var currentMode: LocalAgentMode? = null
-    
-    // Simple token provider for Employee Agent mode
-    private var simpleTokenProvider: SimpleTokenProvider? = null
-    
-    // Continuation for async token refresh
-    private var tokenRefreshContinuation: Continuation<String>? = null
-    
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -137,19 +135,26 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     )
                     .build()
                 
+                val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
-                    .enableMultiAgent(true)
-                    .enableMultiModalInput(false)
-                    .enablePDFUpload(false)
+                    .enableMultiAgent(flags.enableMultiAgent)
+                    .enableMultiModalInput(flags.enableMultiModalInput)
+                    .enablePDFUpload(flags.enablePDFUpload)
+                    .enableVoice(false) // Voice off for Service Agent
                     .build()
 
-                val agentforceConfig = AgentforceConfiguration
+                val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
+                val permissions = reactApplicationContext.currentActivity?.let { AgentforceClientPermissions(it) }
+
+                val agentforceConfigBuilder = AgentforceConfiguration
                     .builder(credentialProvider)
                     .setServiceApiURL(serviceConfig.serviceApiURL)
                     .setSalesforceDomain(serviceConfig.serviceApiURL)
                     .setApplication(reactApplicationContext.applicationContext as Application)
                     .setFeatureFlagSettings(featureFlagSettings)
-                    .build()
+                    .setCameraUriProvider(cameraUriProvider)
+                permissions?.let { agentforceConfigBuilder.setPermission(it) }
+                val agentforceConfig = agentforceConfigBuilder.build()
                 
                 val sdkMode = AgentforceMode.ServiceAgent(
                     serviceAgentConfiguration = sdkServiceConfig,
@@ -166,7 +171,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 AgentforceClientHolder.setClient(client)
                 AgentforceClientHolder.setMode(LocalAgentMode.Service(serviceConfig))
                 
-                Log.d(TAG, "✅ Service Agent configured successfully")
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                     putString("mode", "service")
@@ -188,27 +192,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         }
         
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
-        
-        // Create simple token provider for delegate-based refresh
-        simpleTokenProvider = SimpleTokenProvider(
-            accessToken = employeeConfig.accessToken,
-            organizationId = employeeConfig.organizationId,
-            userId = employeeConfig.userId,
-            instanceUrl = employeeConfig.instanceUrl
-        )
-        
-        // Set up refresh handler that calls back to JS
-        simpleTokenProvider?.setRefreshHandler {
-            requestTokenRefreshFromJS()
-        }
-        
-        // Set up auth failure handler
-        simpleTokenProvider?.setAuthFailureHandler {
-            emitAuthenticationFailure("Token refresh failed")
-        }
-        
+
         // Configure unified credential provider for Employee Agent mode
-        credentialProvider.configure(employeeConfig, simpleTokenProvider!!)
+        // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
+        credentialProvider.configure(employeeConfig)
         currentMode = LocalAgentMode.Employee(employeeConfig)
         
         // Persist employee agentId (editable in Settings tab)
@@ -220,19 +207,26 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         scope.launch {
             try {
                 // Create AgentforceConfiguration for FullConfig mode
+                val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
-                    .enableMultiAgent(true)
-                    .enableMultiModalInput(false)
-                    .enablePDFUpload(false)
+                    .enableMultiAgent(flags.enableMultiAgent)
+                    .enableMultiModalInput(flags.enableMultiModalInput)
+                    .enablePDFUpload(flags.enablePDFUpload)
+                    .enableVoice(flags.enableVoice)
                     .build()
 
-                val agentforceConfig = AgentforceConfiguration
+                val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
+                val permissions = reactApplicationContext.currentActivity?.let { AgentforceClientPermissions(it) }
+
+                val agentforceConfigBuilder = AgentforceConfiguration
                     .builder(credentialProvider)
                     .setServiceApiURL(employeeConfig.instanceUrl)
                     .setSalesforceDomain(employeeConfig.instanceUrl)
                     .setApplication(reactApplicationContext.applicationContext as Application)
                     .setFeatureFlagSettings(featureFlagSettings)
-                    .build()
+                    .setCameraUriProvider(cameraUriProvider)
+                permissions?.let { agentforceConfigBuilder.setPermission(it) }
+                val agentforceConfig = agentforceConfigBuilder.build()
                 
                 // Use FullConfig mode for Employee Agent
                 val sdkMode = AgentforceMode.FullConfig(
@@ -249,7 +243,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 AgentforceClientHolder.setClient(client)
                 AgentforceClientHolder.setMode(LocalAgentMode.Employee(employeeConfig))
                 
-                Log.d(TAG, "✅ Employee Agent configured successfully")
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                     putString("mode", "employee")
@@ -416,6 +409,62 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         promise.resolve(null)
     }
 
+    private data class FeatureFlags(
+        val enableMultiAgent: Boolean,
+        val enableMultiModalInput: Boolean,
+        val enablePDFUpload: Boolean,
+        val enableVoice: Boolean
+    )
+
+    private fun getFeatureFlagsFromConfigOrPrefs(config: ReadableMap): FeatureFlags {
+        val featureFlagsMap = if (config.hasKey("featureFlags")) config.getMap("featureFlags") else null
+        return if (featureFlagsMap != null) {
+            FeatureFlags(
+                enableMultiAgent = featureFlagsMap.hasKey("enableMultiAgent") && featureFlagsMap.getBoolean("enableMultiAgent"),
+                enableMultiModalInput = featureFlagsMap.hasKey("enableMultiModalInput") && featureFlagsMap.getBoolean("enableMultiModalInput"),
+                enablePDFUpload = featureFlagsMap.hasKey("enablePDFUpload") && featureFlagsMap.getBoolean("enablePDFUpload"),
+                enableVoice = featureFlagsMap.hasKey("enableVoice") && featureFlagsMap.getBoolean("enableVoice")
+            )
+        } else {
+            FeatureFlags(
+                enableMultiAgent = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true),
+                enableMultiModalInput = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false),
+                enablePDFUpload = featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false),
+                enableVoice = featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false)
+            )
+        }
+    }
+
+    private fun saveFeatureFlagsToPrefs(flags: FeatureFlags) {
+        featureFlagsPrefs.edit()
+            .putBoolean(KEY_ENABLE_MULTI_AGENT, flags.enableMultiAgent)
+            .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, flags.enableMultiModalInput)
+            .putBoolean(KEY_ENABLE_PDF_UPLOAD, flags.enablePDFUpload)
+            .putBoolean(KEY_ENABLE_VOICE, flags.enableVoice)
+            .apply()
+    }
+
+    @ReactMethod
+    fun getFeatureFlags(promise: Promise) {
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("enableMultiAgent", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true))
+            putBoolean("enableMultiModalInput", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false))
+            putBoolean("enablePDFUpload", featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
+            putBoolean("enableVoice", featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false))
+        })
+    }
+
+    @ReactMethod
+    fun setFeatureFlags(flags: ReadableMap, promise: Promise) {
+        featureFlagsPrefs.edit()
+            .putBoolean(KEY_ENABLE_MULTI_AGENT, flags.hasKey("enableMultiAgent") && flags.getBoolean("enableMultiAgent"))
+            .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, flags.hasKey("enableMultiModalInput") && flags.getBoolean("enableMultiModalInput"))
+            .putBoolean(KEY_ENABLE_PDF_UPLOAD, flags.hasKey("enablePDFUpload") && flags.getBoolean("enablePDFUpload"))
+            .putBoolean(KEY_ENABLE_VOICE, flags.hasKey("enableVoice") && flags.getBoolean("enableVoice"))
+            .apply()
+        promise.resolve(null)
+    }
+
     @ReactMethod
     fun getConfigurationInfo(promise: Promise) {
         if (credentialProvider.isConfigured) {
@@ -445,46 +494,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // MARK: - Token Refresh (Employee Agent only)
 
-    private suspend fun requestTokenRefreshFromJS(): String {
-        return suspendCoroutine { continuation ->
-            tokenRefreshContinuation = continuation
-            
-            // Emit event to JS
-            reactApplicationContext
-                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                .emit("onTokenRefreshNeeded", null)
-        }
-    }
-
-    @ReactMethod
-    fun provideRefreshedToken(token: String, promise: Promise) {
-        if (!credentialProvider.isEmployeeAgent) {
-            promise.reject("INVALID_MODE", "Token refresh only valid for Employee Agent mode")
-            return
-        }
-        
-        val continuation = tokenRefreshContinuation
-        if (continuation != null) {
-            simpleTokenProvider?.updateToken(token)
-            credentialProvider.updateToken(token)
-            continuation.resume(token)
-            tokenRefreshContinuation = null
-            promise.resolve(Arguments.createMap().apply {
-                putBoolean("success", true)
-            })
-        } else {
-            promise.reject("NO_PENDING_REFRESH", "No token refresh was pending")
-        }
-    }
-
-    private fun emitAuthenticationFailure(error: String) {
-        reactApplicationContext
-            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit("onAuthenticationFailure", Arguments.createMap().apply {
-                putString("error", error)
-            })
-    }
-
     // MARK: - Cleanup
 
     @ReactMethod
@@ -501,7 +510,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         AgentforceClientHolder.clear()
         viewModel?.resetConfiguration()
         currentMode = null
-        simpleTokenProvider = null
         credentialProvider.reset()
         employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
         promise.resolve(Arguments.createMap().apply {

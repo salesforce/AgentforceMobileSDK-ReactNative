@@ -95,8 +95,9 @@ export async function getEmployeeAgentCredentials(): Promise<AuthCredentials | n
 
 /**
  * Ask the Mobile SDK to refresh the current session and return new credentials.
- * Use this when the Agentforce backend returns 401 (expired token) and the native layer
- * emits onTokenRefreshNeeded. Returns the new access token and related fields.
+ * Returns the new access token and related fields.
+ * Note: The native SDK now handles token refresh automatically by fetching fresh tokens
+ * from the Mobile SDK. This method is kept for manual refresh scenarios if needed.
  * @throws if no session, no refresh token, or refresh fails
  */
 export async function refreshEmployeeAgentCredentials(): Promise<AuthCredentials> {

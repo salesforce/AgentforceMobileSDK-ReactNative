@@ -51,6 +51,15 @@ RCT_EXTERN_METHOD(getConfigurationInfo:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(isInitialized:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Feature Flags
+
+RCT_EXTERN_METHOD(getFeatureFlags:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(setFeatureFlags:(NSDictionary *)flags
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 // MARK: - Conversation Methods
 
 RCT_EXTERN_METHOD(launchConversation:(RCTPromiseResolveBlock)resolve

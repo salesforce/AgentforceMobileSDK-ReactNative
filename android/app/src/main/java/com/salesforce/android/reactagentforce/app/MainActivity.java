@@ -25,6 +25,7 @@ package com.salesforce.android.reactagentforce.app;
 
 import android.os.Bundle;
 import com.facebook.react.ReactActivity;
+import com.salesforce.android.reactagentforce.AgentforceClientPermissions;
 import com.facebook.react.ReactActivityDelegate;
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactActivityDelegate;
@@ -70,5 +71,15 @@ public class MainActivity extends ReactActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(null);
+	}
+
+	/**
+	 * Forward permission results to AgentforceClientPermissions so the SDK's
+	 * permission requests (e.g. RECORD_AUDIO, CAMERA) can complete.
+	 */
+	@Override
+	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		AgentforceClientPermissions.handlePermissionResult(requestCode, permissions, grantResults);
 	}
 }

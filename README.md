@@ -11,7 +11,6 @@ The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI plat
 ## ✨ Features
 
 - **Service Agent Configuration** - Configure and initialize the SDK with Service Agent settings
-- **Employee Agent Configuration** - The bridge layer supports conversion to an Employee Agent configuration
 - **Full UI Experience** - Use the pre-built chat interface provided by the Agentforce SDK
 - **Cross-Platform** - Single codebase for both iOS and Android with native SDK integration
 - **Persistent Configuration** - Settings are saved and restored automatically
@@ -82,7 +81,7 @@ npm install
 ### 2. iOS Setup
 
 ```bash
-# Install CocoaPods dependencies (includes bridge pod)
+# Install CocoaPods dependencies
 node installios.js
 
 # Run on iOS
@@ -91,9 +90,13 @@ npm run ios
 
 ### 3. Android Setup
 
+
+
 ```bash
-# Android setup is automatic with Gradle
-# Just run the app directly
+# If using Employee Agents
+node installandroid.js
+
+# Run on Android
 npx react-native run-android
 ```
 
@@ -126,6 +129,27 @@ When you first launch the app, navigate to **Settings** and configure:
 3. Native conversation UI will appear
 4. Start chatting with your Service Agent!
 
+### Employee Agent
+
+#### 1. Configure Salesforce Connection
+
+##### Create Your Own Connected App
+
+1. Follow the instructions in the [Developer Guide](https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html#create-a-salesforce-app)
+3. Set the callback URL in your bootconfig.plist
+4. Update `bootconfig.plist` with your consumer key
+
+#### 2. Configure Agent ID
+
+Add a default agentID in the Employee Agent settings tab
+
+#### 3. Testing the Conversation
+
+1. From the Home screen, tap **Launch Agentforce**
+2. The SDK will initialize with your configuration
+3. Native conversation UI will appear
+4. Start chatting with your Employee Agent!
+
 ## 📁 Project Structure
 
 ```
@@ -142,14 +166,6 @@ AgentforceSDK-ReactNative/
 ├── ios/                                # iOS app; Agentforce from bridge pod
 └── App.tsx                             # Root component with navigation
 ```
-
-### Employee Agent Settings
-
-#### Configure an External Client App
-Follow the instructions in the [Developer Guide](https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html#create-a-salesforce-app)
-
-#### Check out the Employee Agent Demo App
-Explore the [Employee Agent Demo App branch](https://github.com/salesforce/AgentforceMobileSDK-ReactNative/tree/employeeAgent)
 
 ## 🔧 Development
 

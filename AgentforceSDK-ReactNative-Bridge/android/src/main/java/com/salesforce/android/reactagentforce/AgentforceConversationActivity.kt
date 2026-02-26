@@ -87,6 +87,17 @@ class AgentforceConversationActivity : ComponentActivity() {
             // When agentId is null or blank, pass null so the SDK bootstraps and picks the first available agent (multi-agent path).
             // When agentId is set, the session starts with that agent.
             val agentIdParam = AgentforceClientHolder.agentId?.takeIf { it.isNotBlank() }
+
+            // Check if multi-agent is enabled when agentId is null
+            if (agentIdParam == null) {
+                val prefs = getSharedPreferences("AgentforceFeatureFlags", MODE_PRIVATE)
+                val multiAgentEnabled = prefs.getBoolean("enableMultiAgent", true)
+                if (!multiAgentEnabled) {
+                    Log.w(TAG, "WARNING: No agentId provided and multi-agent is disabled. Chat panel will likely fail.")
+                }
+                Log.d(TAG, "Starting conversation with agentId=null (multi-agent: $multiAgentEnabled)")
+            }
+
             try {
                 val conversation = client.startAgentforceConversation(agentId = agentIdParam)
                 AgentforceClientHolder.setConversation(conversation)
@@ -127,10 +138,16 @@ fun AgentforceConversationScreen(
     val client: AgentforceClient? = holderClient ?: vmClient
     val conversation: AgentforceConversation? = holderConversation ?: vmConversation
     
-    // Determine title based on mode
-    val title = when (AgentforceClientHolder.currentMode) {
-        is AgentMode.Employee -> "Agentforce Employee Agent"
-        is AgentMode.Service -> "Agentforce Service Agent"
+    // Determine title based on mode and agent label
+    val title = when (val mode = AgentforceClientHolder.currentMode) {
+        is AgentMode.Employee -> {
+            // Use agentLabel if available, otherwise show generic title
+            AgentforceClientHolder.agentLabel ?: "Employee Agent"
+        }
+        is AgentMode.Service -> {
+            // For Service Agent, could show esDeveloperName if needed
+            "Service Agent"
+        }
         null -> "Agentforce"
     }
 
