@@ -31,18 +31,36 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { AgentforceService } from 'react-native-agentforce';
+import { AgentforceService, LoggerDelegate, LogLevel } from 'react-native-agentforce';
 
 interface HomeScreenProps {
   navigation: any;
 }
+
+// Sample logger delegate — forwards Agentforce SDK logs to console
+const agentforceLogger: LoggerDelegate = {
+  onLog(level: LogLevel, message: string, error?: string) {
+    const prefix = `[Agentforce ${level.toUpperCase()}]`;
+    if (error) {
+      console.log(`${prefix} ${message} | ${error}`);
+    } else {
+      console.log(`${prefix} ${message}`);
+    }
+  },
+};
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [isConfigured, setIsConfigured] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
+    // Register logger delegate so SDK logs are forwarded to JS
+    AgentforceService.setLoggerDelegate(agentforceLogger);
     checkConfiguration();
+
+    return () => {
+      AgentforceService.clearLoggerDelegate();
+    };
   }, []);
 
   // Refresh configuration status when screen gains focus

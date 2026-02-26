@@ -25,12 +25,14 @@ import {
 } from '../types/AgentConfig';
 
 import { TokenDelegate } from '../types/TokenDelegate';
+import { LoggerDelegate, LogLevel } from '../types/LoggerDelegate';
 
 const { AgentforceModule } = NativeModules;
 
 // Re-export types for convenience
 export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig };
 export type { TokenDelegate };
+export type { LoggerDelegate, LogLevel };
 
 /**
  * Native module event names
@@ -38,6 +40,7 @@ export type { TokenDelegate };
 const EVENTS = {
   TOKEN_REFRESH_NEEDED: 'onTokenRefreshNeeded',
   AUTHENTICATION_FAILURE: 'onAuthenticationFailure',
+  LOG_MESSAGE: 'onLogMessage',
 } as const;
 
 /**
@@ -91,6 +94,16 @@ class AgentforceService {
    * Subscription for authentication failure events
    */
   private authFailureSubscription: EmitterSubscription | null = null;
+
+  /**
+   * Logger delegate for receiving SDK log messages
+   */
+  private loggerDelegate: LoggerDelegate | null = null;
+
+  /**
+   * Subscription for log message events
+   */
+  private loggerSubscription: EmitterSubscription | null = null;
 
   /**
    * Track if service has been initialized
@@ -219,6 +232,55 @@ class AgentforceService {
    */
   hasTokenDelegate(): boolean {
     return this.tokenDelegate !== null;
+  }
+
+  /**
+   * Register a logger delegate to receive log messages from the native Agentforce SDK.
+   *
+   * Register before calling `configure()` so the logger is attached when the SDK initializes.
+   *
+   * @param delegate - Logger delegate implementation
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setLoggerDelegate({
+   *   onLog(level, message, error) {
+   *     console.log(`[Agentforce ${level.toUpperCase()}] ${message}`);
+   *   },
+   * });
+   * ```
+   */
+  setLoggerDelegate(delegate: LoggerDelegate): void {
+    this.loggerDelegate = delegate;
+    this.setupLoggerListener();
+    AgentforceModule?.enableLogForwarding(true);
+    console.log('[AgentforceService] Logger delegate registered');
+  }
+
+  /**
+   * Clear the registered logger delegate and stop receiving log messages.
+   */
+  clearLoggerDelegate(): void {
+    this.loggerDelegate = null;
+    this.loggerSubscription?.remove();
+    this.loggerSubscription = null;
+    AgentforceModule?.enableLogForwarding(false);
+    console.log('[AgentforceService] Logger delegate cleared');
+  }
+
+  /**
+   * Set up listener for log message events from native layer
+   */
+  private setupLoggerListener(): void {
+    this.loggerSubscription?.remove();
+    if (!this.eventEmitter) return;
+
+    this.loggerSubscription = this.eventEmitter.addListener(
+      EVENTS.LOG_MESSAGE,
+      (event: { level: LogLevel; message: string; error?: string }) => {
+        this.loggerDelegate?.onLog(event.level, event.message, event.error);
+      },
+    );
   }
 
   /**
@@ -654,7 +716,11 @@ class AgentforceService {
     this.authFailureSubscription?.remove();
     this.authFailureSubscription = null;
 
+    this.loggerSubscription?.remove();
+    this.loggerSubscription = null;
+
     this.tokenDelegate = null;
+    this.loggerDelegate = null;
     this.eventEmitter = null;
     this.initialized = false;
 
