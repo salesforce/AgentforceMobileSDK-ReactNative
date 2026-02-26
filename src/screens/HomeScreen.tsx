@@ -64,12 +64,16 @@ const agentforceLogger: LoggerDelegate = {
   },
 };
 
-// Sample navigation delegate — handles Agentforce SDK navigation requests
+// Sample navigation delegate — handles Agentforce SDK navigation requests.
+// Modify this to add your own navigation handling logic.
+// The request.type indicates the destination kind ('record', 'link',
+// 'quickAction', 'pageReference', 'objectHome', 'app').
+// Access fields like request.recordId, request.uri, request.actionName, etc.
+// See NavigationDelegate.ts for the full list of known fields per type.
 const agentforceNavigation: NavigationDelegate = {
   onNavigate(request: NavigationRequest) {
-    // Show a toast with the raw request data for debugging
+    // For debugging — replace with your own navigation handling
     Alert.alert('Navigation Request', JSON.stringify(request, null, 2));
-
     console.log(`[Agentforce Nav] ${request.type}:`, request);
   },
 };
