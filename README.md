@@ -92,9 +92,10 @@ npm run ios
 ### 3. Android Setup
 
 ```bash
-# Android setup is automatic with Gradle
-# Just run the app directly
-npx react-native run-android
+node installandroid.js
+
+# Run on Android
+npm run android
 ```
 
 ## ⚙️ Configuration
