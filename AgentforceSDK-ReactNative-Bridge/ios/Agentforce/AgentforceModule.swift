@@ -13,52 +13,42 @@ import AgentforceSDK
 import AgentforceService
 import SalesforceUser
 
+#if canImport(SalesforceSDKCore)
+import SalesforceSDKCore
+#endif
+
 /// React Native bridge module for Agentforce SDK
 /// Supports both Service Agent (guest) and Employee Agent (authenticated) modes
 @objc(AgentforceModule)
 class AgentforceModule: RCTEventEmitter {
     
     // MARK: - Properties
-    
+
     /// Unified credential provider for both Service and Employee agents
     private let credentialProvider = UnifiedCredentialProvider()
-    
+
     /// Agentforce client instance
     private var agentforceClient: AgentforceClient?
-    
+
     /// Current conversation
     private var currentConversation: AgentConversation?
-    
-    /// Simple token provider for Employee Agent mode
-    private var simpleTokenProvider: SimpleTokenProvider?
-    
+
     /// Current mode configuration
     private var currentMode: AgentMode?
-    
-    /// Continuation for async token refresh
-    private var tokenRefreshContinuation: CheckedContinuation<String, Error>?
-    
-    /// Track if we have listeners registered
-    private var hasListeners = false
+
+    /// Voice delegate for handling voice interactions
+    private var voiceDelegate: AgentforceVoiceDelegate?
     
     // MARK: - Module Setup
-    
+
     override static func requiresMainQueueSetup() -> Bool {
         return true
     }
-    
+
     override func supportedEvents() -> [String]! {
-        return ["onTokenRefreshNeeded", "onAuthenticationFailure"]
+        return []
     }
-    
-    override func startObserving() {
-        hasListeners = true
-    }
-    
-    override func stopObserving() {
-        hasListeners = false
-    }
-    
+
     // MARK: - Unified Configuration Method
     
     /// Configure the SDK with either Service or Employee agent settings.
@@ -108,8 +98,6 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("serviceApiURL must be a valid URL (e.g. https://your-site.salesforce.com)")
         }
         
-        print("[AgentforceModule] 📍 Service Agent config - serviceApiURL: \(config.serviceApiURL), organizationId: \(config.organizationId), esDeveloperName: \(config.esDeveloperName)")
-        
         // Configure unified credential provider for Service Agent mode
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
@@ -138,8 +126,6 @@ class AgentforceModule: RCTEventEmitter {
             credentialProvider: credentialProvider,
             mode: .serviceAgent(sdkServiceConfig)
         )
-        
-        print("[AgentforceModule] ✅ Service Agent configured - Org: \(config.organizationId). If you see 'Start session failed with 400' or keyNotFound(sessionId), check serviceApiURL, organizationId, and esDeveloperName match your org/site.")
     }
     
     // MARK: - Employee Agent Configuration
@@ -148,55 +134,49 @@ class AgentforceModule: RCTEventEmitter {
         guard let config = EmployeeAgentModeConfig.from(dictionary: configDict) else {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
         }
-        
-        // Create simple token provider for delegate-based refresh
-        simpleTokenProvider = SimpleTokenProvider(
-            accessToken: config.accessToken,
-            organizationId: config.organizationId,
-            userId: config.userId
-        )
-        
-        // Set up refresh handler that calls back to JS
-        simpleTokenProvider?.setRefreshHandler { [weak self] in
-            guard let self = self else {
-                throw TokenError.refreshFailed("Module deallocated")
-            }
-            return try await self.requestTokenRefreshFromJS()
-        }
-        
-        // Set up auth failure handler
-        simpleTokenProvider?.setAuthFailureHandler { [weak self] in
-            self?.emitAuthenticationFailure(error: "Token refresh failed")
-        }
-        
-        // Configure unified credential provider for Employee Agent mode with delegate
-        credentialProvider.configure(
-            employeeAgent: config,
-            tokenProvider: simpleTokenProvider!
-        )
+
+        // Configure unified credential provider for Employee Agent mode
+        // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
+        credentialProvider.configure(employeeAgent: config)
         currentMode = .employee(config: config)
-        
+
         // Persist employee agentId (editable in Settings tab)
         UserDefaults.standard.set(config.agentId ?? "", forKey: "EmployeeAgentId")
-        
+
         // Clean up any existing client
         cleanupClient()
-        
+
+        // Get orgId and userId from Mobile SDK if available (more reliable than config)
+        var userId = config.userId
+        var organizationId = config.organizationId
+
+        #if canImport(SalesforceSDKCore)
+        if let currentUser = UserAccountManager.shared.currentUserAccount {
+            if let mobileUserId = currentUser.credentials.userId {
+                userId = mobileUserId
+            }
+            if let mobileOrgId = currentUser.credentials.organizationId {
+                organizationId = mobileOrgId
+            }
+        }
+        #endif
+
         // Create User for FullConfig mode (SDK 14.x). We use .fullConfig(AgentforceConfiguration)
         // instead of .employeeAgent so we can set feature flags explicitly (e.g. multiAgent only).
         let user = User(
-            userId: config.userId,
-            org: Org(id: config.organizationId),
-            username: config.userId,
-            displayName: config.userId
+            userId: userId,
+            org: Org(id: organizationId),
+            username: userId,
+            displayName: userId
         )
         
-        // Feature flags: only multi-agent enabled (mirror Android SDK settings).
+        let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
-            enableMultiModalInput: false,
-            enablePDFFileUpload: false,
-            multiAgent: true,
+            enableMultiModalInput: flags.enableMultiModalInput,
+            enablePDFFileUpload: flags.enablePDFUpload,
+            multiAgent: flags.enableMultiAgent,
             shouldBlockMicrophone: false,
+            enableVoice: flags.enableVoice,
             enableOnboarding: false,
             internalFlags: [:]
         )
@@ -216,8 +196,6 @@ class AgentforceModule: RCTEventEmitter {
             credentialProvider: credentialProvider,
             mode: .fullConfig(fullConfiguration)
         )
-        
-        print("[AgentforceModule] ✅ Employee Agent configured - Org: \(config.organizationId), User: \(config.userId)")
     }
     
     // MARK: - Legacy Configuration Method (Backward Compatibility)
@@ -276,10 +254,17 @@ class AgentforceModule: RCTEventEmitter {
                 // Try new unified path first
                 if let client = agentforceClient, let mode = currentMode {
                     let conversation = try getOrCreateConversation(client: client, mode: mode)
-                    
+
+                    // Create voice delegate to handle voice button taps
+                    let delegate = AgentforceVoiceDelegate(
+                        agentforceClient: client,
+                        presentingViewController: nil // Will find topmost VC automatically
+                    )
+                    self.voiceDelegate = delegate
+
                     let chatView = try client.createAgentforceChatView(
                         conversation: conversation,
-                        delegate: nil,
+                        delegate: delegate,
                         showTopBar: true,
                         onContainerClose: { [weak self] in
                             Task { @MainActor in
@@ -287,7 +272,7 @@ class AgentforceModule: RCTEventEmitter {
                             }
                         }
                     )
-                    
+
                     presentConversationView(chatView)
                     resolve(["success": true])
                     return
@@ -304,12 +289,19 @@ class AgentforceModule: RCTEventEmitter {
                 guard let client = ServiceAgentManager.shared.getClient() else {
                     throw ServiceAgentError.sdkNotInitialized
                 }
-                
+
                 let conversation = ServiceAgentManager.shared.startConversation()
-                
+
+                // Create voice delegate to handle voice button taps
+                let delegate = AgentforceVoiceDelegate(
+                    agentforceClient: client,
+                    presentingViewController: nil // Will find topmost VC automatically
+                )
+                self.voiceDelegate = delegate
+
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: nil,
+                    delegate: delegate,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
@@ -322,6 +314,8 @@ class AgentforceModule: RCTEventEmitter {
                 resolve(["success": true])
             } catch {
                 print("[AgentforceModule] ❌ Launch failed: \(error)")
+                print("[AgentforceModule] ❌ Error details: \((error as NSError).domain) code: \((error as NSError).code)")
+                print("[AgentforceModule] ❌ Full error: \(error)")
                 let desc = (error as NSError).localizedDescription
                 let hint = desc.contains("sessionId")
                     ? " Session start failed (400 = config; 500 = server/org). See docs/TROUBLESHOOTING.md."
@@ -345,10 +339,17 @@ class AgentforceModule: RCTEventEmitter {
                 // Try new unified path first
                 if let client = agentforceClient, let mode = currentMode {
                     let conversation = try getOrCreateConversation(client: client, mode: mode, forceNew: true)
-                    
+
+                    // Create voice delegate to handle voice button taps
+                    let delegate = AgentforceVoiceDelegate(
+                        agentforceClient: client,
+                        presentingViewController: nil // Will find topmost VC automatically
+                    )
+                    self.voiceDelegate = delegate
+
                     let chatView = try client.createAgentforceChatView(
                         conversation: conversation,
-                        delegate: nil,
+                        delegate: delegate,
                         showTopBar: true,
                         onContainerClose: { [weak self] in
                             Task { @MainActor in
@@ -373,12 +374,19 @@ class AgentforceModule: RCTEventEmitter {
                 guard let client = ServiceAgentManager.shared.getClient() else {
                     throw ServiceAgentError.sdkNotInitialized
                 }
-                
+
                 let conversation = await ServiceAgentManager.shared.startNewConversation()
-                
+
+                // Create voice delegate to handle voice button taps
+                let delegate = AgentforceVoiceDelegate(
+                    agentforceClient: client,
+                    presentingViewController: nil // Will find topmost VC automatically
+                )
+                self.voiceDelegate = delegate
+
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: nil,
+                    delegate: delegate,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
@@ -401,32 +409,42 @@ class AgentforceModule: RCTEventEmitter {
     private func getOrCreateConversation(client: AgentforceClient, mode: AgentMode, forceNew: Bool = false) throws -> AgentConversation {
         // Return existing if available and not forcing new
         if !forceNew, let existing = currentConversation {
-            print("[AgentforceModule] ♻️ Reusing existing conversation")
             return existing
         }
-        
+
         // Start new conversation based on mode
         let conversation: AgentConversation
-        
+
         switch mode {
         case .service(let config):
             conversation = client.startAgentforceConversation(
                 forESDeveloperName: config.esDeveloperName
             )
-            
+
         case .employee(let config):
-            conversation = client.startAgentforceConversation(
-                forAgentId: config.agentId
-            )
+            // For Employee Agent, check if agentId is provided
+            if let agentId = config.agentId, !agentId.isEmpty {
+                // Specific agent ID provided - always use it
+                conversation = client.startAgentforceConversation(
+                    forAgentId: agentId
+                )
+            } else {
+                // No agentId provided - check if multi-agent is enabled
+                let multiAgentEnabled = UserDefaults.standard.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : UserDefaults.standard.bool(forKey: Self.featureFlagKeys.enableMultiAgent)
+
+                if !multiAgentEnabled {
+                    // Multi-agent disabled but no agentId - this will likely fail at SDK level
+                    print("[AgentforceModule] ⚠️ WARNING: No agentId provided and multi-agent is disabled. Chat panel will likely fail.")
+                }
+
+                // Pass nil and let SDK handle it (will succeed if multi-agent enabled, fail otherwise)
+                conversation = client.startAgentforceConversation(
+                    forAgentId: nil
+                )
+            }
         }
-        
+
         currentConversation = conversation
-        switch mode {
-        case .service(let config):
-            print("[AgentforceModule] 📝 New conversation started (Service Agent) - esDeveloperName: \(config.esDeveloperName). Session start API will use serviceApiURL: \(config.serviceApiURL)")
-        case .employee(let config):
-            print("[AgentforceModule] 📝 New conversation started (Employee Agent) - agentId: \(config.agentId ?? "nil (multi-agent)"). Session start API will use instanceUrl and credentials.")
-        }
         return conversation
     }
     
@@ -434,7 +452,6 @@ class AgentforceModule: RCTEventEmitter {
         if let conversation = currentConversation {
             do {
                 try await conversation.closeConversation()
-                print("[AgentforceModule] 📪 Conversation closed")
             } catch {
                 print("[AgentforceModule] ⚠️ Error closing conversation: \(error)")
             }
@@ -480,6 +497,83 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         UserDefaults.standard.set(agentId, forKey: "EmployeeAgentId")
+        resolve(nil)
+    }
+    
+    private static let featureFlagKeys = (
+        enableMultiAgent: "AgentforceFF_enableMultiAgent",
+        enableMultiModalInput: "AgentforceFF_enableMultiModalInput",
+        enablePDFUpload: "AgentforceFF_enablePDFUpload",
+        enableVoice: "AgentforceFF_enableVoice"
+    )
+    
+    private struct FeatureFlags {
+        let enableMultiAgent: Bool
+        let enableMultiModalInput: Bool
+        let enablePDFUpload: Bool
+        let enableVoice: Bool
+    }
+    
+    private func getFeatureFlagsFromConfigOrUserDefaults(_ configDict: [String: Any]) -> FeatureFlags {
+        if let featureFlags = configDict["featureFlags"] as? [String: Any] {
+            return FeatureFlags(
+                enableMultiAgent: (featureFlags["enableMultiAgent"] as? NSNumber)?.boolValue ?? true,
+                enableMultiModalInput: (featureFlags["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false,
+                enablePDFUpload: (featureFlags["enablePDFUpload"] as? NSNumber)?.boolValue ?? false,
+                enableVoice: (featureFlags["enableVoice"] as? NSNumber)?.boolValue ?? false
+            )
+        }
+        let ud = UserDefaults.standard
+        return FeatureFlags(
+            enableMultiAgent: ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
+            enableMultiModalInput: ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
+            enablePDFUpload: ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
+            enableVoice: ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+        )
+    }
+    
+    private func saveFeatureFlagsToUserDefaults(_ flags: FeatureFlags) {
+        UserDefaults.standard.set(flags.enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
+        UserDefaults.standard.set(flags.enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
+        UserDefaults.standard.set(flags.enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
+        UserDefaults.standard.set(flags.enableVoice, forKey: Self.featureFlagKeys.enableVoice)
+    }
+    
+    @objc
+    func getFeatureFlags(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        let ud = UserDefaults.standard
+        let flags = [
+            "enableMultiAgent": ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
+            "enableMultiModalInput": ud.object(forKey: Self.featureFlagKeys.enableMultiModalInput) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
+            "enablePDFUpload": ud.object(forKey: Self.featureFlagKeys.enablePDFUpload) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
+            "enableVoice": ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+        ]
+        resolve(flags)
+    }
+
+    @objc
+    func setFeatureFlags(
+        _ flags: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let dict = flags as? [String: Any] else {
+            resolve(nil)
+            return
+        }
+        let enableMultiAgent = (dict["enableMultiAgent"] as? NSNumber)?.boolValue ?? true
+        let enableMultiModalInput = (dict["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false
+        let enablePDFUpload = (dict["enablePDFUpload"] as? NSNumber)?.boolValue ?? false
+        let enableVoice = (dict["enableVoice"] as? NSNumber)?.boolValue ?? false
+
+        UserDefaults.standard.set(enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
+        UserDefaults.standard.set(enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
+        UserDefaults.standard.set(enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
+        UserDefaults.standard.set(enableVoice, forKey: Self.featureFlagKeys.enableVoice)
+
         resolve(nil)
     }
     
@@ -555,51 +649,6 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
     
-    // MARK: - Token Refresh (Employee Agent only)
-    
-    /// Called when token needs refresh - emits event to JS
-    private func requestTokenRefreshFromJS() async throws -> String {
-        return try await withCheckedThrowingContinuation { continuation in
-            // Emit event to JS to request token refresh
-            if hasListeners {
-                sendEvent(withName: "onTokenRefreshNeeded", body: nil)
-            }
-            
-            // Store continuation to be resolved when JS calls back
-            self.tokenRefreshContinuation = continuation
-        }
-    }
-    
-    /// Called by JS when it has a fresh token
-    @objc
-    func provideRefreshedToken(
-        _ token: String,
-        resolver resolve: @escaping RCTPromiseResolveBlock,
-        rejecter reject: @escaping RCTPromiseRejectBlock
-    ) {
-        guard credentialProvider.isEmployeeAgent else {
-            reject("INVALID_MODE", "Token refresh only valid for Employee Agent mode", nil)
-            return
-        }
-        
-        if let continuation = tokenRefreshContinuation {
-            simpleTokenProvider?.updateToken(token)
-            credentialProvider.updateToken(token)
-            continuation.resume(returning: token)
-            tokenRefreshContinuation = nil
-            resolve(["success": true])
-        } else {
-            reject("NO_PENDING_REFRESH", "No token refresh was pending", nil)
-        }
-    }
-    
-    /// Emit authentication failure event to JS
-    private func emitAuthenticationFailure(error: String) {
-        if hasListeners {
-            sendEvent(withName: "onAuthenticationFailure", body: ["error": error])
-        }
-    }
-    
     // MARK: - Cleanup
     
     private func cleanupClient() {
@@ -631,7 +680,6 @@ class AgentforceModule: RCTEventEmitter {
             await closeCurrentConversation()
             cleanupClient()
             currentMode = nil
-            simpleTokenProvider = nil
             credentialProvider.reset()
             ServiceAgentManager.shared.resetToDefaults()
             UserDefaults.standard.removeObject(forKey: "EmployeeAgentId")
@@ -652,7 +700,6 @@ class AgentforceModule: RCTEventEmitter {
         hostingController.modalPresentationStyle = .fullScreen
         hostingController.modalTransitionStyle = .coverVertical
         
-        print("[AgentforceModule] 🚀 Presenting conversation view")
         rootViewController.present(hostingController, animated: true)
     }
     
@@ -664,7 +711,6 @@ class AgentforceModule: RCTEventEmitter {
         }
         
         if rootViewController.presentedViewController != nil {
-            print("[AgentforceModule] 📪 Dismissing conversation view")
             rootViewController.dismiss(animated: true)
         }
     }

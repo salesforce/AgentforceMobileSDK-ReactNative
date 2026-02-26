@@ -9,6 +9,7 @@ export {
   ServiceAgentConfig,
   EmployeeAgentConfig,
   AgentConfig,
+  FeatureFlags,
   LegacyServiceAgentConfig,
   ConfigurationResult,
   ConfigurationInfo,
@@ -16,13 +17,6 @@ export {
   isEmployeeAgentConfig,
   isLegacyConfig,
 } from './AgentConfig';
-
-// Token delegate types
-export {
-  TokenDelegate,
-  TokenRefreshEvent,
-  AuthenticationFailureEvent,
-} from './TokenDelegate';
 
 // Logger delegate types
 export { LoggerDelegate, LogLevel } from './LoggerDelegate';

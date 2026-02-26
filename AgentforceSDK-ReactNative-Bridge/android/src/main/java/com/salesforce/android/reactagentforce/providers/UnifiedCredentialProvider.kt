@@ -7,10 +7,10 @@ package com.salesforce.android.reactagentforce.providers
 import android.util.Log
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentialProvider
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentials
-import com.salesforce.android.reactagentforce.delegates.TokenProvider
 import com.salesforce.android.reactagentforce.models.AgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
+import com.salesforce.androidsdk.app.SalesforceSDKManager
 
 /**
  * Unified credential provider that handles both Service Agent and Employee Agent modes.
@@ -27,11 +27,8 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
     /** Current operating mode */
     var mode: AgentMode? = null
         private set
-    
-    /** Token provider for Employee Agent mode (null for Service Agent) */
-    private var tokenProvider: TokenProvider? = null
-    
-    /** Direct token storage for simple token cases */
+
+    /** Direct token storage for simple token cases (fallback only) */
     @Volatile
     private var directToken: String? = null
     private var directOrgId: String? = null
@@ -43,41 +40,22 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
      */
     fun configure(serviceAgent: ServiceAgentModeConfig) {
         this.mode = AgentMode.Service(serviceAgent)
-        this.tokenProvider = null
         this.directToken = ""  // Empty token for Service Agent
         this.directOrgId = serviceAgent.organizationId
         this.directUserId = ""  // Empty userId for Service Agent
-        
-        Log.d(TAG, "Configured for Service Agent mode")
+
     }
-    
+
     /**
-     * Configure for Employee Agent mode with a token provider delegate
+     * Configure for Employee Agent mode
      * @param config Employee Agent configuration
-     * @param tokenProvider Token provider implementation
-     */
-    fun configure(employeeAgent: EmployeeAgentModeConfig, tokenProvider: TokenProvider) {
-        this.mode = AgentMode.Employee(employeeAgent)
-        this.tokenProvider = tokenProvider
-        this.directToken = null
-        this.directOrgId = null
-        this.directUserId = null
-        
-        Log.d(TAG, "Configured for Employee Agent mode with token provider")
-    }
-    
-    /**
-     * Configure for Employee Agent mode with a direct token (simpler testing scenario)
-     * @param config Employee Agent configuration with accessToken
      */
     fun configure(employeeAgent: EmployeeAgentModeConfig) {
         this.mode = AgentMode.Employee(employeeAgent)
-        this.tokenProvider = null
         this.directToken = employeeAgent.accessToken
         this.directOrgId = employeeAgent.organizationId
         this.directUserId = employeeAgent.userId
-        
-        Log.d(TAG, "Configured for Employee Agent mode with direct token")
+
     }
     
     override fun getAuthCredentials(): AgentforceAuthCredentials {
@@ -96,24 +74,36 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
             
             is AgentMode.Employee -> {
                 // Employee Agent uses OAuth with REAL token
-                val provider = tokenProvider
-                if (provider != null) {
-                    // Delegate-based token
-                    AgentforceAuthCredentials.OAuth(
-                        authToken = provider.getAccessToken(),
-                        orgId = provider.getOrganizationId(),
-                        userId = provider.getUserId()
-                    )
-                } else {
-                    // Direct token
-                    val token = directToken
-                        ?: throw IllegalStateException("Employee Agent mode requires either tokenProvider or directToken")
-                    AgentforceAuthCredentials.OAuth(
-                        authToken = token,
-                        orgId = directOrgId ?: currentMode.config.organizationId,
-                        userId = directUserId ?: currentMode.config.userId
-                    )
+                // Get fresh credentials from Mobile SDK each time (Mobile SDK handles refresh internally)
+                try {
+                    val currentUser = SalesforceSDKManager.getInstance()
+                        ?.userAccountManager?.currentUser
+
+                    if (currentUser != null) {
+                        val authToken = currentUser.authToken
+                        val orgId = currentUser.orgId
+                        val userId = currentUser.userId
+
+                        if (authToken != null && orgId != null && userId != null) {
+                            return AgentforceAuthCredentials.OAuth(
+                                authToken = authToken,
+                                orgId = orgId,
+                                userId = userId
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to get fresh credentials from Mobile SDK, falling back to cached", e)
                 }
+
+                // Fallback to cached token if Mobile SDK not available
+                val token = directToken
+                    ?: throw IllegalStateException("Employee Agent mode requires either Mobile SDK or cached token")
+                AgentforceAuthCredentials.OAuth(
+                    authToken = token,
+                    orgId = directOrgId ?: currentMode.config.organizationId,
+                    userId = directUserId ?: currentMode.config.userId
+                )
             }
         }
     }
@@ -128,7 +118,6 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
             return
         }
         this.directToken = newToken
-        Log.d(TAG, "Token updated")
     }
     
     /** Check if currently in Employee Agent mode */
@@ -156,10 +145,8 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
      */
     fun reset() {
         mode = null
-        tokenProvider = null
         directToken = null
         directOrgId = null
         directUserId = null
-        Log.d(TAG, "Reset to unconfigured state")
     }
 }

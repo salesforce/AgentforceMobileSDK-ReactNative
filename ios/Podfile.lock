@@ -1554,7 +1554,7 @@ SPEC CHECKSUMS:
   React-runtimescheduler: 1dcdcd65d72bdce74a58a2da5d5b3295b27c6ca2
   React-utils: e45cd7466d8fd9f1a88611fb8e9d38b92ef05b76
   ReactCommon: 82c202f4ec2759b2e8461a5a524e3d0e9ec14b1e
-  ReactNativeAgentforce: 45bbc31ac25209eaf47a72f9f91afacf02d187ae
+  ReactNativeAgentforce: 1b850b508bf262e20d164d42ceeb323043247aa9
   RNGestureHandler: 5d95b0a3cffed8325ed0c181f4f411c1dcd49317
   RNScreens: 9ffe14a19aa4fecfe49ead4cfea952cba63e02f5
   SalesforceLogging: 174438f5745353c816de5c3188ffaa21be55ff49

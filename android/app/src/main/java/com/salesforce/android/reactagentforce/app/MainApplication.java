@@ -39,8 +39,7 @@ import com.facebook.soloader.SoLoader;
 import java.util.List;
 
 /**
- * Simplified Application class for Agentforce Service Agent sample
- * No Salesforce Mobile SDK required - lightweight implementation
+ * Application class for Agentforce sample.
  */
 public class MainApplication extends Application implements ReactApplication {
 
