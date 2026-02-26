@@ -1,0 +1,18 @@
+--- a/node_modules/@react-native/gradle-plugin/settings-plugin/build.gradle.kts
++++ b/node_modules/@react-native/gradle-plugin/settings-plugin/build.gradle.kts
+@@ -41,11 +41,12 @@ java { targetCompatibility = JavaVersion.VERSION_11 }
+ kotlin { jvmToolchain(17) }
+
+ tasks.withType<KotlinCompile>().configureEach {
+-  kotlinOptions {
+-    apiVersion = "1.6"
++  compilerOptions {
++    apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9)
+     // See comment above on JDK 11 support
+-    jvmTarget = "11"
+-    allWarningsAsErrors = true
++    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
++    // Disabled to prevent build failures from deprecation warnings in Kotlin 2.2.0
++    allWarningsAsErrors.set(false)
+   }
+ }
