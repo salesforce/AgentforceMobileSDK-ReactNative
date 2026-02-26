@@ -35,14 +35,11 @@ import com.facebook.react.ReactPackage;
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactNativeHost;
 import com.facebook.soloader.SoLoader;
-import com.salesforce.androidsdk.app.SalesforceSDKManager;
 
 import java.util.List;
 
 /**
  * Application class for Agentforce sample.
- * Initializes Salesforce Mobile SDK (reads bootconfig from res/values/bootconfig.xml)
- * so Employee Agent auth (login) is available on the Employee settings tab.
  */
 public class MainApplication extends Application implements ReactApplication {
 
@@ -84,8 +81,6 @@ public class MainApplication extends Application implements ReactApplication {
 	@Override
 	public void onCreate() {
 		super.onCreate();
-		// Initialize Salesforce Mobile SDK (required for Employee Agent login; uses res/values/bootconfig.xml)
-		SalesforceSDKManager.initNative(this, MainActivity.class);
 		SoLoader.init(this, /* native exopackage */ false);
 		if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
 			// If you opted-in for the New Architecture, we load the native entry point for this app.

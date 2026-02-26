@@ -11,89 +11,11 @@ The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI plat
 ## ✨ Features
 
 - **Service Agent Configuration** - Configure and initialize the SDK with Service Agent settings
+- **Employee Agent Configuration** - The bridge layer supports conversion to an Employee Agent configuration
 - **Full UI Experience** - Use the pre-built chat interface provided by the Agentforce SDK
 - **Cross-Platform** - Single codebase for both iOS and Android with native SDK integration
 - **Persistent Configuration** - Settings are saved and restored automatically
 - **Conversation Continuity** - Conversations persist across app launches
-
-## 🔧 Advanced Features (Hidden by Default)
-
-This sample app includes **full support for Employee Agents, Voice features, and Feature Flags**, but these UI elements are **hidden by default** to provide a simpler out-of-the-box experience focused on Service Agents.
-
-### What's Included (But Hidden)
-
-All the code and infrastructure for advanced features is present:
-- ✅ **Employee Agent Support** - Complete native implementation with auth integration
-- ✅ **Voice Features** - Immersive voice conversation capabilities
-- ✅ **Camera Permissions** - Photo capture and multimodal input support
-- ✅ **Feature Flags** - Runtime configuration for voice, multi-agent, PDF upload, etc.
-- ✅ **Token Provider Architecture** - For custom authentication implementations
-- ✅ **Kotlin Build Patches** - Android build optimization patches
-
-### Enabling Advanced Features
-
-To show Employee Agent and Feature Flags UI, edit `src/config/UIFeatures.ts`:
-
-```typescript
-export const UI_FEATURES = {
-  SHOW_EMPLOYEE_AGENT: true,      // Shows Employee Agent UI
-  SHOW_FEATURE_FLAGS_TAB: true,   // Shows Feature Flags settings tab
-} as const;
-```
-
-**What This Enables:**
-- **SHOW_EMPLOYEE_AGENT = true**:
-  - Adds "Employee Agent" launch button to HomeScreen
-  - Adds "Employee" tab to SettingsScreen for auth configuration
-  - Requires Mobile SDK authentication setup
-
-- **SHOW_FEATURE_FLAGS_TAB = true**:
-  - Adds "Flags" tab to SettingsScreen
-  - Allows toggling voice, multi-agent, PDF upload, etc. via UI
-
-### Programmatic Access
-
-Even with UI hidden, all features remain accessible programmatically:
-
-```typescript
-import {
-  AgentforceService,
-  isEmployeeAgentAuthSupported,
-  loginForEmployeeAgent,
-  getEmployeeAgentCredentials,
-} from 'react-native-agentforce';
-
-// Configure employee agent programmatically
-const config = {
-  type: 'employee',
-  instanceUrl: 'https://your-instance.my.salesforce.com',
-  organizationId: 'your-org-id',
-  userId: 'your-user-id',
-  agentId: 'your-agent-id',
-  accessToken: 'your-access-token',
-  featureFlags: {
-    enableVoice: true,
-    enableMultiAgent: true,
-  },
-};
-await AgentforceService.configure(config);
-
-// Set feature flags programmatically
-await AgentforceService.setFeatureFlags({
-  enableVoice: true,
-  enableMultiModalInput: true,
-  enablePDFUpload: true,
-});
-```
-
-### Why Hidden by Default?
-
-1. **Simpler First Experience** - Service Agents work without additional auth setup
-2. **Flexible Integration** - Consumers can add their own auth UI and flows
-3. **No MobileSDK Dependency in Default UI** - Easier to understand and modify
-4. **Cleaner Starting Point** - Focus on core concepts first
-
-For full Employee Agent setup including Mobile SDK integration, see the `employeeAgent` branch or refer to the bridge documentation.
 
 ## 🏗️ Architecture
 
@@ -160,7 +82,7 @@ npm install
 ### 2. iOS Setup
 
 ```bash
-# Install CocoaPods dependencies
+# Install CocoaPods dependencies (includes bridge pod)
 node installios.js
 
 # Run on iOS
@@ -169,13 +91,9 @@ npm run ios
 
 ### 3. Android Setup
 
-
-
 ```bash
-# If using Employee Agents
-node installandroid.js
-
-# Run on Android
+# Android setup is automatic with Gradle
+# Just run the app directly
 npx react-native run-android
 ```
 
@@ -208,27 +126,6 @@ When you first launch the app, navigate to **Settings** and configure:
 3. Native conversation UI will appear
 4. Start chatting with your Service Agent!
 
-### Employee Agent
-
-#### 1. Configure Salesforce Connection
-
-##### Create Your Own Connected App
-
-1. Follow the instructions in the [Developer Guide](https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html#create-a-salesforce-app)
-3. Set the callback URL in your bootconfig.plist
-4. Update `bootconfig.plist` with your consumer key
-
-#### 2. Configure Agent ID
-
-Add a default agentID in the Employee Agent settings tab
-
-#### 3. Testing the Conversation
-
-1. From the Home screen, tap **Launch Agentforce**
-2. The SDK will initialize with your configuration
-3. Native conversation UI will appear
-4. Start chatting with your Employee Agent!
-
 ## 📁 Project Structure
 
 ```
@@ -245,6 +142,14 @@ AgentforceSDK-ReactNative/
 ├── ios/                                # iOS app; Agentforce from bridge pod
 └── App.tsx                             # Root component with navigation
 ```
+
+### Employee Agent Settings
+
+#### Configure an External Client App
+Follow the instructions in the [Developer Guide](https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html#create-a-salesforce-app)
+
+#### Check out the Employee Agent Demo App
+Explore the [Employee Agent Demo App branch](https://github.com/salesforce/AgentforceMobileSDK-ReactNative/tree/employeeAgent)
 
 ## 🔧 Development
 

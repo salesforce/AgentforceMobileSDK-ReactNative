@@ -17,10 +17,6 @@ PODS:
     - InternalCollectionsUtilities (= 1.1.4)
   - DoubleConversion (1.1.6)
   - FBLazyVector (0.74.7)
-  - FMDB/Core (2.7.12)
-  - FMDB/SQLCipher (2.7.12):
-    - FMDB/Core
-    - SQLCipher (~> 4.6)
   - fmt (9.1.0)
   - glog (0.3.5)
   - hermes-engine (0.74.7):
@@ -42,10 +38,6 @@ PODS:
   - LiveKitWebRTC (137.7151.10)
   - Logging (1.4.0)
   - Messaging-InApp-Core (1.10.2)
-  - MobileSync (13.1.1):
-    - MobileSync/MobileSync (= 13.1.1)
-  - MobileSync/MobileSync (13.1.1):
-    - SmartStore (~> 13.1.1)
   - NetworkImage (6.0.1)
   - OrderedCollections (1.1.4):
     - InternalCollectionsUtilities (= 1.1.4)
@@ -1208,12 +1200,11 @@ PODS:
     - React-logger (= 0.74.7)
     - React-perflogger (= 0.74.7)
     - React-utils (= 0.74.7)
+  - ReactNativeAgentforce (1.0.0):
+    - ReactNativeAgentforce/Core (= 1.0.0)
   - ReactNativeAgentforce/Core (1.0.0):
     - AgentforceSDK
     - React-Core
-  - ReactNativeAgentforce/WithMobileSDK (1.0.0):
-    - ReactNativeAgentforce/Core
-    - SalesforceSDKCore
   - RNGestureHandler (2.16.2):
     - DoubleConversion
     - glog
@@ -1257,42 +1248,11 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - SalesforceAnalytics (13.1.1):
-    - SalesforceAnalytics/SalesforceAnalytics (= 13.1.1)
-  - SalesforceAnalytics/SalesforceAnalytics (13.1.1):
-    - SalesforceSDKCommon (~> 13.1.1)
   - SalesforceLogging (1.0.0)
   - SalesforceNavigation (1.0.0)
   - SalesforceNetwork (1.0.0)
-  - SalesforceReact (13.1.1):
-    - SalesforceReact/SalesforceReact (= 13.1.1)
-  - SalesforceReact/SalesforceReact (13.1.1):
-    - MobileSync (~> 13.1.1)
-    - React-Core
-    - SalesforceAnalytics (~> 13.1.1)
-    - SalesforceSDKCommon (~> 13.1.1)
-    - SalesforceSDKCore (~> 13.1.1)
-    - SmartStore (~> 13.1.1)
-  - SalesforceSDKCommon (13.1.1):
-    - SalesforceSDKCommon/SalesforceSDKCommon (= 13.1.1)
-  - SalesforceSDKCommon/SalesforceSDKCommon (13.1.1)
-  - SalesforceSDKCore (13.1.1):
-    - SalesforceSDKCore/SalesforceSDKCore (= 13.1.1)
-  - SalesforceSDKCore/SalesforceSDKCore (13.1.1):
-    - SalesforceAnalytics (~> 13.1.1)
   - SalesforceUser (1.0.0)
-  - SmartStore (13.1.1):
-    - SmartStore/SmartStore (= 13.1.1)
-  - SmartStore/SmartStore (13.1.1):
-    - FMDB/SQLCipher (~> 2.7.12)
-    - SalesforceSDKCore (~> 13.1.1)
-    - SQLCipher (~> 4.10.0)
   - SocketRocket (0.7.0)
-  - SQLCipher (4.10.0):
-    - SQLCipher/standard (= 4.10.0)
-  - SQLCipher/common (4.10.0)
-  - SQLCipher/standard (4.10.0):
-    - SQLCipher/common
   - swift-markdown-ui (2.4.0):
     - cmark_gfm (~> 0.26)
     - NetworkImage
@@ -1365,10 +1325,9 @@ DEPENDENCIES:
   - React-runtimescheduler (from `../node_modules/react-native/ReactCommon/react/renderer/runtimescheduler`)
   - React-utils (from `../node_modules/react-native/ReactCommon/react/utils`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
-  - ReactNativeAgentforce/WithMobileSDK (from `../AgentforceSDK-ReactNative-Bridge/ios`)
+  - ReactNativeAgentforce (from `../AgentforceSDK-ReactNative-Bridge/ios`)
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - RNScreens (from `../node_modules/react-native-screens`)
-  - SalesforceReact (from `../node_modules/react-native-force`)
   - swift-markdown-ui (from `https://github.com/salesforce-misc/swift-markdown-ui.git`, branch `main`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -1376,16 +1335,11 @@ SPEC REPOS:
   https://github.com/forcedotcom/SalesforceMobileSDK-iOS-Specs.git:
     - AgentforceSDK
     - AgentforceService
-    - MobileSync
     - NetworkImage
-    - SalesforceAnalytics
     - SalesforceLogging
     - SalesforceNavigation
     - SalesforceNetwork
-    - SalesforceSDKCommon
-    - SalesforceSDKCore
     - SalesforceUser
-    - SmartStore
   https://github.com/livekit/podspecs.git:
     - DequeModule
     - InternalCollectionsUtilities
@@ -1395,11 +1349,9 @@ SPEC REPOS:
     - OrderedCollections
     - SwiftCrypto
   trunk:
-    - FMDB
     - Logging
     - Messaging-InApp-Core
     - SocketRocket
-    - SQLCipher
     - SwiftProtobuf
 
 EXTERNAL SOURCES:
@@ -1521,8 +1473,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-gesture-handler"
   RNScreens:
     :path: "../node_modules/react-native-screens"
-  SalesforceReact:
-    :path: "../node_modules/react-native-force"
   swift-markdown-ui:
     :branch: main
     :git: https://github.com/salesforce-misc/swift-markdown-ui.git
@@ -1545,7 +1495,6 @@ SPEC CHECKSUMS:
   DequeModule: 646e2f186357734310ba696172d271f0988d3fb8
   DoubleConversion: 76ab83afb40bddeeee456813d9c04f67f78771b5
   FBLazyVector: 04dc972982abebd96d823752c3a426bbe6ac397f
-  FMDB: 728731dd336af3936ce00f91d9d8495f5718a0e6
   fmt: 4c2741a687cc09f0634a2e2c72a838b99f1ff120
   glog: fdfdfe5479092de0c4bdbebedd9056951f092c4f
   hermes-engine: 21ea4e6a0b64854652c8c20cb815efdbb3131fdd
@@ -1555,7 +1504,6 @@ SPEC CHECKSUMS:
   LiveKitWebRTC: 5b0f4c3667449836e006792a46e849bfc673352f
   Logging: beeb016c9c80cf77042d62e83495816847ef108b
   Messaging-InApp-Core: f456cce32c37e36ac1a029704d86ddf4f744e59b
-  MobileSync: 048a0547c8deee414dc4f39c43b951ccbeee37d7
   NetworkImage: 294cd73dda97309cf9da83626f1b2ec7b2801cca
   OrderedCollections: 68f29db2e771b704400ee1078ea34ef98a38e01f
   RCT-Folly: 5dc73daec3476616d19e8a53f0156176f7b55461
@@ -1606,25 +1554,19 @@ SPEC CHECKSUMS:
   React-runtimescheduler: 1dcdcd65d72bdce74a58a2da5d5b3295b27c6ca2
   React-utils: e45cd7466d8fd9f1a88611fb8e9d38b92ef05b76
   ReactCommon: 82c202f4ec2759b2e8461a5a524e3d0e9ec14b1e
-  ReactNativeAgentforce: 45bbc31ac25209eaf47a72f9f91afacf02d187ae
+  ReactNativeAgentforce: 1b850b508bf262e20d164d42ceeb323043247aa9
   RNGestureHandler: 5d95b0a3cffed8325ed0c181f4f411c1dcd49317
   RNScreens: 9ffe14a19aa4fecfe49ead4cfea952cba63e02f5
-  SalesforceAnalytics: b8146e953b490ae5990a5418a92651542e167e92
   SalesforceLogging: 174438f5745353c816de5c3188ffaa21be55ff49
   SalesforceNavigation: c7dfa7a232252295585817d0ce3920c7e1dc7ad6
   SalesforceNetwork: 4a527f3c192515507c61d259f70e433a2a4f90dd
-  SalesforceReact: ab0cf5ffe6860e8d9d55306138d3d817f04c6a58
-  SalesforceSDKCommon: 2cea4ebc52b0c5e34a66af399cd80aee61530fc0
-  SalesforceSDKCore: 5b58eb46a432a5f5d0e0ae9fb8b2c5e106e89242
   SalesforceUser: 5b5614e282f7dc491dedcb92d3a6cf6b61f58fd9
-  SmartStore: 299e46472221896bc1ef5feeaf4eec28988966f7
   SocketRocket: abac6f5de4d4d62d24e11868d7a2f427e0ef940d
-  SQLCipher: eb79c64049cb002b4e9fcb30edb7979bf4706dfc
   swift-markdown-ui: 1ca8de6ca80a9530177f06503d2e74c8e75af995
   SwiftCrypto: 8d2cd09cae2eafd28f37b049f8c24b3b28c4d12e
   SwiftProtobuf: e1b437c8e31a4c5577b643249a0bb62ed4f02153
   Yoga: 6986e115ef4e300f1f5b4910d5eef51c711c8747
 
-PODFILE CHECKSUM: 129eefa8d58cafba1f7d7d328148198200b0bf6c
+PODFILE CHECKSUM: 232c8c2206aeb3a65d0478c32aa6183ca6e57a9a
 
 COCOAPODS: 1.16.2

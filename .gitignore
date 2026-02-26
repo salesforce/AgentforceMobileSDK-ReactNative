@@ -78,9 +78,6 @@ local.properties
 .kotlin/
 /.claude
 
-# Cloned Mobile SDK (installios.js / installandroid.js)
-/mobile_sdk
-
 # Node
 node_modules
 *.log

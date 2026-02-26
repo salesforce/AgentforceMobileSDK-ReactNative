@@ -8,13 +8,11 @@
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "test": "jest",
-    "build:force": "node scripts/build-react-native-force.js",
     "install:ios": "node installios.js",
     "install:android": "node installandroid.js"
   },
   "dependencies": {
     "react-native-agentforce": "file:./AgentforceSDK-ReactNative-Bridge",
-    "react-native-force": "github:forcedotcom/SalesforceMobileSDK-ReactNative#v13.1.1",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.26",
     "react": "18.2.0",
@@ -47,14 +45,5 @@
   },
   "engines": {
     "node": ">=18"
-  },
-  "overrides": {
-    "react-native-force": {
-      "react-native": "0.74.7"
-    }
-  },
-  "sdkDependencies": {
-    "SalesforceMobileSDK-iOS": "https://github.com/forcedotcom/SalesforceMobileSDK-iOS.git#v13.1.1",
-    "SalesforceMobileSDK-Android": "https://github.com/forcedotcom/SalesforceMobileSDK-Android.git#v13.1.1"
   }
 }

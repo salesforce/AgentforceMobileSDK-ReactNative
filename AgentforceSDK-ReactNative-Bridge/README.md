@@ -8,14 +8,8 @@ This directory contains the Agentforce bridge module: JavaScript API layer, samp
 
 In your app’s `Podfile`:
 
-- **Service Agent** (default):
 ```ruby
 pod 'ReactNativeAgentforce', :path => '../node_modules/react-native-agentforce/ios'
-```
-
-- **Employee Agent** (OAuth via Salesforce Mobile SDK):
-```ruby
-pod 'ReactNativeAgentforce/WithMobileSDK', :path => '../node_modules/react-native-agentforce/ios'
 ```
 
 Your app must also include the Agentforce iOS SDK in the Podfile so the bridge can link. For **Employee Agent**, the host app must additionally include the Salesforce Mobile SDK and perform bootconfig + SDK initialization.
@@ -52,12 +46,6 @@ implementation "com.salesforce.mobilesdk:SalesforceReact:13.1.1"
 You must also configure **bootconfig** and perform **SDK initialization** (e.g. via react-native-force or your existing Salesforce Mobile SDK setup). Without these, Employee Agent auth will not work.
 
 ### iOS
-
-Use the **WithMobileSDK** subspec so the bridge includes the Employee Agent auth layer:
-
-```ruby
-pod 'ReactNativeAgentforce/WithMobileSDK', :path => '../node_modules/react-native-agentforce/ios'
-```
 
 Include the Salesforce Mobile SDK pods in your Podfile and perform **bootconfig** and **SDK initialization** as required for your app. The bridge’s Employee Agent auth layer relies on the SDK being initialized at runtime.
 
