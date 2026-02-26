@@ -92,7 +92,29 @@ class AgentforceService {
   private initialized: boolean = false;
 
   constructor() {
-    this.initialized = true;
+    this.initializeEventEmitter();
+  }
+
+  /**
+   * Initialize the native event emitter
+   */
+  private initializeEventEmitter(): void {
+    if (!AgentforceModule) {
+      console.warn(
+        '[AgentforceService] Native module not available - events will not work',
+      );
+      return;
+    }
+  
+    try {
+      this.eventEmitter = new NativeEventEmitter(AgentforceModule);
+      this.initialized = true;
+    } catch (error) {
+      console.warn(
+        '[AgentforceService] Failed to initialize event emitter:',
+        error,
+      );
+    }
   }
 
 
