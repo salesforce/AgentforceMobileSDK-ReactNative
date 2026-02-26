@@ -30,7 +30,6 @@ import {
   StyleSheet,
   Alert,
   Image,
-  Linking,
   Platform,
   ScrollView,
 } from 'react-native';
@@ -43,10 +42,8 @@ import {
   isEmployeeAgentConfigValid,
   LoggerDelegate,
   LogLevel,
-  NavigationDelegate,
-  NavigationRequest,
 } from 'react-native-agentforce';
-import { UI_FEATURES } from '../config/AppConfig';
+import { UI_FEATURES } from '../config/UIFeatures';
 
 interface HomeScreenProps {
   navigation: any;
@@ -55,27 +52,12 @@ interface HomeScreenProps {
 // Sample logger delegate — forwards Agentforce SDK logs to console
 const agentforceLogger: LoggerDelegate = {
   onLog(level: LogLevel, message: string, error?: string) {
-    const timestamp = new Date().toISOString();
-    const prefix = `[${timestamp}][Agentforce ${level.toUpperCase()}]`;
+    const prefix = `[Agentforce ${level.toUpperCase()}]`;
     if (error) {
-      console.log(`${prefix} ${message} | ERROR: ${error}`);
+      console.log(`${prefix} ${message} | ${error}`);
     } else {
       console.log(`${prefix} ${message}`);
     }
-  },
-};
-
-// Sample navigation delegate — handles Agentforce SDK navigation requests.
-// Modify this to add your own navigation handling logic.
-// The request.type indicates the destination kind ('record', 'link',
-// 'quickAction', 'pageReference', 'objectHome', 'app').
-// Access fields like request.recordId, request.uri, request.actionName, etc.
-// See NavigationDelegate.ts for the full list of known fields per type.
-const agentforceNavigation: NavigationDelegate = {
-  onNavigate(request: NavigationRequest) {
-    // For debugging — replace with your own navigation handling
-    Alert.alert('Navigation Request', JSON.stringify(request, null, 2));
-    console.log(`[Agentforce Nav] ${request.type}:`, request);
   },
 };
 
@@ -94,13 +76,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   useEffect(() => {
     // Register logger delegate so SDK logs are forwarded to JS
     AgentforceService.setLoggerDelegate(agentforceLogger);
-    // Register navigation delegate so SDK navigation requests are forwarded to JS
-    AgentforceService.setNavigationDelegate(agentforceNavigation);
     checkConfigurations();
 
     return () => {
       AgentforceService.clearLoggerDelegate();
-      AgentforceService.clearNavigationDelegate();
     };
   }, []);
 
@@ -257,11 +236,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         <Text style={styles.title}>Agentforce</Text>
         <Text style={styles.subtitle}>
-          {UI_FEATURES.SHOW_SERVICE_AGENT && UI_FEATURES.SHOW_EMPLOYEE_AGENT
+          {UI_FEATURES.SHOW_EMPLOYEE_AGENT
             ? 'Choose an agent type to launch'
-            : UI_FEATURES.SHOW_SERVICE_AGENT
-            ? 'Service Agent'
-            : 'Employee Agent'}
+            : 'Service Agent'}
         </Text>
 
         {isChecking && (
@@ -273,32 +250,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         )}
 
         <View style={styles.buttonsContainer}>
-          {UI_FEATURES.SHOW_SERVICE_AGENT && (
-            <TouchableOpacity
-              style={[
-                styles.launchButton,
-                styles.serviceAgentButton,
-                !isServiceAgentConfigured && styles.launchButtonDisabled,
-                activeMode === 'service' && styles.activeButton,
-              ]}
-              onPress={handleLaunchServiceAgent}
-              disabled={isChecking}
-            >
-              <View style={styles.launchButtonContent}>
-                <Text style={styles.launchButtonTitle}>Service Agent</Text>
-                <Text style={styles.launchButtonSubtitle}>
-                  {isServiceAgentConfigured
-                    ? activeMode === 'service'
-                      ? 'Active - Tap to launch'
-                      : 'Configured - Tap to launch'
-                    : 'Not configured'}
-                </Text>
-              </View>
-              {isServiceAgentConfigured && (
-                <Text style={styles.launchButtonArrow}>›</Text>
-              )}
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[
+              styles.launchButton,
+              styles.serviceAgentButton,
+              !isServiceAgentConfigured && styles.launchButtonDisabled,
+              activeMode === 'service' && styles.activeButton,
+            ]}
+            onPress={handleLaunchServiceAgent}
+            disabled={isChecking}
+          >
+            <View style={styles.launchButtonContent}>
+              <Text style={styles.launchButtonTitle}>Service Agent</Text>
+              <Text style={styles.launchButtonSubtitle}>
+                {isServiceAgentConfigured
+                  ? activeMode === 'service'
+                    ? 'Active - Tap to launch'
+                    : 'Configured - Tap to launch'
+                  : 'Not configured'}
+              </Text>
+            </View>
+            {isServiceAgentConfigured && (
+              <Text style={styles.launchButtonArrow}>›</Text>
+            )}
+          </TouchableOpacity>
 
           {UI_FEATURES.SHOW_EMPLOYEE_AGENT && (
             <TouchableOpacity

@@ -118,7 +118,7 @@ class AgentforceService {
       );
       return;
     }
-  
+
     try {
       this.eventEmitter = new NativeEventEmitter(AgentforceModule);
       this.initialized = true;
