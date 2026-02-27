@@ -30,6 +30,7 @@ import {
   StyleSheet,
   Alert,
   Image,
+  Linking,
   Platform,
   ScrollView,
 } from 'react-native';
@@ -42,6 +43,8 @@ import {
   isEmployeeAgentConfigValid,
   LoggerDelegate,
   LogLevel,
+  NavigationDelegate,
+  NavigationRequest,
 } from 'react-native-agentforce';
 import { UI_FEATURES } from '../config/UIFeatures';
 
@@ -61,6 +64,20 @@ const agentforceLogger: LoggerDelegate = {
   },
 };
 
+// Sample navigation delegate — handles Agentforce SDK navigation requests.
+// Modify this to add your own navigation handling logic.
+// The request.type indicates the destination kind ('record', 'link',
+// 'quickAction', 'pageReference', 'objectHome', 'app').
+// Access fields like request.recordId, request.uri, request.actionName, etc.
+// See NavigationDelegate.ts for the full list of known fields per type.
+const agentforceNavigation: NavigationDelegate = {
+  onNavigate(request: NavigationRequest) {
+    // For debugging — replace with your own navigation handling
+    Alert.alert('Navigation Request', JSON.stringify(request, null, 2));
+    console.log(`[Agentforce Nav] ${request.type}:`, request);
+  },
+};
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [isServiceAgentConfigured, setIsServiceAgentConfigured] =
     useState(false);
@@ -76,10 +93,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   useEffect(() => {
     // Register logger delegate so SDK logs are forwarded to JS
     AgentforceService.setLoggerDelegate(agentforceLogger);
+    // Register navigation delegate so SDK navigation requests are forwarded to JS
+    AgentforceService.setNavigationDelegate(agentforceNavigation);
     checkConfigurations();
 
     return () => {
       AgentforceService.clearLoggerDelegate();
+      AgentforceService.clearNavigationDelegate();
     };
   }, []);
 

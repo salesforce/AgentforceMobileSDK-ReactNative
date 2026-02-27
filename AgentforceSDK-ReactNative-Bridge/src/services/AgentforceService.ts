@@ -26,18 +26,21 @@ import {
 } from '../types/AgentConfig';
 
 import { LoggerDelegate, LogLevel } from '../types/LoggerDelegate';
+import { NavigationDelegate, NavigationRequest } from '../types/NavigationDelegate';
 
 const { AgentforceModule } = NativeModules;
 
 // Re-export types for convenience
 export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags };
 export type { LoggerDelegate, LogLevel };
+export type { NavigationDelegate, NavigationRequest };
 
 /**
  * Native module event names
  */
 const EVENTS = {
   LOG_MESSAGE: 'onLogMessage',
+  NAVIGATION_REQUEST: 'onNavigationRequest',
 } as const;
 
 /**
@@ -85,6 +88,16 @@ class AgentforceService {
    * Subscription for log message events
    */
   private loggerSubscription: EmitterSubscription | null = null;
+
+  /**
+   * Navigation delegate for receiving SDK navigation requests
+   */
+  private navigationDelegate: NavigationDelegate | null = null;
+
+  /**
+   * Subscription for navigation request events
+   */
+  private navigationSubscription: EmitterSubscription | null = null;
 
   /**
    * Track if service has been initialized
@@ -163,6 +176,62 @@ class AgentforceService {
       EVENTS.LOG_MESSAGE,
       (event: { level: LogLevel; message: string; error?: string }) => {
         this.loggerDelegate?.onLog(event.level, event.message, event.error);
+      },
+    );
+  }
+
+  /**
+   * Register a navigation delegate to receive navigation requests from the native Agentforce SDK.
+   *
+   * Register before calling `configure()` so the navigation handler is attached when the SDK initializes.
+   *
+   * @param delegate - Navigation delegate implementation
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setNavigationDelegate({
+   *   onNavigate(request) {
+   *     switch (request.type) {
+   *       case 'link':
+   *         if (request.uri) Linking.openURL(request.uri);
+   *         break;
+   *       case 'record':
+   *         console.log(`Open record: ${request.objectType} ${request.recordId}`);
+   *         break;
+   *     }
+   *   },
+   * });
+   * ```
+   */
+  setNavigationDelegate(delegate: NavigationDelegate): void {
+    this.navigationDelegate = delegate;
+    this.setupNavigationListener();
+    AgentforceModule?.enableNavigationForwarding(true);
+    console.log('[AgentforceService] Navigation delegate registered');
+  }
+
+  /**
+   * Clear the registered navigation delegate and stop receiving navigation requests.
+   */
+  clearNavigationDelegate(): void {
+    this.navigationDelegate = null;
+    this.navigationSubscription?.remove();
+    this.navigationSubscription = null;
+    AgentforceModule?.enableNavigationForwarding(false);
+    console.log('[AgentforceService] Navigation delegate cleared');
+  }
+
+  /**
+   * Set up listener for navigation request events from native layer
+   */
+  private setupNavigationListener(): void {
+    this.navigationSubscription?.remove();
+    if (!this.eventEmitter) return;
+
+    this.navigationSubscription = this.eventEmitter.addListener(
+      EVENTS.NAVIGATION_REQUEST,
+      (event: NavigationRequest) => {
+        this.navigationDelegate?.onNavigate(event);
       },
     );
   }
@@ -635,8 +704,12 @@ class AgentforceService {
   destroy(): void {
     this.loggerSubscription?.remove();
     this.loggerSubscription = null;
-
     this.loggerDelegate = null;
+
+    this.navigationSubscription?.remove();
+    this.navigationSubscription = null;
+    this.navigationDelegate = null;
+
     this.eventEmitter = null;
     this.initialized = false;
     console.log('[AgentforceService] Service destroyed');
