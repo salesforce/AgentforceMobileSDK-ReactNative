@@ -56,7 +56,7 @@ class AgentforceModule: RCTEventEmitter {
     }
 
     override func supportedEvents() -> [String]! {
-        return ["onLogMessage"]  // Required for logging events to work
+        return ["onLogMessage", "onNavigationRequest"]
     }
 
     override func startObserving() {
@@ -699,6 +699,18 @@ class AgentforceModule: RCTEventEmitter {
     func emitLogEvent(_ payload: [String: Any]) {
         guard listenerLock.withLock({ _hasListeners }) else { return }
         sendEvent(withName: "onLogMessage", body: payload)
+    }
+
+    // MARK: - Navigation (stub until iOS implementation)
+
+    @objc
+    func enableNavigationForwarding(
+        _ enabled: Bool,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        // No-op: iOS navigation forwarding not yet implemented
+        resolve(true)
     }
 
     // MARK: - Cleanup
