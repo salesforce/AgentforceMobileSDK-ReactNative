@@ -40,6 +40,7 @@ import java.util.List;
 
 /**
  * Application class for Agentforce sample.
+ * Conditionally initializes Mobile SDK for Employee Agent flavor.
  */
 public class MainApplication extends Application implements ReactApplication {
 
@@ -81,6 +82,18 @@ public class MainApplication extends Application implements ReactApplication {
 	@Override
 	public void onCreate() {
 		super.onCreate();
+
+		// Initialize Mobile SDK for Employee Agent flavor (uses reflection to avoid compile-time dependency)
+		if ("employeeAgent".equals(BuildConfig.FLAVOR)) {
+			try {
+				Class<?> sdkManagerClass = Class.forName("com.salesforce.androidsdk.app.SalesforceSDKManager");
+				java.lang.reflect.Method initMethod = sdkManagerClass.getMethod("initNative", android.content.Context.class, Class.class);
+				initMethod.invoke(null, this, MainActivity.class);
+			} catch (Exception e) {
+				throw new RuntimeException("Employee Agent requires Mobile SDK but initialization failed", e);
+			}
+		}
+
 		SoLoader.init(this, /* native exopackage */ false);
 		if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
 			// If you opted-in for the New Architecture, we load the native entry point for this app.

@@ -7,8 +7,11 @@ use_modular_headers!
 
 use_frameworks!
 
-project 'ReactAgentforce.xcodeproj'
-target 'ReactAgentforce' do
+# Get target from environment variable (set by installios.js)
+install_target = ENV['INSTALL_TARGET'] || 'all'
+
+# Shared dependencies function
+def shared_pods
   source 'https://github.com/forcedotcom/SalesforceMobileSDK-iOS-Specs.git'
   source 'https://github.com/livekit/podspecs.git'
   source 'https://cdn.cocoapods.org/'
@@ -25,9 +28,6 @@ target 'ReactAgentforce' do
   pod 'Messaging-InApp-Core', '> 1.10.0'
   pod 'LiveKitClient' #This is required to ensure Cocoapods looks in the correct source location
 
-  # Agentforce React Native bridge (submodule) – Service Agent only (Core), no Mobile SDK
-  pod 'ReactNativeAgentforce', :path => '../AgentforceSDK-ReactNative-Bridge/ios'
-
   pod 'DequeModule'
   pod 'InternalCollectionsUtilities'
   pod 'OrderedCollections'
@@ -37,7 +37,33 @@ target 'ReactAgentforce' do
   # swift-markdown-ui from git repository
   pod "swift-markdown-ui", :git => 'https://github.com/salesforce-misc/swift-markdown-ui.git', :branch => 'main'
   pod "cmark_gfm", :git => 'https://github.com/salesforce-misc/swift-markdown-ui.git', :branch => 'main'
+end
 
+# Service Agent - Core only (no Mobile SDK)
+# Only install if target is 'service' or 'all'
+if install_target == 'all' || install_target == 'service'
+  target 'ServiceAgent' do
+    project 'ReactAgentforce.xcodeproj'
+    shared_pods
+    # Agentforce React Native bridge – Service Agent only (Core), no Mobile SDK
+    pod 'ReactNativeAgentforce/Core', :path => '../AgentforceSDK-ReactNative-Bridge/ios'
+  end
+end
+
+# Employee Agent - WithMobileSDK subspec
+# Only install if target is 'employee' or 'all'
+if install_target == 'all' || install_target == 'employee'
+  target 'EmployeeAgent' do
+    project 'ReactAgentforce.xcodeproj'
+    shared_pods
+
+    # Salesforce Mobile SDK React Native bridge (provides initialization helpers)
+    pod 'SalesforceReact', :path => '../node_modules/react-native-force'
+
+    # Agentforce React Native bridge – Employee Agent with Mobile SDK
+    # WithMobileSDK subspec pulls in SalesforceSDKCore from published specs
+    pod 'ReactNativeAgentforce/WithMobileSDK', :path => '../AgentforceSDK-ReactNative-Bridge/ios'
+  end
 end
 
 pre_install do |installer|

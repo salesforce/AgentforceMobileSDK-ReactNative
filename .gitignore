@@ -189,3 +189,14 @@ fix_*.patch
 
 # [Experimental] Generated TS type definitions
 /packages/**/types_generated/
+
+# iOS Build Artifacts
+*.jsbundle
+*.jsbundle.map
+/ios/assets/
+
+# Backup files
+*.backup
+
+# Generated app configuration
+/src/config/AppConfig.generated.ts

@@ -43,7 +43,7 @@ import {
   LoggerDelegate,
   LogLevel,
 } from 'react-native-agentforce';
-import { UI_FEATURES } from '../config/UIFeatures';
+import { UI_FEATURES } from '../config/AppConfig';
 
 interface HomeScreenProps {
   navigation: any;
@@ -236,9 +236,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         <Text style={styles.title}>Agentforce</Text>
         <Text style={styles.subtitle}>
-          {UI_FEATURES.SHOW_EMPLOYEE_AGENT
+          {UI_FEATURES.SHOW_SERVICE_AGENT && UI_FEATURES.SHOW_EMPLOYEE_AGENT
             ? 'Choose an agent type to launch'
-            : 'Service Agent'}
+            : UI_FEATURES.SHOW_SERVICE_AGENT
+            ? 'Service Agent'
+            : 'Employee Agent'}
         </Text>
 
         {isChecking && (
@@ -250,30 +252,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         )}
 
         <View style={styles.buttonsContainer}>
-          <TouchableOpacity
-            style={[
-              styles.launchButton,
-              styles.serviceAgentButton,
-              !isServiceAgentConfigured && styles.launchButtonDisabled,
-              activeMode === 'service' && styles.activeButton,
-            ]}
-            onPress={handleLaunchServiceAgent}
-            disabled={isChecking}
-          >
-            <View style={styles.launchButtonContent}>
-              <Text style={styles.launchButtonTitle}>Service Agent</Text>
-              <Text style={styles.launchButtonSubtitle}>
-                {isServiceAgentConfigured
-                  ? activeMode === 'service'
-                    ? 'Active - Tap to launch'
-                    : 'Configured - Tap to launch'
-                  : 'Not configured'}
-              </Text>
-            </View>
-            {isServiceAgentConfigured && (
-              <Text style={styles.launchButtonArrow}>›</Text>
-            )}
-          </TouchableOpacity>
+          {UI_FEATURES.SHOW_SERVICE_AGENT && (
+            <TouchableOpacity
+              style={[
+                styles.launchButton,
+                styles.serviceAgentButton,
+                !isServiceAgentConfigured && styles.launchButtonDisabled,
+                activeMode === 'service' && styles.activeButton,
+              ]}
+              onPress={handleLaunchServiceAgent}
+              disabled={isChecking}
+            >
+              <View style={styles.launchButtonContent}>
+                <Text style={styles.launchButtonTitle}>Service Agent</Text>
+                <Text style={styles.launchButtonSubtitle}>
+                  {isServiceAgentConfigured
+                    ? activeMode === 'service'
+                      ? 'Active - Tap to launch'
+                      : 'Configured - Tap to launch'
+                    : 'Not configured'}
+                </Text>
+              </View>
+              {isServiceAgentConfigured && (
+                <Text style={styles.launchButtonArrow}>›</Text>
+              )}
+            </TouchableOpacity>
+          )}
 
           {UI_FEATURES.SHOW_EMPLOYEE_AGENT && (
             <TouchableOpacity
