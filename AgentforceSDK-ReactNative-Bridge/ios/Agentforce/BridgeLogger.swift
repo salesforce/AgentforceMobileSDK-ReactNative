@@ -1,9 +1,8 @@
-//
-//  BridgeLogger.swift
-//  AgentforceSDK-ReactNative-Bridge
-//
-//  Created for React Native bridge logging integration
-//
+/*
+ * Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
+ *
+ * React Native bridge logger for Agentforce SDK
+ */
 
 import Foundation
 import SalesforceLogging
