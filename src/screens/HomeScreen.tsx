@@ -55,9 +55,10 @@ interface HomeScreenProps {
 // Sample logger delegate — forwards Agentforce SDK logs to console
 const agentforceLogger: LoggerDelegate = {
   onLog(level: LogLevel, message: string, error?: string) {
-    const prefix = `[Agentforce ${level.toUpperCase()}]`;
+    const timestamp = new Date().toISOString();
+    const prefix = `[${timestamp}][Agentforce ${level.toUpperCase()}]`;
     if (error) {
-      console.log(`${prefix} ${message} | ${error}`);
+      console.log(`${prefix} ${message} | ERROR: ${error}`);
     } else {
       console.log(`${prefix} ${message}`);
     }

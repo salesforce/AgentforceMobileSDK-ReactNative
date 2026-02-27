@@ -10,9 +10,9 @@
 
 /**
  * Log levels emitted by the Agentforce SDK.
- * Maps to the native Logger interface methods: e() → error, w() → warn, i() → info.
+ * Android emits: error, warn, info. iOS additionally emits: debug.
  */
-export type LogLevel = 'error' | 'warn' | 'info';
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
 /**
  * Delegate interface for receiving log messages from the Agentforce SDK.
@@ -39,7 +39,7 @@ export interface LoggerDelegate {
   /**
    * Called when the Agentforce SDK emits a log message.
    *
-   * @param level - The log level: 'error', 'warn', or 'info'
+   * @param level - The log level: 'error', 'warn', 'info', or 'debug' (iOS only)
    * @param message - The log message from the SDK
    * @param error - Optional stringified exception (only present for error/warn with exceptions)
    */
