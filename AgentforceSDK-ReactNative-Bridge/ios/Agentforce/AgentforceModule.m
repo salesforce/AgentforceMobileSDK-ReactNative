@@ -82,4 +82,10 @@ RCT_EXTERN_METHOD(provideRefreshedToken:(NSString *)token
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Logging
+
+RCT_EXTERN_METHOD(enableLogForwarding:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
