@@ -88,4 +88,10 @@ RCT_EXTERN_METHOD(enableLogForwarding:(BOOL)enabled
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Navigation (stub until iOS implementation)
+
+RCT_EXTERN_METHOD(enableNavigationForwarding:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
