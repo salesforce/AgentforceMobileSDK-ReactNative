@@ -20,3 +20,6 @@ export {
 
 // Logger delegate types
 export { LoggerDelegate, LogLevel } from './LoggerDelegate';
+
+// Navigation delegate types
+export { NavigationDelegate, NavigationRequest } from './NavigationDelegate';
