@@ -44,9 +44,20 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Logging
 
-    /// Bridge logger for forwarding SDK logs to JavaScript
+    /// Bridge logger for forwarding SDK logs to JavaScript.
+    /// lazy var is not thread-safe in Swift; safe here because first access
+    /// is in configure methods which run on @MainActor.
     private lazy var bridgeLogger: BridgeLogger = {
         return BridgeLogger(module: self)
+    }()
+
+    // MARK: - Navigation
+
+    /// Bridge navigation for forwarding SDK navigation requests to JavaScript.
+    /// lazy var is not thread-safe in Swift; safe here because first access
+    /// is in configure methods which run on @MainActor.
+    private lazy var bridgeNavigation: BridgeNavigation = {
+        return BridgeNavigation(module: self)
     }()
 
     // MARK: - Module Setup
@@ -132,8 +143,8 @@ class AgentforceModule: RCTEventEmitter {
             )
         }
         
-        // Using fullConfig instead of .serviceAgent() to inject bridgeLogger.
-        // TODO: Migrate to mode .serviceAgent(config) when ServiceAgentConfiguration supports a logger parameter.
+        // Using fullConfig instead of .serviceAgent() to inject bridgeLogger and bridgeNavigation.
+        // TODO: Migrate to .serviceAgent(config) when ServiceAgentConfiguration supports logger/navigation parameters.
         let serviceUser = User(
             userId: "",
             org: Org(id: config.organizationId),
@@ -146,7 +157,7 @@ class AgentforceModule: RCTEventEmitter {
             forceConfigEndpoint: config.serviceApiURL,
             agentforceFeatureFlagSettings: AgentforceFeatureFlagSettings(),
             salesforceNetwork: nil,
-            salesforceNavigation: nil,
+            salesforceNavigation: bridgeNavigation,
             salesforceLogger: bridgeLogger,
             serviceApiURL: config.serviceApiURL
         )
@@ -192,7 +203,7 @@ class AgentforceModule: RCTEventEmitter {
 
         // Create User for FullConfig mode (SDK 14.x). We use .fullConfig(AgentforceConfiguration)
         // instead of .employeeAgent so we can set feature flags explicitly (e.g. multiAgent only).
-        // TODO: Migrate to mode .employeeAgent(config) when EmployeeAgentConfiguration supports a logger parameter.
+        // TODO: Migrate to .employeeAgent(config) when EmployeeAgentConfiguration supports logger/navigation parameters.
         let user = User(
             userId: userId,
             org: Org(id: organizationId),
@@ -218,7 +229,7 @@ class AgentforceModule: RCTEventEmitter {
             forceConfigEndpoint: config.instanceUrl,
             agentforceFeatureFlagSettings: featureFlagSettings,
             salesforceNetwork: nil,
-            salesforceNavigation: nil,
+            salesforceNavigation: bridgeNavigation,
             salesforceLogger: bridgeLogger
         )
         
@@ -694,14 +705,18 @@ class AgentforceModule: RCTEventEmitter {
         resolve(true)
     }
 
-    /// Emits a log event to JavaScript if listeners are active
-    /// Called by BridgeLogger when forwarding is enabled
+    /// Emits a log event to JavaScript if listeners are active.
+    /// Called by BridgeLogger when forwarding is enabled.
+    ///
+    /// Events require both `forwardingEnabled` (on BridgeLogger) and active
+    /// NativeEventEmitter listeners to flow. JS must call `addListener` before
+    /// `enableLogForwarding(true)` to avoid a window where events are dropped.
     func emitLogEvent(_ payload: [String: Any]) {
         guard listenerLock.withLock({ _hasListeners }) else { return }
         sendEvent(withName: "onLogMessage", body: payload)
     }
 
-    // MARK: - Navigation (stub until iOS implementation)
+    // MARK: - Navigation
 
     @objc
     func enableNavigationForwarding(
@@ -709,8 +724,19 @@ class AgentforceModule: RCTEventEmitter {
         resolver resolve: @escaping RCTPromiseResolveBlock,
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
-        // No-op: iOS navigation forwarding not yet implemented
+        bridgeNavigation.forwardingEnabled = enabled
         resolve(true)
+    }
+
+    /// Emits a navigation event to JavaScript if listeners are active.
+    /// Called by BridgeNavigation when forwarding is enabled.
+    ///
+    /// Events require both `forwardingEnabled` (on BridgeNavigation) and active
+    /// NativeEventEmitter listeners to flow. JS must call `addListener` before
+    /// `enableNavigationForwarding(true)` to avoid a window where events are dropped.
+    func emitNavigationEvent(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onNavigationRequest", body: payload)
     }
 
     // MARK: - Cleanup
