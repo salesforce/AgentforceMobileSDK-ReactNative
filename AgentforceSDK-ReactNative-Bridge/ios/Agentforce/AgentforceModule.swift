@@ -38,7 +38,28 @@ class AgentforceModule: RCTEventEmitter {
 
     /// Voice delegate for handling voice interactions
     private var voiceDelegate: AgentforceVoiceDelegate?
-    
+
+    private let listenerLock = NSLock()
+    private var _hasListeners = false
+
+    // MARK: - Logging
+
+    /// Bridge logger for forwarding SDK logs to JavaScript.
+    /// lazy var is not thread-safe in Swift; safe here because first access
+    /// is in configure methods which run on @MainActor.
+    private lazy var bridgeLogger: BridgeLogger = {
+        return BridgeLogger(module: self)
+    }()
+
+    // MARK: - Navigation
+
+    /// Bridge navigation for forwarding SDK navigation requests to JavaScript.
+    /// lazy var is not thread-safe in Swift; safe here because first access
+    /// is in configure methods which run on @MainActor.
+    private lazy var bridgeNavigation: BridgeNavigation = {
+        return BridgeNavigation(module: self)
+    }()
+
     // MARK: - Module Setup
 
     override static func requiresMainQueueSetup() -> Bool {
@@ -46,7 +67,15 @@ class AgentforceModule: RCTEventEmitter {
     }
 
     override func supportedEvents() -> [String]! {
-        return []
+        return ["onLogMessage", "onNavigationRequest"]
+    }
+
+    override func startObserving() {
+        listenerLock.withLock { _hasListeners = true }
+    }
+
+    override func stopObserving() {
+        listenerLock.withLock { _hasListeners = false }
     }
 
     // MARK: - Unified Configuration Method
@@ -114,17 +143,28 @@ class AgentforceModule: RCTEventEmitter {
             )
         }
         
-        // Create Service Agent Configuration for SDK
-        let sdkServiceConfig = ServiceAgentConfiguration(
-            esDeveloperName: config.esDeveloperName,
-            organizationId: config.organizationId,
+        // Using fullConfig instead of .serviceAgent() to inject bridgeLogger and bridgeNavigation.
+        // TODO: Migrate to .serviceAgent(config) when ServiceAgentConfiguration supports logger/navigation parameters.
+        let serviceUser = User(
+            userId: "",
+            org: Org(id: config.organizationId),
+            username: "service_user",
+            displayName: "Service User"
+        )
+
+        let fullConfiguration = AgentforceConfiguration(
+            user: serviceUser,
+            forceConfigEndpoint: config.serviceApiURL,
+            agentforceFeatureFlagSettings: AgentforceFeatureFlagSettings(),
+            salesforceNetwork: nil,
+            salesforceNavigation: bridgeNavigation,
+            salesforceLogger: bridgeLogger,
             serviceApiURL: config.serviceApiURL
         )
-        
-        // Initialize Agentforce Client with Service Agent mode
+
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
-            mode: .serviceAgent(sdkServiceConfig)
+            mode: .fullConfig(fullConfiguration)
         )
     }
     
@@ -163,6 +203,7 @@ class AgentforceModule: RCTEventEmitter {
 
         // Create User for FullConfig mode (SDK 14.x). We use .fullConfig(AgentforceConfiguration)
         // instead of .employeeAgent so we can set feature flags explicitly (e.g. multiAgent only).
+        // TODO: Migrate to .employeeAgent(config) when EmployeeAgentConfiguration supports logger/navigation parameters.
         let user = User(
             userId: userId,
             org: Org(id: organizationId),
@@ -188,7 +229,8 @@ class AgentforceModule: RCTEventEmitter {
             forceConfigEndpoint: config.instanceUrl,
             agentforceFeatureFlagSettings: featureFlagSettings,
             salesforceNetwork: nil,
-            salesforceNavigation: nil
+            salesforceNavigation: bridgeNavigation,
+            salesforceLogger: bridgeLogger
         )
         
         // Initialize Agentforce Client with fullConfig mode (explicit config + feature flags).
@@ -648,7 +690,55 @@ class AgentforceModule: RCTEventEmitter {
             resolve(initialized)
         }
     }
-    
+
+    // MARK: - Logging
+
+    /// Enable or disable forwarding of native SDK logs to JavaScript
+    /// Called by AgentforceService.setLoggerDelegate() and clearLoggerDelegate()
+    @objc
+    func enableLogForwarding(
+        _ enabled: Bool,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        bridgeLogger.forwardingEnabled = enabled
+        resolve(true)
+    }
+
+    /// Emits a log event to JavaScript if listeners are active.
+    /// Called by BridgeLogger when forwarding is enabled.
+    ///
+    /// Events require both `forwardingEnabled` (on BridgeLogger) and active
+    /// NativeEventEmitter listeners to flow. JS must call `addListener` before
+    /// `enableLogForwarding(true)` to avoid a window where events are dropped.
+    func emitLogEvent(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onLogMessage", body: payload)
+    }
+
+    // MARK: - Navigation
+
+    @objc
+    func enableNavigationForwarding(
+        _ enabled: Bool,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        bridgeNavigation.forwardingEnabled = enabled
+        resolve(true)
+    }
+
+    /// Emits a navigation event to JavaScript if listeners are active.
+    /// Called by BridgeNavigation when forwarding is enabled.
+    ///
+    /// Events require both `forwardingEnabled` (on BridgeNavigation) and active
+    /// NativeEventEmitter listeners to flow. JS must call `addListener` before
+    /// `enableNavigationForwarding(true)` to avoid a window where events are dropped.
+    func emitNavigationEvent(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onNavigationRequest", body: payload)
+    }
+
     // MARK: - Cleanup
     
     private func cleanupClient() {

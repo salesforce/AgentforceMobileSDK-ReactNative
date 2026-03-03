@@ -64,6 +64,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Bridge logger for forwarding SDK logs to JS
     private val bridgeLogger = BridgeLogger(reactContext)
 
+    // Bridge navigation for forwarding SDK navigation requests to JS
+    private val bridgeNavigation = BridgeNavigation(reactContext)
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -157,6 +160,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setFeatureFlagSettings(featureFlagSettings)
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
+                    .setNavigation(bridgeNavigation)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
                 val agentforceConfig = agentforceConfigBuilder.build()
 
@@ -230,6 +234,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setFeatureFlagSettings(featureFlagSettings)
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
+                    .setNavigation(bridgeNavigation)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
                 val agentforceConfig = agentforceConfigBuilder.build()
 
@@ -503,6 +508,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun enableLogForwarding(enabled: Boolean, promise: Promise) {
         bridgeLogger.forwardingEnabled = enabled
         Log.d(TAG, "Log forwarding ${if (enabled) "enabled" else "disabled"}")
+        promise.resolve(true)
+    }
+
+    // MARK: - Navigation Forwarding
+
+    @ReactMethod
+    fun enableNavigationForwarding(enabled: Boolean, promise: Promise) {
+        bridgeNavigation.forwardingEnabled = enabled
+        Log.d(TAG, "Navigation forwarding ${if (enabled) "enabled" else "disabled"}")
         promise.resolve(true)
     }
 
