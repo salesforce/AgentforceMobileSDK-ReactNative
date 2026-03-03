@@ -222,7 +222,12 @@ android/app/build/outputs/apk/
 ```
 ios/
 ├── project.yml                 # XcodeGen configuration
-├── Podfile                     # Multi-target CocoaPods setup
+├── Podfile                     # Default: loads Podfile.employee (run pod install via installios.js)
+├── Podfile.service             # Service Agent only (subset of deps)
+├── Podfile.employee            # Employee Agent / both apps (full deps)
+├── Podfile.common.rb           # Shared pod list and hooks
+├── Podfile.service.lock        # Lock for Service Agent
+├── Podfile.employee.lock       # Lock for Employee Agent / both
 ├── Shared/                     # Shared code (AppDelegate, main.m)
 │   ├── AppDelegate.{h,m}
 │   └── main.m
@@ -266,10 +271,25 @@ All JavaScript/TypeScript code is **100% shared** between both apps. No changes 
 
 ### iOS Architecture
 
-**XcodeGen + CocoaPods:**
+**Single Project, Two Targets (XcodeGen + CocoaPods):**
+
+This project uses a **single Xcode project with two targets** approach, which provides:
+- **Platform consistency**: Matches Android's product flavor architecture
+- **Maximum code reuse**: >98% shared code, minimal duplication
+- **Selective installation**: Install service-only or employee with Mobile SDK
+- **React Native CLI compatibility**: Works seamlessly with standard RN tooling
+
+**Alternative Considered:** Separate projects (one for each app) with independent project.yml/Podfile per app was evaluated but rejected because it would:
+- Double disk space and build time (2x Pods directories)
+- Break React Native CLI conventions (expects single ios/ directory)
+- Create platform inconsistency (Android uses flavors, not separate projects)
+- Duplicate most configuration for minimal benefit
+
+**Architecture Details:**
 - `project.yml` defines two targets (ServiceAgent, EmployeeAgent)
 - `xcodegen generate` creates `.xcodeproj` with both targets
-- `Podfile` conditionally installs pods based on `INSTALL_TARGET` env var
+- **Two Podfiles**: `Podfile.service` (Service Agent only, subset) and `Podfile.employee` (both targets, full deps). `installios.js` copies the right one to `Podfile` and uses the matching lock (`Podfile.service.lock` or `Podfile.employee.lock`). "all" uses the employee Podfile so both apps share one dependency set.
+- **Build order fix**: `Podfile.common.rb` adds explicit Pods target dependencies at the Xcode project level, ensuring Pods build before app targets (fixes "React/RCTBridgeDelegate.h file not found" errors)
 - ServiceAgent uses `ReactNativeAgentforce/Core` (no Mobile SDK)
 - EmployeeAgent uses `ReactNativeAgentforce/WithMobileSDK` (includes Mobile SDK)
 
@@ -280,6 +300,9 @@ pod 'SalesforceReact', :path => '../node_modules/react-native-force'
 pod 'ReactNativeAgentforce/WithMobileSDK', :path => '../AgentforceSDK-ReactNative-Bridge/ios'
 # WithMobileSDK subspec brings in SalesforceSDKCore from published specs
 ```
+
+**Build Order Solution:**
+The `Podfile.common.rb` includes an `add_pods_target_dependency` function that automatically adds explicit dependencies from each app target (ServiceAgent, EmployeeAgent) to its corresponding Pods target (Pods-ServiceAgent, Pods-EmployeeAgent). This ensures CocoaPods builds first, making React Native headers available during app compilation.
 
 ### Android Architecture
 
@@ -386,6 +409,59 @@ These files contain OAuth client configuration for Mobile SDK authentication.
 
 ## 🔍 Troubleshooting
 
+### iOS: `'React/RCTBridgeDelegate.h' file not found` (or UIKit/Foundation modules not found)
+
+**Cause**: The app target is not using the CocoaPods-generated xcconfig, or Pods are not building before the app target. This typically happens when:
+
+1. **You run `xcodegen generate` after `pod install`** – XcodeGen overwrites the project and removes the `baseConfigurationReference` to the Pods xcconfig that CocoaPods added.
+2. **You open the `.xcodeproj` instead of the `.xcworkspace`** – Always open `ios/ReactAgentforce.xcworkspace` so the Pods project and settings are in scope.
+3. **You're building the wrong target** – If you ran `node installios.js service`, only the ServiceAgent target has Pods linked. Building EmployeeAgent will fail with missing React headers until you run `node installios.js employee` or `node installios.js all`.
+4. **Pods target dependency not set** – The app target needs an explicit dependency on its Pods target to ensure correct build order.
+
+**Solution**:
+
+1. **Use the correct install order and do not re-run XcodeGen after Pods are installed:**
+   ```bash
+   node installios.js service   # or employee, or all
+   ```
+   This runs `xcodegen generate` then `pod install`. CocoaPods then:
+   - Wires each app target to its `Pods-<Target>.(debug|release).xcconfig`
+   - Runs the `post_install` hook which adds explicit Pods target dependencies
+
+   If you need to change `project.yml`, run the full install again so that XcodeGen runs first and then CocoaPods re-applies the xcconfig references and dependencies.
+
+2. **Always open the workspace:**
+   ```bash
+   open ios/ReactAgentforce.xcworkspace
+   ```
+   In Xcode, select the **ServiceAgent** or **EmployeeAgent** scheme (matching what you installed) and build.
+
+3. **If you already ran XcodeGen after pod install**, re-run the installer so CocoaPods can re-attach the xcconfig and dependencies:
+   ```bash
+   node installios.js service   # or employee / all
+   ```
+
+4. **Verify Pods target dependencies**: After running `installios.js`, check the output for:
+   ```
+   ✅ Added ServiceAgent -> Pods-ServiceAgent target dependency
+   ✅ Added EmployeeAgent -> Pods-EmployeeAgent target dependency
+   ```
+   This confirms the build order is properly configured.
+
+5. **UIKit / CoreGraphics / Foundation “module not found”** – Often fixed by the Podfile `post_install` settings (`CLANG_ENABLE_MODULES`, `CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES`). If you still see this, ensure you are building with the workspace and the correct scheme.
+
+### iOS: Build order issues / Pods not building first
+
+**Cause**: The app target doesn't have an explicit dependency on its Pods target.
+
+**Solution**: This is now handled automatically by `installios.js`. The `Podfile.common.rb` post_install hook adds explicit dependencies from each app target to its Pods target. If you're still seeing issues:
+
+```bash
+# Clean and reinstall
+rm -rf ios/Pods ios/Podfile.lock ios/ReactAgentforce.xcodeproj ios/ReactAgentforce.xcworkspace
+node installios.js service  # or employee / all
+```
+
 ### "Invalid target" error
 ```
 ❌ Invalid target: xyz
@@ -474,6 +550,34 @@ node installios.js employee   # Add Employee Agent + Mobile SDK
 
 ## 🛠️ Implementation Details
 
+### Architecture Decision
+
+**Why Single Project with Two Targets?**
+
+This project uses a **single Xcode project with two targets** approach (not separate projects). This decision was made after careful analysis:
+
+**Advantages:**
+- ✅ **Platform consistency**: Matches Android's product flavor architecture
+- ✅ **Maximum code reuse**: >98% shared code between targets
+- ✅ **Single build graph**: Pods installed once, shared between targets
+- ✅ **React Native CLI compatibility**: Standard RN tooling expects single ios/ directory
+- ✅ **Faster builds**: Single Pods directory, no duplication
+- ✅ **Easier maintenance**: One project.yml, one set of build settings
+
+**Alternative Considered (Rejected):**
+Separate projects (ServiceAgent-ios/, EmployeeAgent-ios/) with independent configurations were evaluated but would introduce:
+- ❌ 2x disk space (separate Pods directories)
+- ❌ 2x pod install time
+- ❌ Platform inconsistency (Android uses flavors, not separate gradle projects)
+- ❌ React Native CLI incompatibility (expects single ios/ directory)
+- ❌ Configuration duplication (most settings identical)
+
+**The Current Issues (Now Fixed):**
+1. ~~Build order problems requiring scheme patching workaround~~ → **Fixed** with proper Pods target dependencies
+2. ~~Podfile switching complexity~~ → **Improved** with clear logging and validation
+3. ~~Two lock files to maintain separately~~ → **Improved** with explicit lock file management
+4. ~~Limited validation and unclear error messages~~ → **Fixed** with pre-flight checks and verbose logging
+
 ### What Was Implemented
 
 1. **Multi-target iOS setup** (XcodeGen + CocoaPods)
@@ -481,6 +585,9 @@ node installios.js employee   # Add Employee Agent + Mobile SDK
 3. **Selective installation** (service/employee/all arguments)
 4. **Conditional dependency resolution** (flavor-specific dependencies)
 5. **Published artifacts integration** (Maven Central & CocoaPods specs)
+6. **Build order fix** (Explicit Pods target dependencies via post_install hook)
+7. **Environment validation** (Pre-flight checks for required tools)
+8. **Verbose logging** (Clear progress indicators and step-by-step feedback)
 
 ### Files Created
 
@@ -501,7 +608,10 @@ node installios.js employee   # Add Employee Agent + Mobile SDK
 - `package.json` - Added run scripts, react-native-force dependency, build:force script
 - `installios.js` - Added selective installation logic + react-native-force build
 - `installandroid.js` - Added selective installation logic + react-native-force build
-- `ios/Podfile` - Multi-target with conditional Mobile SDK (SalesforceReact for Employee Agent)
+- `ios/Podfile.service` - Service Agent only (subset of deps)
+- `ios/Podfile.employee` - Both targets, full deps (used for employee and "all")
+- `ios/Podfile.common.rb` - Shared pod list and post_install hooks
+- **Locks**: `Podfile.service.lock` and `Podfile.employee.lock` (install script copies the active one to `Podfile.lock` and back)
 - `android/settings.gradle` - Simplified project structure
 - `android/app/build.gradle` - Product flavors + conditional deps
 - `src/config/AppConfig.ts` - Dynamic app mode configuration
@@ -511,7 +621,7 @@ node installios.js employee   # Add Employee Agent + Mobile SDK
 
 **iOS:**
 - **XcodeGen**: Makes project structure version-controllable (YAML)
-- **Podfile ENV variable**: Controls which targets get installed
+- **Two Podfiles + locks**: Install script selects Podfile.service or Podfile.employee and the matching lock
 - **Published specs**: Uses SalesforceReact from npm + CocoaPods specs
 
 **Android:**
@@ -613,4 +723,4 @@ This guide covered:
 
 ---
 
-**Last Updated**: February 27, 2026
+**Last Updated**: March 3, 2026

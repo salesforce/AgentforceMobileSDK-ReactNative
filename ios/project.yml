@@ -3,14 +3,23 @@ options:
   bundleIdPrefix: com.salesforce.android.reactagentforce
   deploymentTarget:
     iOS: "17.0"
-  xcodeVersion: "15.0"
   generateEmptyDirectories: true
 
+# Align with main-branch project.pbxproj (single-app reference)
+# https://github.com/salesforce/AgentforceMobileSDK-ReactNative/blob/main/ios/ReactAgentforce.xcodeproj/project.pbxproj
 settings:
   ENABLE_BITCODE: NO
-  ONLY_ACTIVE_ARCH: NO
   CLANG_ENABLE_OBJC_WEAK: YES
   CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER: NO
+  CLANG_ENABLE_MODULES: YES
+  CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES: YES
+  GCC_PRECOMPILE_PREFIX_HEADER: NO
+  "EXCLUDED_ARCHS[sdk=iphonesimulator*]": i386
+  configs:
+    Debug:
+      ONLY_ACTIVE_ARCH: YES
+    Release:
+      ONLY_ACTIVE_ARCH: NO
 
 targetTemplates:
   AgentforceApp:
@@ -19,11 +28,18 @@ targetTemplates:
     deploymentTarget: "17.0"
     settings:
       DEVELOPMENT_TEAM: ""
-      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_STYLE: Manual
       ENABLE_BITCODE: NO
       OTHER_LDFLAGS: "$(inherited) -ObjC -lc++"
-      HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../node_modules/react-native/React/** $(SRCROOT)/../node_modules/react-native/ReactCommon/**"
-      LIBRARY_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../node_modules/react-native/ReactCommon/**"
+      LIBRARY_SEARCH_PATHS: "$(inherited)"
+      HEADER_SEARCH_PATHS:
+        - "$(inherited)"
+        - "$(SRCROOT)/../node_modules/react-native/React/**"
+      VERSIONING_SYSTEM: apple-generic
+      configs:
+        Debug:
+          DEAD_CODE_STRIPPING: NO
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
     preBuildScripts:
       - name: "Start Packager"
         script: |

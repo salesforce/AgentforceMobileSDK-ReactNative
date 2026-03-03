@@ -3,7 +3,6 @@
 !**/*.pbxproj
 !**/*.xcworkspacedata
 !**/*.xcsettings
-!**/*.xcscheme
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -21,6 +20,9 @@ DerivedData
 *.xcuserstate
 project.xcworkspace
 **/.xcode.env
+
+# XcodeGen-generated schemes (auto-generated during install)
+ios/ReactAgentforce.xcodeproj/xcshareddata/xcschemes/
 
 # Gradle
 /packages/rn-tester/build

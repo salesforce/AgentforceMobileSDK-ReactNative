@@ -1,0 +1,31 @@
+# Employee Agent (and both apps). Full dependency set.
+# Service Agent deps are a subset; "all" uses this Podfile so both apps share one lock.
+# Used by: node installios.js employee | node installios.js all
+
+require_relative 'Podfile.common'
+
+platform :ios, '17.0'
+prepare_react_native_project!
+use_modular_headers!
+use_frameworks!
+
+target 'ServiceAgent' do
+  project 'ReactAgentforce.xcodeproj'
+  shared_pods
+  pod 'ReactNativeAgentforce/Core', :path => '../AgentforceSDK-ReactNative-Bridge/ios'
+end
+
+target 'EmployeeAgent' do
+  project 'ReactAgentforce.xcodeproj'
+  shared_pods
+  pod 'SalesforceReact', :path => '../node_modules/react-native-force'
+  pod 'ReactNativeAgentforce/WithMobileSDK', :path => '../AgentforceSDK-ReactNative-Bridge/ios'
+end
+
+pre_install do |installer|
+  common_pre_install(installer)
+end
+
+post_install do |installer|
+  common_post_install(installer)
+end
