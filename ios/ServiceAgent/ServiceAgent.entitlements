@@ -4,7 +4,7 @@
 <dict>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.salesforce.android.reactagentforce.service</string>
+		<string>$(AppIdentifierPrefix)com.salesforce.reactagentforce.service</string>
 	</array>
 </dict>
 </plist>
