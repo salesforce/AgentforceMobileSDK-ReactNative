@@ -21,7 +21,7 @@
     "build:ios:employee": "node scripts/generate-app-config.js employee && xcodebuild -workspace ios/ReactAgentforce.xcworkspace -scheme EmployeeAgent -configuration Release",
     "generate:xcode": "cd ios && xcodegen generate",
     "install:pods": "cd ios && pod install",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package && node scripts/generate-app-config.js service"
   },
   "dependencies": {
     "@react-navigation/native": "^6.1.9",

@@ -133,6 +133,7 @@ ios/.xcode.env
 # The "source of truth" is in Podfile.service, Podfile.employee, and project.yml
 /ios/Podfile
 /ios/Podfile.lock
+/ios/Podfile.*.lock
 /ios/ReactAgentforce.xcodeproj/
 /ios/ReactAgentforce.xcworkspace/
 /private/helloworld/ios/build/

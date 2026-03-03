@@ -1,6 +1,6 @@
 name: ReactAgentforce
 options:
-  bundleIdPrefix: com.salesforce.android.reactagentforce
+  bundleIdPrefix: com.salesforce.reactagentforce
   deploymentTarget:
     iOS: "17.0"
   generateEmptyDirectories: true
@@ -92,7 +92,7 @@ targets:
     templates:
       - AgentforceApp
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.salesforce.android.reactagentforce.service
+      PRODUCT_BUNDLE_IDENTIFIER: com.salesforce.reactagentforce.service
       PRODUCT_NAME: ServiceAgent
       INFOPLIST_FILE: ServiceAgent/Info.plist
       CODE_SIGN_ENTITLEMENTS: ServiceAgent/ServiceAgent.entitlements
@@ -107,7 +107,7 @@ targets:
     templates:
       - AgentforceApp
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.salesforce.android.reactagentforce.employee
+      PRODUCT_BUNDLE_IDENTIFIER: com.salesforce.reactagentforce.employee
       PRODUCT_NAME: EmployeeAgent
       INFOPLIST_FILE: EmployeeAgent/Info.plist
       CODE_SIGN_ENTITLEMENTS: EmployeeAgent/EmployeeAgent.entitlements
