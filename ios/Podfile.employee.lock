@@ -1311,6 +1311,7 @@ DEPENDENCIES:
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - InternalCollectionsUtilities
+  - JWTKit
   - LiveKitClient
   - Logging (= 1.4.0)
   - Messaging-InApp-Core (> 1.10.0)
