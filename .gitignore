@@ -3,7 +3,6 @@
 !**/*.pbxproj
 !**/*.xcworkspacedata
 !**/*.xcsettings
-!**/*.xcscheme
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -21,6 +20,9 @@ DerivedData
 *.xcuserstate
 project.xcworkspace
 **/.xcode.env
+
+# XcodeGen-generated schemes (auto-generated during install)
+ios/ReactAgentforce.xcodeproj/xcshareddata/xcschemes/
 
 # Gradle
 /packages/rn-tester/build
@@ -126,6 +128,14 @@ vendor/
 ios/.xcode.env
 /node_modules
 /ios/.claude
+
+# iOS Multi-App: Generated/Copied Files
+# The "source of truth" is in Podfile.service, Podfile.employee, and project.yml
+/ios/Podfile
+/ios/Podfile.lock
+/ios/Podfile.*.lock
+/ios/ReactAgentforce.xcodeproj/
+/ios/ReactAgentforce.xcworkspace/
 /private/helloworld/ios/build/
 /private/helloworld/ios/Pods/
 /private/helloworld/ios/Podfile.lock
@@ -189,3 +199,14 @@ fix_*.patch
 
 # [Experimental] Generated TS type definitions
 /packages/**/types_generated/
+
+# iOS Build Artifacts
+*.jsbundle
+*.jsbundle.map
+/ios/assets/
+
+# Backup files
+*.backup
+
+# Generated app configuration
+/src/config/AppConfig.generated.ts

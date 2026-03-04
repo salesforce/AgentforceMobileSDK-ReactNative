@@ -6,6 +6,19 @@ var path = require('path');
 var fs = require('fs');
 var rimraf = require('rimraf');
 
+// Parse target argument: service, employee, all (default: all)
+var target = process.argv[2] || 'all';
+if (!['service', 'employee', 'all'].includes(target)) {
+  console.error('❌ Invalid target: ' + target);
+  console.error('   Usage: node installandroid.js [service|employee|all]');
+  console.error('   Examples:');
+  console.error('     node installandroid.js service   # Service Agent only (no Mobile SDK)');
+  console.error('     node installandroid.js employee  # Employee Agent only (with Mobile SDK)');
+  console.error('     node installandroid.js all       # Both apps (with Mobile SDK)');
+  console.error('     node installandroid.js           # Same as "all" (backward compatible)');
+  process.exit(1);
+}
+
 console.log('📦 Installing npm dependencies...');
 try {
   execSync('npm install --legacy-peer-deps --ignore-scripts', { stdio: [0, 1, 2] });
@@ -114,5 +127,23 @@ if (fs.existsSync(bundleHermesCTaskPath)) {
   }
 }
 
+// Build react-native-force for Employee Agent (provides Mobile SDK React Native bridge)
+if (target === 'employee' || target === 'all') {
+  console.log('\n📦 Building react-native-force (Mobile SDK React Native bridge)...');
+  try {
+    execSync('npm run build:force', { stdio: [0, 1, 2] });
+  } catch (e) {
+    console.warn('⚠️  build:force failed (optional if already built)');
+  }
+}
+
 console.log('\n✅ Android setup complete.');
-console.log('   Run: npm run android');
+if (target === 'service') {
+  console.log('   🚀 Service Agent ready: npm run android:service');
+} else if (target === 'employee') {
+  console.log('   🚀 Employee Agent ready: npm run android:employee');
+} else {
+  console.log('   🚀 Both apps ready:');
+  console.log('      npm run android:service  (Service Agent)');
+  console.log('      npm run android:employee (Employee Agent)');
+}
