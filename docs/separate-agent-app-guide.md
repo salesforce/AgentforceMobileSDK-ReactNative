@@ -36,19 +36,13 @@ Both apps share >98% of code (JavaScript/TypeScript and core native code), with 
 ### Service Agent
 - **Purpose**: Customer-facing, public service app
 - **Authentication**: Anonymous (URL-based configuration)
-- **Bundle ID (iOS)**: `com.salesforce.android.reactagentforce.service`
-- **Package (Android)**: `com.salesforce.android.reactagentforce.service`
 - **Display Name**: "Service Agent"
-- **Binary Size**: Smaller (no Mobile SDK)
 - **Mobile SDK**: NOT included
 
 ### Employee Agent
 - **Purpose**: Internal workforce app
 - **Authentication**: OAuth via Salesforce Mobile SDK
-- **Bundle ID (iOS)**: `com.salesforce.android.reactagentforce.employee`
-- **Package (Android)**: `com.salesforce.android.reactagentforce.employee`
 - **Display Name**: "Employee Agent"
-- **Binary Size**: Larger (includes Mobile SDK)
 - **Mobile SDK**: Included (SalesforceSDKCore 13.1.1 from CocoaPods)
 
 ---
@@ -381,26 +375,21 @@ These files contain OAuth client configuration for Mobile SDK authentication.
 ## ✨ Benefits
 
 ### 1. Separate Apps
-- Both installable side-by-side (different bundle IDs)
+- Both installable side-by-side
 - Independent release cycles
 - Clear separation of concerns
 
-### 2. Smaller Service Agent
-- Smaller binary (no Mobile SDK)
-- Faster download for end users
-- Lower memory footprint
-
-### 3. Code Reuse
+### 2. Code Reuse
 - >98% shared code
 - Single codebase maintenance
 - Consistent features across apps
 
-### 4. Selective Installation
+### 3. Selective Installation
 - Install only what you need (service/employee/all)
 - Service Agent: No Mobile SDK required
 - Employee Agent: Full Mobile SDK from published artifacts
 
-### 5. Developer Experience
+### 4. Developer Experience
 - Service Agent devs don't need to understand Mobile SDK
 - Employee Agent devs get full Mobile SDK integration
 - Flexible workflow for different development needs
@@ -536,9 +525,7 @@ node installios.js employee   # Add Employee Agent + Mobile SDK
 
 ### Q: Can both apps be installed on the same device?
 
-**A:** Yes! They have different bundle IDs:
-- Service Agent: `com.salesforce.android.reactagentforce.service`
-- Employee Agent: `com.salesforce.android.reactagentforce.employee`
+**A:** Yes! Both apps can be installed side-by-side on the same device.
 
 ### Q: Which install should I use for CI/CD?
 
@@ -651,7 +638,6 @@ Separate projects (ServiceAgent-ios/, EmployeeAgent-ios/) with independent confi
 | Aspect | Service Agent | Employee Agent |
 |--------|---------------|----------------|
 | **Mobile SDK** | ❌ Not included | ✅ From Maven/CocoaPods |
-| **Binary size** | Smaller | Larger |
 | **Authentication** | Anonymous | OAuth |
 | **Use case** | Customer-facing | Internal workforce |
 
