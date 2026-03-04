@@ -6,10 +6,10 @@ A React Native sample application demonstrating **two separate apps** built from
 
 This sample app demonstrates how to build **two distinct apps** from one codebase:
 
-- **Service Agent App**: Customer-facing service with anonymous authentication, no Mobile SDK dependency (~smaller binary)
+- **Service Agent App**: Customer-facing service with anonymous authentication, no Mobile SDK dependency
 - **Employee Agent App**: Internal workforce app with OAuth authentication via Salesforce Mobile SDK
 
-Both apps share >98% of code while maintaining separate identities, bundle IDs, and can be installed side-by-side on the same device.
+Both apps share >98% of code while maintaining separate identities and can be installed side-by-side on the same device.
 
 The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI platform directly into your mobile applications. Service Agents provide AI-powered conversational experiences for customer support scenarios, while Employee Agents enable authenticated workforce interactions.
 
@@ -21,11 +21,11 @@ The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI plat
 - **Two Separate Apps** - Service Agent and Employee Agent from one codebase
 - **Selective Installation** - Install only what you need
 - **Independent Releases** - Deploy Service Agent and Employee Agent separately
-- **Side-by-Side Installation** - Both apps on same device (different bundle IDs)
+- **Side-by-Side Installation** - Both apps on same device
 
 ### Service Agent App
 - **Anonymous Authentication** - URL-based configuration, no login required
-- **Lightweight** - No Mobile SDK dependency (~5-10MB smaller)
+- **Lightweight** - No Mobile SDK dependency
 - **Customer-Facing** - Optimized for public service scenarios
 
 ### Employee Agent App
@@ -74,16 +74,6 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 - **Agentforce API**: `AgentforceService` from `react-native-agentforce` (bridge package)
 - **Screens**: Home, Settings, About
 - **No app-specific code**: Same JavaScript for both apps
-
-### App Identity
-
-| Aspect | Service Agent | Employee Agent |
-|--------|---------------|----------------|
-| **Bundle ID (iOS)** | `com.salesforce.android.reactagentforce.service` | `com.salesforce.android.reactagentforce.employee` |
-| **Package (Android)** | `com.salesforce.android.reactagentforce.service` | `com.salesforce.android.reactagentforce.employee` |
-| **Display Name** | "Service Agent" | "Employee Agent" |
-| **Mobile SDK** | ❌ Not included | ✅ Included (13.1.1) |
-| **Binary Size** | ~15-20 MB | ~20-30 MB |
 
 ## 📋 Prerequisites
 
