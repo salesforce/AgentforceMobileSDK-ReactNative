@@ -45,6 +45,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         private const val KEY_ENABLE_MULTI_MODAL_INPUT = "enableMultiModalInput"
         private const val KEY_ENABLE_PDF_UPLOAD = "enablePDFUpload"
         private const val KEY_ENABLE_VOICE = "enableVoice"
+        private const val KEY_ENABLE_CUSTOM_VIEW_PROVIDER = "enableCustomViewProvider"
     }
 
     private val employeePrefs: SharedPreferences
@@ -443,7 +444,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val enableMultiAgent: Boolean,
         val enableMultiModalInput: Boolean,
         val enablePDFUpload: Boolean,
-        val enableVoice: Boolean
+        val enableVoice: Boolean,
+        val enableCustomViewProvider: Boolean
     )
 
     private fun getFeatureFlagsFromConfigOrPrefs(config: ReadableMap): FeatureFlags {
@@ -453,14 +455,16 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 enableMultiAgent = featureFlagsMap.hasKey("enableMultiAgent") && featureFlagsMap.getBoolean("enableMultiAgent"),
                 enableMultiModalInput = featureFlagsMap.hasKey("enableMultiModalInput") && featureFlagsMap.getBoolean("enableMultiModalInput"),
                 enablePDFUpload = featureFlagsMap.hasKey("enablePDFUpload") && featureFlagsMap.getBoolean("enablePDFUpload"),
-                enableVoice = featureFlagsMap.hasKey("enableVoice") && featureFlagsMap.getBoolean("enableVoice")
+                enableVoice = featureFlagsMap.hasKey("enableVoice") && featureFlagsMap.getBoolean("enableVoice"),
+                enableCustomViewProvider = featureFlagsMap.hasKey("enableCustomViewProvider") && featureFlagsMap.getBoolean("enableCustomViewProvider")
             )
         } else {
             FeatureFlags(
                 enableMultiAgent = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true),
                 enableMultiModalInput = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false),
                 enablePDFUpload = featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false),
-                enableVoice = featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false)
+                enableVoice = featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false),
+                enableCustomViewProvider = featureFlagsPrefs.getBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, false)
             )
         }
     }
@@ -471,6 +475,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, flags.enableMultiModalInput)
             .putBoolean(KEY_ENABLE_PDF_UPLOAD, flags.enablePDFUpload)
             .putBoolean(KEY_ENABLE_VOICE, flags.enableVoice)
+            .putBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, flags.enableCustomViewProvider)
             .apply()
     }
 
@@ -481,6 +486,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putBoolean("enableMultiModalInput", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false))
             putBoolean("enablePDFUpload", featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
             putBoolean("enableVoice", featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false))
+            putBoolean("enableCustomViewProvider", featureFlagsPrefs.getBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, false))
         })
     }
 
@@ -491,6 +497,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, flags.hasKey("enableMultiModalInput") && flags.getBoolean("enableMultiModalInput"))
             .putBoolean(KEY_ENABLE_PDF_UPLOAD, flags.hasKey("enablePDFUpload") && flags.getBoolean("enablePDFUpload"))
             .putBoolean(KEY_ENABLE_VOICE, flags.hasKey("enableVoice") && flags.getBoolean("enableVoice"))
+            .putBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, flags.hasKey("enableCustomViewProvider") && flags.getBoolean("enableCustomViewProvider"))
             .apply()
         promise.resolve(null)
     }
