@@ -16,11 +16,9 @@ import AgentforceSDK
 /// Component types are registered synchronously from JS; rendering uses RCTRootView.
 class BridgeViewProvider: AgentforceViewProviding {
 
-    /// Set of component definition strings this provider handles (e.g. "copilot/richText")
-    private var registeredTypes: Set<String> = []
-
-    /// The React Native component name to render for matching types
-    private var reactComponentName: String = ""
+    /// Maps component definition strings to React Native component names (1:1).
+    /// e.g. ["copilot/richText": "CustomRichTextView", "copilot/markdown": "CustomMarkdownView"]
+    private var componentMap: [String: String] = [:]
 
     /// Reference to the RCT bridge for creating root views
     private weak var bridge: RCTBridge?
@@ -29,38 +27,39 @@ class BridgeViewProvider: AgentforceViewProviding {
         self.bridge = bridge
     }
 
-    /// Register component types and the React component to render them.
+    /// Register a 1:1 mapping of component definition strings to React component names.
     /// Called from JS via the native module before launching conversation.
-    func register(componentTypes: [String], reactComponentName: String) {
-        self.registeredTypes = Set(componentTypes)
-        self.reactComponentName = reactComponentName
+    func register(componentMap: [String: String]) {
+        self.componentMap = componentMap
     }
 
     /// Clear all registrations
     func reset() {
-        registeredTypes.removeAll()
-        reactComponentName = ""
+        componentMap.removeAll()
     }
 
     var isRegistered: Bool {
-        !registeredTypes.isEmpty && !reactComponentName.isEmpty
+        !componentMap.isEmpty
     }
 
     // MARK: - AgentforceViewProviding
 
     func canHandle(type: String) -> Bool {
-        registeredTypes.contains(type)
+        componentMap[type] != nil
     }
 
     @MainActor
     func view(for type: String, data: [String: Any]) -> AnyView {
+        guard let moduleName = componentMap[type] else {
+            return AnyView(EmptyView())
+        }
         let props: [String: Any] = [
             "definition": type,
             "properties": data,
         ]
         return AnyView(ReactNativeViewWrapper(
             bridge: bridge,
-            moduleName: reactComponentName,
+            moduleName: moduleName,
             initialProperties: props
         ))
     }
