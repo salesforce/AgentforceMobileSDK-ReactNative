@@ -23,3 +23,6 @@ export { LoggerDelegate, LogLevel } from './LoggerDelegate';
 
 // Navigation delegate types
 export { NavigationDelegate, NavigationRequest } from './NavigationDelegate';
+
+// View provider delegate types
+export { ViewProviderDelegate, ViewProviderComponentData } from './ViewProviderDelegate';
