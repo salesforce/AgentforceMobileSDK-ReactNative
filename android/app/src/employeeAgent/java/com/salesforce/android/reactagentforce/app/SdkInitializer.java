@@ -26,6 +26,7 @@
  */
 package com.salesforce.android.reactagentforce.app;
 
+import android.app.Activity;
 import android.content.Context;
 import com.salesforce.androidsdk.app.SalesforceSDKManager;
 
@@ -34,7 +35,7 @@ import com.salesforce.androidsdk.app.SalesforceSDKManager;
  * Initializes Salesforce Mobile SDK for OAuth authentication.
  */
 public class SdkInitializer {
-    public static void initialize(Context context, Class<?> mainActivityClass) {
+    public static void initialize(Context context, Class<? extends Activity> mainActivityClass) {
         SalesforceSDKManager.initNative(context, mainActivityClass);
     }
 }

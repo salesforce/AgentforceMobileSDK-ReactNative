@@ -26,6 +26,7 @@
  */
 package com.salesforce.android.reactagentforce.app;
 
+import android.app.Activity;
 import android.content.Context;
 
 /**
@@ -33,7 +34,7 @@ import android.content.Context;
  * No Mobile SDK initialization needed for Service Agent (uses anonymous auth).
  */
 public class SdkInitializer {
-    public static void initialize(Context context, Class<?> mainActivityClass) {
+    public static void initialize(Context context, Class<? extends Activity> mainActivityClass) {
         // No-op: Service Agent does not use Mobile SDK
     }
 }
