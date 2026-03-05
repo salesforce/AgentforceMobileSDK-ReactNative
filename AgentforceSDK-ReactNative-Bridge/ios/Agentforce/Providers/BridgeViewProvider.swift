@@ -68,17 +68,15 @@ class BridgeViewProvider: AgentforceViewProviding {
 // MARK: - SwiftUI wrapper for RCTRootView
 
 /// Wraps an RCTRootView in a UIViewRepresentable for use in SwiftUI.
+/// Uses RCTRootView's intrinsic content size so SwiftUI can lay it out correctly.
 private struct ReactNativeViewWrapper: UIViewRepresentable {
     let bridge: RCTBridge?
     let moduleName: String
     let initialProperties: [String: Any]
 
-    func makeUIView(context: Context) -> UIView {
+    func makeUIView(context: Context) -> RCTRootView {
         guard let bridge = bridge else {
-            let label = UILabel()
-            label.text = "Bridge unavailable"
-            label.textAlignment = .center
-            return label
+            return RCTRootView()
         }
         let rootView = RCTRootView(
             bridge: bridge,
@@ -86,10 +84,18 @@ private struct ReactNativeViewWrapper: UIViewRepresentable {
             initialProperties: initialProperties
         )
         rootView.backgroundColor = .clear
+        rootView.sizeFlexibility = .widthAndHeight
         return rootView
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
+    func updateUIView(_ uiView: RCTRootView, context: Context) {
         // RCTRootView handles its own updates via the bridge
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: RCTRootView, context: Context) -> CGSize? {
+        let width = proposal.width ?? UIScreen.main.bounds.width
+        let size = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
+        guard size.height > 0 else { return nil }
+        return CGSize(width: width, height: size.height)
     }
 }
