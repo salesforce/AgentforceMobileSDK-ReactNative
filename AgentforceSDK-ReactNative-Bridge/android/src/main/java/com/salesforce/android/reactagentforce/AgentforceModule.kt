@@ -26,6 +26,7 @@ import com.salesforce.android.agentforceservice.conversationservice.data.Copilot
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
+import com.salesforce.android.reactagentforce.providers.BridgeViewProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
 import kotlinx.coroutines.*
 
@@ -68,6 +69,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // Bridge navigation for forwarding SDK navigation requests to JS
     private val bridgeNavigation = BridgeNavigation(reactContext)
+
+    // Bridge view provider for delegating native SDK views to React Native components
+    private val bridgeViewProvider = BridgeViewProvider(reactContext)
 
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -168,6 +172,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
+                if (bridgeViewProvider.isRegistered) {
+                    agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
+                }
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 val sdkMode = AgentforceMode.ServiceAgent(
@@ -246,6 +253,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
+                if (bridgeViewProvider.isRegistered) {
+                    agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
+                }
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 // Use FullConfig mode for Employee Agent
@@ -555,7 +565,35 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     }
     // endregion
 
-    // region Cleanup
+    // MARK: - View Provider
+
+    @ReactMethod
+    fun registerViewProvider(config: ReadableMap, promise: Promise) {
+        val types = config.getArray("componentTypes")
+        val componentName = config.getString("reactComponentName")
+
+        if (types == null || types.size() == 0 || componentName.isNullOrEmpty()) {
+            promise.reject("INVALID_CONFIG", "Must provide componentTypes array and reactComponentName")
+            return
+        }
+
+        val typeList = (0 until types.size()).mapNotNull { types.getString(it) }
+        bridgeViewProvider.register(typeList, componentName)
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+            putArray("registeredTypes", Arguments.fromList(typeList))
+        })
+    }
+
+    @ReactMethod
+    fun clearViewProvider(promise: Promise) {
+        bridgeViewProvider.reset()
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+        })
+    }
+
+    // MARK: - Cleanup
 
     @ReactMethod
     fun closeConversation(promise: Promise) {
@@ -572,6 +610,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         viewModel?.resetConfiguration()
         currentMode = null
         credentialProvider.reset()
+        bridgeViewProvider.reset()
         employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
         promise.resolve(Arguments.createMap().apply {
             putBoolean("success", true)
