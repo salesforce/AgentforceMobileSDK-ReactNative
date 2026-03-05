@@ -27,5 +27,9 @@
 import 'react-native-gesture-handler';
 import { AppRegistry } from 'react-native';
 import App from './App';
+import CustomAgentforceView from './src/components/CustomAgentforceView';
 
 AppRegistry.registerComponent('ReactAgentforce', () => App);
+
+// Register the custom view provider component so native can render it via RCTRootView/ReactRootView
+AppRegistry.registerComponent('CustomAgentforceView', () => CustomAgentforceView);
