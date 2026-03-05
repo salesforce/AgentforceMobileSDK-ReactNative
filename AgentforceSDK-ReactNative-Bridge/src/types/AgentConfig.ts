@@ -13,6 +13,7 @@ export interface FeatureFlags {
   enableMultiModalInput: boolean;
   enablePDFUpload: boolean;
   enableVoice: boolean;
+  enableCustomViewProvider: boolean;
 }
 
 /**
