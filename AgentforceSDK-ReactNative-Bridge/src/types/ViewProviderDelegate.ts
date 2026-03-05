@@ -5,14 +5,19 @@
  * When enabled, the native SDK checks the registered component types before rendering
  * its built-in views. If a match is found, a React Native root view is rendered instead.
  *
+ * Each component type maps 1:1 to a React Native component name, so different
+ * SDK view types can be rendered by different React components.
+ *
  * Known component definition strings follow the pattern "copilot/<type>" or "agentforce/<type>".
  * Examples: 'copilot/richText', 'copilot/markdown', 'copilot/recordInfo', 'copilot/list'.
  *
  * @example
  * ```typescript
  * AgentforceService.setViewProviderDelegate({
- *   componentTypes: ['copilot/richText', 'copilot/markdown'],
- *   reactComponentName: 'CustomAgentforceView',
+ *   componentMap: {
+ *     'copilot/richText': 'CustomRichTextView',
+ *     'copilot/markdown': 'CustomMarkdownView',
+ *   },
  * });
  * ```
  */
@@ -35,24 +40,26 @@ export interface ViewProviderComponentData {
  * Configuration for the View Provider delegate.
  *
  * Register this to tell the native SDK which component types your React Native
- * view can handle. When the SDK encounters a matching type, it renders your
- * registered React component instead of the built-in native view.
+ * views can handle. Each key is a component definition string, and the value
+ * is the registered React Native component name to render for that type.
+ *
+ * Register each component with `AppRegistry.registerComponent()`.
  */
 export interface ViewProviderDelegate {
   /**
-   * List of component definition strings this provider handles.
-   * The native `canHandle()` method checks against this list synchronously.
+   * Maps component definition strings to React Native component names.
+   * The native `canHandle()` method checks against the keys synchronously.
+   * The `view()` / `GetView()` method looks up the component name for the
+   * matching key and renders it via RCTRootView / ReactRootView.
    *
-   * @example ['copilot/richText', 'copilot/markdown', 'copilot/recordInfo']
+   * @example
+   * ```typescript
+   * {
+   *   'copilot/richText': 'CustomRichTextView',
+   *   'copilot/markdown': 'CustomMarkdownView',
+   *   'copilot/recordInfo': 'CustomRecordInfoView',
+   * }
+   * ```
    */
-  componentTypes: string[];
-
-  /**
-   * The registered React Native component name that will be rendered
-   * for matching types. This component receives `ViewProviderComponentData`
-   * as its props via the native root view.
-   *
-   * Register the component with `AppRegistry.registerComponent()`.
-   */
-  reactComponentName: string;
+  componentMap: Record<string, string>;
 }
