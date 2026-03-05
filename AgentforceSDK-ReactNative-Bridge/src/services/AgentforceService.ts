@@ -278,8 +278,10 @@ class AgentforceService {
    * @example
    * ```typescript
    * AgentforceService.setViewProviderDelegate({
-   *   componentTypes: ['copilot/richText', 'copilot/markdown'],
-   *   reactComponentName: 'CustomAgentforceView',
+   *   componentMap: {
+   *     'copilot/richText': 'CustomRichTextView',
+   *     'copilot/markdown': 'CustomMarkdownView',
+   *   },
    * });
    * ```
    */
@@ -293,11 +295,10 @@ class AgentforceService {
 
     try {
       await AgentforceModule.registerViewProvider({
-        componentTypes: delegate.componentTypes,
-        reactComponentName: delegate.reactComponentName,
+        componentMap: delegate.componentMap,
       });
       console.log(
-        `[AgentforceService] View provider registered for ${delegate.componentTypes.length} types`,
+        `[AgentforceService] View provider registered for ${Object.keys(delegate.componentMap).length} types`,
       );
     } catch (error) {
       console.error('[AgentforceService] Failed to register view provider:', error);
