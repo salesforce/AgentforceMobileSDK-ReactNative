@@ -32,6 +32,7 @@ import type {
   AgentforceContextVariable,
   AgentforceContextVariableType,
 } from '../types/AgentforceContext';
+import { ViewProviderDelegate, ViewProviderComponentData } from '../types/ViewProviderDelegate';
 
 const { AgentforceModule } = NativeModules;
 
@@ -40,6 +41,7 @@ export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags
 export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
+export type { ViewProviderDelegate, ViewProviderComponentData };
 
 /**
  * Native module event names
@@ -121,6 +123,11 @@ class AgentforceService {
    * Subscription for navigation request events
    */
   private navigationSubscription: EmitterSubscription | null = null;
+
+  /**
+   * View provider delegate configuration (registered component types + React component name)
+   */
+  private viewProviderDelegate: ViewProviderDelegate | null = null;
 
   /**
    * Track if service has been initialized
@@ -257,6 +264,64 @@ class AgentforceService {
         this.navigationDelegate?.onNavigate(event);
       },
     );
+  }
+
+  /**
+   * Register a view provider delegate to override native SDK output views
+   * with custom React Native components.
+   *
+   * Must be called before `configure()` so the native provider is attached
+   * at SDK initialization time.
+   *
+   * @param delegate - View provider delegate configuration
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setViewProviderDelegate({
+   *   componentTypes: ['copilot/richText', 'copilot/markdown'],
+   *   reactComponentName: 'CustomAgentforceView',
+   * });
+   * ```
+   */
+  async setViewProviderDelegate(delegate: ViewProviderDelegate): Promise<void> {
+    this.viewProviderDelegate = delegate;
+
+    if (!AgentforceModule?.registerViewProvider) {
+      console.warn('[AgentforceService] registerViewProvider not available on native module');
+      return;
+    }
+
+    try {
+      await AgentforceModule.registerViewProvider({
+        componentTypes: delegate.componentTypes,
+        reactComponentName: delegate.reactComponentName,
+      });
+      console.log(
+        `[AgentforceService] View provider registered for ${delegate.componentTypes.length} types`,
+      );
+    } catch (error) {
+      console.error('[AgentforceService] Failed to register view provider:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear the registered view provider delegate.
+   * After clearing, the native SDK will render its built-in views for all types.
+   */
+  async clearViewProviderDelegate(): Promise<void> {
+    this.viewProviderDelegate = null;
+
+    if (!AgentforceModule?.clearViewProvider) {
+      return;
+    }
+
+    try {
+      await AgentforceModule.clearViewProvider();
+      console.log('[AgentforceService] View provider delegate cleared');
+    } catch (error) {
+      console.warn('[AgentforceService] Failed to clear view provider:', error);
+    }
   }
 
   /**
@@ -808,6 +873,8 @@ class AgentforceService {
     this.navigationSubscription?.remove();
     this.navigationSubscription = null;
     this.navigationDelegate = null;
+
+    this.viewProviderDelegate = null;
 
     this.eventEmitter = null;
     this.initialized = false;
