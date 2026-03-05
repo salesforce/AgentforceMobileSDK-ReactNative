@@ -28,35 +28,31 @@ class BridgeViewProvider(
     private val reactContext: ReactApplicationContext
 ) : AgentforceViewProvider {
 
-    /** Set of component definition strings this provider handles */
-    private var registeredTypes: MutableSet<String> = mutableSetOf()
+    /** Maps component definition strings to their React Native component names */
+    private var componentMap: MutableMap<String, String> = mutableMapOf()
 
-    /** The React Native component name to render for matching types */
-    private var reactComponentName: String = ""
-
-    /** Register component types and the React component to render them. */
-    fun register(componentTypes: List<String>, reactComponentName: String) {
-        this.registeredTypes = componentTypes.toMutableSet()
-        this.reactComponentName = reactComponentName
+    /** Register a 1:1 mapping of component types to React component names. */
+    fun register(componentMap: Map<String, String>) {
+        this.componentMap = componentMap.toMutableMap()
     }
 
     /** Clear all registrations */
     fun reset() {
-        registeredTypes.clear()
-        reactComponentName = ""
+        componentMap.clear()
     }
 
     val isRegistered: Boolean
-        get() = registeredTypes.isNotEmpty() && reactComponentName.isNotEmpty()
+        get() = componentMap.isNotEmpty()
 
     // MARK: - AgentforceViewProvider
 
     override fun canHandle(definition: String): Boolean {
-        return registeredTypes.contains(definition)
+        return componentMap.containsKey(definition)
     }
 
     @Composable
     override fun GetView(modifier: Modifier, view: AgentforceComponent) {
+        val moduleName = componentMap[view.definition] ?: return
         val props = componentToBundle(view)
         AndroidView(
             modifier = modifier,
@@ -64,13 +60,13 @@ class BridgeViewProvider(
                 ReactRootView(context).apply {
                     val reactApp = reactContext.applicationContext as? ReactApplication
                     val reactHost = reactApp?.reactHost
-                    // Start the React surface with the registered component name and props
+                    // Start the React surface with the per-type component name and props
                     startReactApplication(
                         reactHost?.currentReactContext?.catalystInstance?.let {
                             // For modern RN, get the instance manager from the host
                             (reactApp as? ReactApplication)?.reactNativeHost?.reactInstanceManager
                         },
-                        reactComponentName,
+                        moduleName,
                         props
                     )
                 }

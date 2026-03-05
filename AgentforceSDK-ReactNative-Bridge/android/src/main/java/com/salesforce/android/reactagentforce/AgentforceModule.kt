@@ -534,19 +534,29 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun registerViewProvider(config: ReadableMap, promise: Promise) {
-        val types = config.getArray("componentTypes")
-        val componentName = config.getString("reactComponentName")
+        val mapData = config.getMap("componentMap")
 
-        if (types == null || types.size() == 0 || componentName.isNullOrEmpty()) {
-            promise.reject("INVALID_CONFIG", "Must provide componentTypes array and reactComponentName")
+        if (mapData == null) {
+            promise.reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary")
             return
         }
 
-        val typeList = (0 until types.size()).mapNotNull { types.getString(it) }
-        bridgeViewProvider.register(typeList, componentName)
+        val componentMap = mutableMapOf<String, String>()
+        val iterator = mapData.keySetIterator()
+        while (iterator.hasNextKey()) {
+            val key = iterator.nextKey()
+            mapData.getString(key)?.let { componentMap[key] = it }
+        }
+
+        if (componentMap.isEmpty()) {
+            promise.reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary")
+            return
+        }
+
+        bridgeViewProvider.register(componentMap)
         promise.resolve(Arguments.createMap().apply {
             putBoolean("success", true)
-            putArray("registeredTypes", Arguments.fromList(typeList))
+            putInt("registeredCount", componentMap.size)
         })
     }
 
