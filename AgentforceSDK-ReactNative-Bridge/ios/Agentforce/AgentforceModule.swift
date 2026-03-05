@@ -760,14 +760,13 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         guard let dict = config as? [String: Any],
-              let types = dict["componentTypes"] as? [String],
-              let componentName = dict["reactComponentName"] as? String,
-              !types.isEmpty, !componentName.isEmpty else {
-            reject("INVALID_CONFIG", "Must provide componentTypes array and reactComponentName", nil)
+              let componentMap = dict["componentMap"] as? [String: String],
+              !componentMap.isEmpty else {
+            reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary", nil)
             return
         }
-        bridgeViewProvider.register(componentTypes: types, reactComponentName: componentName)
-        resolve(["success": true, "registeredTypes": types])
+        bridgeViewProvider.register(componentMap: componentMap)
+        resolve(["success": true, "registeredTypes": Array(componentMap.keys)])
     }
 
     /// Clear the custom view provider registration.
