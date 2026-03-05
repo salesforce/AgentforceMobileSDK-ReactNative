@@ -119,8 +119,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       const flags = await AgentforceService.getFeatureFlags();
       if (flags.enableCustomViewProvider) {
         await AgentforceService.setViewProviderDelegate({
-          componentTypes: ['copilot/richText', 'copilot/markdown'],
-          reactComponentName: 'CustomAgentforceView',
+          componentMap: {
+            'copilot/richText': 'CustomAgentforceView',
+            'copilot/markdown': 'CustomAgentforceView',
+          },
         });
       }
     } catch (error) {
