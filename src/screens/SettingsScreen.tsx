@@ -55,6 +55,7 @@ const FLAG_KEYS: (keyof FeatureFlags)[] = [
   'enableMultiModalInput',
   'enablePDFUpload',
   'enableVoice',
+  'enableCustomViewProvider',
 ];
 
 const FLAG_LABELS: Record<keyof FeatureFlags, string> = {
@@ -62,6 +63,7 @@ const FLAG_LABELS: Record<keyof FeatureFlags, string> = {
   enableMultiModalInput: 'Multi-modal input',
   enablePDFUpload: 'PDF upload',
   enableVoice: 'Voice',
+  enableCustomViewProvider: 'Custom View Provider',
 };
 
 const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
@@ -69,6 +71,7 @@ const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
   enableMultiModalInput: 'Enable image/file input in addition to text',
   enablePDFUpload: 'Allow PDF file uploads',
   enableVoice: 'Enable immersive voice',
+  enableCustomViewProvider: 'Override SDK output views with React Native components',
 };
 
 interface SettingsScreenProps {
@@ -289,6 +292,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         enableMultiModalInput: false,
         enablePDFUpload: false,
         enableVoice: false,
+        enableCustomViewProvider: false,
       });
     }
   };
