@@ -27,6 +27,10 @@ import {
 
 import { LoggerDelegate, LogLevel } from '../types/LoggerDelegate';
 import { NavigationDelegate, NavigationRequest } from '../types/NavigationDelegate';
+import type {
+  CopilotAdditionalContext,
+  CopilotContextVariable,
+} from '../types/CopilotContext';
 
 const { AgentforceModule } = NativeModules;
 
@@ -34,6 +38,7 @@ const { AgentforceModule } = NativeModules;
 export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags };
 export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
+export type { CopilotAdditionalContext, CopilotContextVariable };
 
 /**
  * Native module event names
@@ -669,6 +674,70 @@ class AgentforceService {
     } catch (error) {
       console.error('[AgentforceService] Failed to close conversation:', error);
       return false;
+    }
+  }
+
+  /**
+   * Set additional context for the conversation.
+   *
+   * Provides contextual information to the Agentforce conversation,
+   * such as user ID, account ID, case number, or any other relevant data.
+   * This helps the agent provide more personalized and relevant responses.
+   *
+   * **Must be called after launching a conversation.**
+   *
+   * @param context - The additional context with variables to set
+   * @returns Promise<boolean> indicating success
+   * @throws Error if no conversation exists or context is invalid
+   *
+   * @example
+   * ```typescript
+   * await AgentforceService.launchConversation();
+   *
+   * await AgentforceService.setAdditionalContext({
+   *   variables: [
+   *     { name: 'userId', type: 'Text', value: '005xx0000001234' },
+   *     { name: 'accountId', type: 'Text', value: '001xx0000001234' },
+   *     { name: 'priority', type: 'Text', value: 'high' }
+   *   ]
+   * });
+   * ```
+   */
+  async setAdditionalContext(context: CopilotAdditionalContext): Promise<boolean> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      console.warn('Agentforce only supported on Android and iOS');
+      return false;
+    }
+
+    if (!AgentforceModule) {
+      console.error('AgentforceModule native module not found');
+      return false;
+    }
+
+    // Validate context structure
+    if (!context || !Array.isArray(context.variables)) {
+      throw new Error('Invalid context: must have "variables" array');
+    }
+
+    // Validate each variable
+    for (const variable of context.variables) {
+      if (!variable.name || typeof variable.name !== 'string') {
+        throw new Error('Invalid context variable: missing or invalid "name"');
+      }
+      if (!variable.type || typeof variable.type !== 'string') {
+        throw new Error('Invalid context variable: missing or invalid "type"');
+      }
+    }
+
+    try {
+      const result = await AgentforceModule.setAdditionalContext(context);
+      console.log(
+        `[AgentforceService] Additional context set: ${context.variables.length} variables`
+      );
+      return result?.success ?? true;
+    } catch (error) {
+      console.error('[AgentforceService] Failed to set additional context:', error);
+      throw error;
     }
   }
 
