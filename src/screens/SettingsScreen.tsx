@@ -854,6 +854,11 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 16,
   },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 24,
+  },
 });
 
 export default SettingsScreen;
