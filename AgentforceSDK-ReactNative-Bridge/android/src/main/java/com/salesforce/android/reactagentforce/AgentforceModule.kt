@@ -600,18 +600,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 return
             }
 
-            // Check if conversation exists
-            val conversation = AgentforceClientHolder.currentConversation
-            if (conversation == null) {
-                Log.w(TAG, "No active conversation for setAdditionalContext")
-                promise.reject(
-                    "NO_CONVERSATION",
-                    "No active conversation. Launch conversation first, then set context."
-                )
-                return
-            }
-
-            // Convert to CopilotContextVariable list
+            // Convert to CopilotContextVariable list (do this synchronously)
             val contextVariables = mutableListOf<CopilotContextVariable>()
             for (i in 0 until variablesArray.size()) {
                 val varMap = variablesArray.getMap(i)
@@ -661,9 +650,20 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             // Create CopilotAdditionalContext
             val additionalContext = CopilotAdditionalContext(variables = contextVariables)
 
-            // Apply context to conversation (async)
+            // Apply context to conversation (async) - check conversation inside coroutine
             scope.launch {
                 try {
+                    // Re-check conversation inside coroutine to avoid race condition
+                    val conversation = AgentforceClientHolder.currentConversation
+                    if (conversation == null) {
+                        Log.w(TAG, "No active conversation for setAdditionalContext")
+                        promise.reject(
+                            "NO_CONVERSATION",
+                            "No active conversation. Launch conversation first, then set context."
+                        )
+                        return@launch
+                    }
+
                     conversation.setAdditionalContext(additionalContext)
                     Log.d(TAG, "✓ Additional context set: ${contextVariables.size} variables")
 

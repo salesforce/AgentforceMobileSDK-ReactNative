@@ -30,6 +30,7 @@ import { NavigationDelegate, NavigationRequest } from '../types/NavigationDelega
 import type {
   AgentforceAdditionalContext,
   AgentforceContextVariable,
+  AgentforceContextVariableType,
 } from '../types/AgentforceContext';
 
 const { AgentforceModule } = NativeModules;
@@ -47,6 +48,23 @@ const EVENTS = {
   LOG_MESSAGE: 'onLogMessage',
   NAVIGATION_REQUEST: 'onNavigationRequest',
 } as const;
+
+/**
+ * Valid context variable types for runtime validation
+ */
+const VALID_CONTEXT_TYPES: Set<AgentforceContextVariableType> = new Set([
+  'Text',
+  'Number',
+  'Boolean',
+  'Date',
+  'DateTime',
+  'Json',
+  'List',
+  'Money',
+  'Object',
+  'Ref',
+  'Variable',
+]);
 
 /**
  * Service class for interacting with native Agentforce SDK.
@@ -720,12 +738,20 @@ class AgentforceService {
     }
 
     // Validate each variable
-    for (const variable of context.variables) {
+    for (let i = 0; i < context.variables.length; i++) {
+      const variable = context.variables[i];
       if (!variable.name || typeof variable.name !== 'string') {
-        throw new Error('Invalid context variable: missing or invalid "name"');
+        throw new Error(`Invalid context variable at index ${i}: missing or invalid "name"`);
       }
       if (!variable.type || typeof variable.type !== 'string') {
-        throw new Error('Invalid context variable: missing or invalid "type"');
+        throw new Error(`Invalid context variable at index ${i}: missing or invalid "type"`);
+      }
+      // Validate type against known types
+      if (!VALID_CONTEXT_TYPES.has(variable.type as AgentforceContextVariableType)) {
+        throw new Error(
+          `Invalid context variable at index ${i}: unknown type "${variable.type}". ` +
+            `Valid types: ${Array.from(VALID_CONTEXT_TYPES).join(', ')}`
+        );
       }
     }
 
