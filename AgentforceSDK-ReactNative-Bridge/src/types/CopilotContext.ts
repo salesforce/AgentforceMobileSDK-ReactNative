@@ -4,7 +4,7 @@
  * Android: Use these exact strings (case-sensitive)
  * iOS: Type is just a label; value type is determined by the actual value
  */
-export type CopilotContextVariableType =
+export type AgentforceContextVariableType =
   | 'Text'
   | 'Number'
   | 'Boolean'
@@ -30,7 +30,7 @@ export type CopilotContextVariableType =
  * - Object: object/map value
  * - List: array value
  */
-export interface CopilotContextVariable {
+export interface AgentforceContextVariable {
   /** Variable name/key */
   name: string;
 
@@ -38,13 +38,13 @@ export interface CopilotContextVariable {
    * Variable type (Android SDK type name)
    * Use: 'Text', 'Number', 'Boolean', 'Date', 'DateTime', 'Object', 'List', etc.
    */
-  type: string;
+  type: AgentforceContextVariableType;
 
   /** Optional description (Android only, ignored on iOS) */
   description?: string;
 
   /** Variable value (type must match the 'type' field) */
-  value?: any;
+  value?: string | number | boolean | Record<string, unknown> | unknown[] | null;
 }
 
 /**
@@ -52,7 +52,7 @@ export interface CopilotContextVariable {
  *
  * @example
  * ```typescript
- * const context: CopilotAdditionalContext = {
+ * const context: AgentforceAdditionalContext = {
  *   variables: [
  *     { name: 'userId', type: 'Text', value: '005xx0000001234' },
  *     { name: 'accountId', type: 'Text', value: '001xx0000001234' },
@@ -67,7 +67,7 @@ export interface CopilotContextVariable {
  * await AgentforceService.setAdditionalContext(context);
  * ```
  */
-export interface CopilotAdditionalContext {
+export interface AgentforceAdditionalContext {
   /** Array of context variables */
-  variables: CopilotContextVariable[];
+  variables: AgentforceContextVariable[];
 }

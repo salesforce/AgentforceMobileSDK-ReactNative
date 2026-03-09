@@ -74,8 +74,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     override fun getName(): String = MODULE_NAME
 
-    // MARK: - Unified Configuration Method
-    
+    // region Unified Configuration Method
+
     /**
      * Configure the SDK with either Service or Employee agent settings.
      * Expects a map with 'type' field set to 'service' or 'employee'.
@@ -105,8 +105,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             else -> promise.reject("INVALID_CONFIG", "Invalid type '$type'. Must be 'service' or 'employee'")
         }
     }
+    // endregion
 
-    // MARK: - Service Agent Configuration
+    // region Service Agent Configuration
 
     private fun configureServiceAgent(config: ReadableMap, promise: Promise) {
         val serviceConfig = ServiceAgentModeConfig.fromReadableMap(config)
@@ -194,8 +195,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             }
         }
     }
+    // endregion
 
-    // MARK: - Employee Agent Configuration
+    // region Employee Agent Configuration
 
     private fun configureEmployeeAgent(config: ReadableMap, promise: Promise) {
         val employeeConfig = EmployeeAgentModeConfig.fromReadableMap(config)
@@ -271,8 +273,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             }
         }
     }
+    // endregion
 
-    // MARK: - Legacy Configuration (Backward Compatibility)
+    // region Legacy Configuration (Backward Compatibility)
 
     private fun configureLegacyServiceAgent(
         serviceApiURL: String,
@@ -288,11 +291,12 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putString("organizationId", organizationId)
             putString("esDeveloperName", esDeveloperName)
         }
-        
+
         configureServiceAgent(config, promise)
     }
+    // endregion
 
-    // MARK: - Conversation Methods
+    // region Conversation Methods
 
     /**
      * Launch the Agentforce conversation UI - works for both Service and Employee agents
@@ -375,8 +379,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putBoolean("success", true)
         })
     }
+    // endregion
 
-    // MARK: - Configuration Query Methods
+    // region Configuration Query Methods
 
     @ReactMethod
     fun isConfigured(promise: Promise) {
@@ -424,7 +429,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun setEmployeeAgentId(agentId: String, promise: Promise) {
         val oldAgentId = employeePrefs.getString(KEY_EMPLOYEE_AGENT_ID, "") ?: ""
-        val newAgentId = agentId?.trim() ?: ""
+        val newAgentId = agentId.trim()
 
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, newAgentId).apply()
 
@@ -528,8 +533,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun isInitialized(promise: Promise) {
         promise.resolve(AgentforceClientHolder.isConfigured)
     }
+    // endregion
 
-    // MARK: - Log Forwarding
+    // region Log Forwarding
 
     @ReactMethod
     fun enableLogForwarding(enabled: Boolean, promise: Promise) {
@@ -537,8 +543,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         Log.d(TAG, "Log forwarding ${if (enabled) "enabled" else "disabled"}")
         promise.resolve(true)
     }
+    // endregion
 
-    // MARK: - Navigation Forwarding
+    // region Navigation Forwarding
 
     @ReactMethod
     fun enableNavigationForwarding(enabled: Boolean, promise: Promise) {
@@ -546,8 +553,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         Log.d(TAG, "Navigation forwarding ${if (enabled) "enabled" else "disabled"}")
         promise.resolve(true)
     }
+    // endregion
 
-    // MARK: - Cleanup
+    // region Cleanup
 
     @ReactMethod
     fun closeConversation(promise: Promise) {
@@ -569,8 +577,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putBoolean("success", true)
         })
     }
+    // endregion
 
-    // MARK: - Additional Context
+    // region Additional Context
 
     /**
      * Set additional context for the current conversation.
@@ -672,8 +681,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             promise.reject("CONTEXT_ERROR", e.message, e)
         }
     }
+    // endregion
 
-    // MARK: - Event Emitter Support
+    // region Event Emitter Support
 
     @ReactMethod
     fun addListener(eventName: String) {
@@ -684,8 +694,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun removeListeners(count: Int) {
         // Required for RN event emitter
     }
+    // endregion
 
-    // MARK: - Helper Methods
+    // region Helper Methods
 
     private fun ensureViewModel() {
         if (viewModel == null) {
@@ -706,4 +717,5 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         scope.cancel()
         viewModel = null
     }
+    // endregion
 }

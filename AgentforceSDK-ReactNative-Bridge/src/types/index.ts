@@ -26,7 +26,7 @@ export { NavigationDelegate, NavigationRequest } from './NavigationDelegate';
 
 // Additional context types
 export {
-  CopilotAdditionalContext,
-  CopilotContextVariable,
-  CopilotContextVariableType,
+  AgentforceAdditionalContext,
+  AgentforceContextVariable,
+  AgentforceContextVariableType,
 } from './CopilotContext';

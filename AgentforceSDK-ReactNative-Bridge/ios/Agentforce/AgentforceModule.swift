@@ -787,6 +787,37 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Additional Context
 
+    /// Helper function to recursively convert Any value to JSEncodableValue
+    private func convertToJSEncodableValue(_ rawValue: Any) -> JSEncodableValue? {
+        if let stringValue = rawValue as? String {
+            return .string(stringValue)
+        } else if let numberValue = rawValue as? NSNumber {
+            // Check if it's a boolean first (NSNumber can represent booleans)
+            if CFBooleanGetTypeID() == CFGetTypeID(numberValue) {
+                return .boolean(numberValue.boolValue)
+            } else {
+                return .number(numberValue.doubleValue)
+            }
+        } else if let arrayValue = rawValue as? [Any] {
+            // Recursively convert array elements
+            let encodableArray = arrayValue.compactMap { element in
+                convertToJSEncodableValue(element)
+            }
+            return .array(encodableArray)
+        } else if let dictValue = rawValue as? [String: Any] {
+            // Recursively convert dictionary values
+            var encodableDict: [String: JSEncodableValue] = [:]
+            for (key, val) in dictValue {
+                if let converted = convertToJSEncodableValue(val) {
+                    encodableDict[key] = converted
+                }
+            }
+            return .object(encodableDict)
+        } else {
+            return nil
+        }
+    }
+
     /// Set additional context for the current conversation.
     /// Must be called after launching a conversation.
     ///
@@ -830,58 +861,19 @@ class AgentforceModule: RCTEventEmitter {
                         return
                     }
 
-                    // Convert value to JSEncodableValue enum
+                    // Convert value to JSEncodableValue enum using recursive helper
                     let value: JSEncodableValue?
                     if let rawValue = varDict["value"] {
-                        if let stringValue = rawValue as? String {
-                            value = .string(stringValue)
-                        } else if let numberValue = rawValue as? NSNumber {
-                            // Check if it's a boolean first (NSNumber can represent booleans)
-                            if CFBooleanGetTypeID() == CFGetTypeID(numberValue) {
-                                value = .boolean(numberValue.boolValue)
-                            } else {
-                                value = .number(numberValue.doubleValue)
-                            }
-                        } else if let boolValue = rawValue as? Bool {
-                            value = .boolean(boolValue)
-                        } else if let arrayValue = rawValue as? [Any] {
-                            // Recursively convert array elements
-                            let encodableArray = arrayValue.compactMap { element -> JSEncodableValue? in
-                                if let str = element as? String { return .string(str) }
-                                if let num = element as? NSNumber {
-                                    if CFBooleanGetTypeID() == CFGetTypeID(num) {
-                                        return .boolean(num.boolValue)
-                                    }
-                                    return .number(num.doubleValue)
-                                }
-                                if let bool = element as? Bool { return .boolean(bool) }
-                                return nil
-                            }
-                            value = .array(encodableArray)
-                        } else if let dictValue = rawValue as? [String: Any] {
-                            // Recursively convert dictionary values
-                            var encodableDict: [String: JSEncodableValue] = [:]
-                            for (key, val) in dictValue {
-                                if let str = val as? String { encodableDict[key] = .string(str) }
-                                else if let num = val as? NSNumber {
-                                    if CFBooleanGetTypeID() == CFGetTypeID(num) {
-                                        encodableDict[key] = .boolean(num.boolValue)
-                                    } else {
-                                        encodableDict[key] = .number(num.doubleValue)
-                                    }
-                                }
-                                else if let bool = val as? Bool { encodableDict[key] = .boolean(bool) }
-                            }
-                            value = .object(encodableDict)
-                        } else {
+                        value = convertToJSEncodableValue(rawValue)
+                        if value == nil {
                             print("[AgentforceModule] ⚠️ Unsupported value type at index \(index)")
-                            value = nil
                         }
                     } else {
                         value = nil
                     }
 
                     // Create AgentforceVariable
+                    // Note: iOS AgentforceVariable doesn't support description field (Android only)
                     let variable = AgentforceVariable(
                         name: name,
                         type: type,

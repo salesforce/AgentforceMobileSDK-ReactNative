@@ -28,8 +28,8 @@ import {
 import { LoggerDelegate, LogLevel } from '../types/LoggerDelegate';
 import { NavigationDelegate, NavigationRequest } from '../types/NavigationDelegate';
 import type {
-  CopilotAdditionalContext,
-  CopilotContextVariable,
+  AgentforceAdditionalContext,
+  AgentforceContextVariable,
 } from '../types/CopilotContext';
 
 const { AgentforceModule } = NativeModules;
@@ -38,7 +38,7 @@ const { AgentforceModule } = NativeModules;
 export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags };
 export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
-export type { CopilotAdditionalContext, CopilotContextVariable };
+export type { AgentforceAdditionalContext, AgentforceContextVariable };
 
 /**
  * Native module event names
@@ -703,7 +703,7 @@ class AgentforceService {
    * });
    * ```
    */
-  async setAdditionalContext(context: CopilotAdditionalContext): Promise<boolean> {
+  async setAdditionalContext(context: AgentforceAdditionalContext): Promise<boolean> {
     if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
       console.warn('Agentforce only supported on Android and iOS');
       return false;
