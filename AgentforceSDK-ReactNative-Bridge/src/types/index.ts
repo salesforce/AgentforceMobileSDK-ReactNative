@@ -29,4 +29,4 @@ export {
   AgentforceAdditionalContext,
   AgentforceContextVariable,
   AgentforceContextVariableType,
-} from './CopilotContext';
+} from './AgentforceContext';

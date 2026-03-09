@@ -89,7 +89,7 @@ await AgentforceService.setAdditionalContext({
 - `Json`, `Money`, `Ref`, `Variable` - Additional Android SDK types
 
 **Platform notes:**
-- Android: Uses `CopilotContextVariable` with case-sensitive type names
+- Android: Uses `AgentforceContextVariable` with case-sensitive type names
 - iOS: Uses `AgentforceVariable` with `JSEncodableValue` enum; type is just a label
 - Context persists for the current conversation session
 

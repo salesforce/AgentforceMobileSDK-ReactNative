@@ -30,7 +30,7 @@ import { NavigationDelegate, NavigationRequest } from '../types/NavigationDelega
 import type {
   AgentforceAdditionalContext,
   AgentforceContextVariable,
-} from '../types/CopilotContext';
+} from '../types/AgentforceContext';
 
 const { AgentforceModule } = NativeModules;
 

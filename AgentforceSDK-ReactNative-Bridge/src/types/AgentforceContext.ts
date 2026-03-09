@@ -20,7 +20,7 @@ export type AgentforceContextVariableType =
 /**
  * Represents a single context variable for Agentforce.
  *
- * Compatible with both iOS (AgentforceVariable) and Android (CopilotContextVariable).
+ * Compatible with both iOS (AgentforceVariable) and Android (AgentforceContextVariable).
  *
  * **Type Mapping:**
  * - Text: string value
