@@ -17,7 +17,22 @@ export {
 } from './services/EmployeeAgentAuth';
 export type { AuthCredentials } from './services/EmployeeAgentAuth';
 
-export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags, LegacyServiceAgentConfig, ConfigurationResult, ConfigurationInfo, LoggerDelegate, LogLevel, NavigationDelegate, NavigationRequest, AgentforceAdditionalContext, AgentforceContextVariable, AgentforceContextVariableType } from './types';
+export type {
+  ServiceAgentConfig,
+  EmployeeAgentConfig,
+  AgentConfig,
+  FeatureFlags,
+  LegacyServiceAgentConfig,
+  ConfigurationResult,
+  ConfigurationInfo,
+  LoggerDelegate,
+  LogLevel,
+  NavigationDelegate,
+  NavigationRequest,
+  AgentforceAdditionalContext,
+  AgentforceContextVariable,
+  AgentforceContextVariableType,
+} from './types';
 export { isServiceAgentConfig, isEmployeeAgentConfig, isLegacyConfig } from './types';
 
 export {

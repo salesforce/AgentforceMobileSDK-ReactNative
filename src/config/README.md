@@ -5,23 +5,26 @@ This directory contains configuration that controls which agent UI elements are 
 ## Files
 
 ### AppConfig.ts
+
 Main configuration file that reads `APP_MODE` from `AppConfig.generated.ts` and exports UI feature flags.
 
 ### AppConfig.generated.ts
+
 Auto-generated file created by `scripts/generate-app-config.js`. Contains the `APP_MODE` value for the current build target.
 
 ### README.md
+
 This file.
 
 ## APP_MODE
 
 Controls which agent UI elements are shown:
 
-| Mode | Service Agent UI | Employee Agent UI |
-|------|------------------|-------------------|
-| `'service'` | ✅ Shown | ❌ Hidden |
-| `'employee'` | ❌ Hidden | ✅ Shown |
-| `'all'` | ✅ Shown | ✅ Shown (default) |
+| Mode         | Service Agent UI | Employee Agent UI  |
+| ------------ | ---------------- | ------------------ |
+| `'service'`  | ✅ Shown         | ❌ Hidden          |
+| `'employee'` | ❌ Hidden        | ✅ Shown           |
+| `'all'`      | ✅ Shown         | ✅ Shown (default) |
 
 **Note**: Feature Flags UI tab is always shown in all modes.
 

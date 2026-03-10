@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+ios/build/
+android/build/
+android/.gradle/
+*.log
+
+# Native files
+ios/Pods/
+ios/*.xcworkspace/
+ios/*.xcodeproj/
+android/.idea/
+android/app/build/
+
+# Generated files
+*.generated.ts
+*.generated.js
+
+# Package files
+*.tgz
+
+# Misc
+.DS_Store
+coverage/
+.idea/
+*.iml
+.vscode/
+.bundle/
+vendor/
+
+# Bootconfig files (may contain sensitive data)
+ios/*/bootconfig.plist
+android/app/src/*/res/values/bootconfig.xml

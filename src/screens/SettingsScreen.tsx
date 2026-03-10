@@ -1,6 +1,6 @@
 /*
  Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
- 
+
  Redistribution and use of this software in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
  * Redistributions of source code must retain the above copyright notice, this list of conditions
@@ -11,7 +11,7 @@
  * Neither the name of salesforce.com, inc. nor the names of its contributors may be used to
  endorse or promote products derived from this software without specific prior written
  permission of salesforce.com, inc.
- 
+
  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
  IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
  FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -42,8 +42,6 @@ import {
   hasEmployeeAgentSession,
   loginForEmployeeAgent,
   logoutEmployeeAgent,
-  getEmployeeAgentCredentials,
-  refreshEmployeeAgentCredentials,
 } from 'react-native-agentforce';
 import type { FeatureFlags } from 'react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
@@ -76,17 +74,14 @@ interface SettingsScreenProps {
   route?: { params?: { tab?: TabType } };
 }
 
-const SettingsScreen: React.FC<SettingsScreenProps> = ({
-  navigation,
-  route,
-}) => {
+const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) => {
   const [activeTab, setActiveTab] = useState<TabType>(
     route?.params?.tab ??
       (UI_FEATURES.SHOW_SERVICE_AGENT
         ? 'service'
         : UI_FEATURES.SHOW_EMPLOYEE_AGENT
         ? 'employee'
-        : 'features')
+        : 'features'),
   );
 
   const [serviceApiURL, setServiceApiURL] = useState('');
@@ -172,7 +167,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       return false;
     }
     try {
-      new URL(serviceApiURL);
+      void new URL(serviceApiURL); // Validate URL format
     } catch {
       Alert.alert('Validation Error', 'Please enter a valid URL');
       return false;
@@ -181,28 +176,28 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   const handleSaveServiceConfig = async () => {
-    if (!validateServiceInputs()) return;
+    if (!validateServiceInputs()) {
+      return;
+    }
     setLoading(true);
     try {
       // Get current feature flags to preserve user settings
-      const featureFlags = await AgentforceService.getFeatureFlags();
+      const currentFlags = await AgentforceService.getFeatureFlags();
 
       await AgentforceService.configure({
         type: 'service',
         serviceApiURL: serviceApiURL.trim(),
         organizationId: organizationId.trim(),
         esDeveloperName: esDeveloperName.trim(),
-        featureFlags,
+        featureFlags: currentFlags,
       });
-      Alert.alert(
-        'Success',
-        'Service Agent configured successfully!',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      Alert.alert('Success', 'Service Agent configured successfully!', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
     } catch (error) {
       Alert.alert(
         'Configuration Failed',
-        'Failed to configure Service Agent. Please check your settings.'
+        'Failed to configure Service Agent. Please check your settings.',
       );
       console.error('Configuration error:', error);
     } finally {
@@ -226,7 +221,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   const handleLoginForEmployeeAgent = async () => {
-    if (!authSupported) return;
+    if (!authSupported) {
+      return;
+    }
     setLoading(true);
     try {
       const creds = await loginForEmployeeAgent();
@@ -234,7 +231,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       await AgentforceService.setEmployeeAgentId(agentIdToUse);
 
       // Get current feature flags to preserve user settings
-      const featureFlags = await AgentforceService.getFeatureFlags();
+      const currentFlags = await AgentforceService.getFeatureFlags();
 
       await AgentforceService.configure({
         type: 'employee',
@@ -243,25 +240,19 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         userId: creds.userId,
         agentId: agentIdToUse || undefined,
         accessToken: creds.accessToken,
-        featureFlags,
+        featureFlags: currentFlags,
       });
       setEmployeeLoggedIn(true);
       Alert.alert(
         'Success',
         'You are signed in. You can launch Employee Agent from the Home screen.',
-        [{ text: 'OK' }]
+        [{ text: 'OK' }],
       );
     } catch (error: any) {
-      if (
-        error?.message?.includes('cancel') ||
-        error?.code === 'USER_CANCEL'
-      ) {
+      if (error?.message?.includes('cancel') || error?.code === 'USER_CANCEL') {
         return;
       }
-      Alert.alert(
-        'Login Failed',
-        error?.message || 'Could not complete sign-in.'
-      );
+      Alert.alert('Login Failed', error?.message || 'Could not complete sign-in.');
       console.error('Login error:', error);
     } finally {
       setLoading(false);
@@ -293,11 +284,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
-  const handleToggleFeatureFlag = async (
-    key: keyof FeatureFlags,
-    value: boolean
-  ) => {
-    if (featureFlags == null) return;
+  const handleToggleFeatureFlag = async (key: keyof FeatureFlags, value: boolean) => {
+    if (featureFlags == null) {
+      return;
+    }
     const next = { ...featureFlags, [key]: value };
     setFeatureFlags(next);
     setSavingFlags(true);
@@ -311,55 +301,30 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
-
   const renderTabs = () => (
     <View style={styles.tabContainer}>
       {UI_FEATURES.SHOW_SERVICE_AGENT && (
         <TouchableOpacity
           style={[styles.tab, activeTab === 'service' && styles.activeTab]}
-          onPress={() => setActiveTab('service')}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'service' && styles.activeTabText,
-            ]}
-          >
+          onPress={() => setActiveTab('service')}>
+          <Text style={[styles.tabText, activeTab === 'service' && styles.activeTabText]}>
             Service
           </Text>
         </TouchableOpacity>
       )}
       {UI_FEATURES.SHOW_EMPLOYEE_AGENT && (
         <TouchableOpacity
-          style={[
-            styles.tab,
-            activeTab === 'employee' && styles.activeTabEmployee,
-          ]}
-          onPress={() => setActiveTab('employee')}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'employee' && styles.activeTabTextEmployee,
-            ]}
-          >
+          style={[styles.tab, activeTab === 'employee' && styles.activeTabEmployee]}
+          onPress={() => setActiveTab('employee')}>
+          <Text style={[styles.tabText, activeTab === 'employee' && styles.activeTabTextEmployee]}>
             Employee
           </Text>
         </TouchableOpacity>
       )}
       <TouchableOpacity
-        style={[
-          styles.tab,
-          activeTab === 'features' && styles.activeTabFeatures,
-        ]}
-        onPress={() => setActiveTab('features')}
-      >
-        <Text
-          style={[
-            styles.tabText,
-            activeTab === 'features' && styles.activeTabTextFeatures,
-          ]}
-        >
+        style={[styles.tab, activeTab === 'features' && styles.activeTabFeatures]}
+        onPress={() => setActiveTab('features')}>
+        <Text style={[styles.tabText, activeTab === 'features' && styles.activeTabTextFeatures]}>
           Flags
         </Text>
       </TouchableOpacity>
@@ -370,21 +335,17 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     <ScrollView
       style={styles.tabContent}
       contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
+      keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <Text style={styles.title}>Service Agent Configuration</Text>
         <Text style={styles.description}>
-          Configure your Salesforce Service Agent with the required
-          credentials.
+          Configure your Salesforce Service Agent with the required credentials.
         </Text>
       </View>
 
       {loadingConfig && (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>
-            Loading saved configuration...
-          </Text>
+          <Text style={styles.loadingText}>Loading saved configuration...</Text>
         </View>
       )}
 
@@ -406,9 +367,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </View>
         <View style={styles.fieldContainer}>
           <Text style={styles.label}>Organization ID</Text>
-          <Text style={styles.hint}>
-            Your 15 or 18 character Salesforce Org ID
-          </Text>
+          <Text style={styles.hint}>Your 15 or 18 character Salesforce Org ID</Text>
           <TextInput
             style={styles.input}
             value={organizationId}
@@ -422,9 +381,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </View>
         <View style={styles.fieldContainer}>
           <Text style={styles.label}>ES Developer Name</Text>
-          <Text style={styles.hint}>
-            The API name of your Einstein Service Agent
-          </Text>
+          <Text style={styles.hint}>The API name of your Einstein Service Agent</Text>
           <TextInput
             style={styles.input}
             value={esDeveloperName}
@@ -442,8 +399,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.buttonDisabled]}
           onPress={handleSaveServiceConfig}
-          disabled={loading}
-        >
+          disabled={loading}>
           <Text style={styles.saveButtonText}>
             {loading ? 'Configuring...' : 'Save Configuration'}
           </Text>
@@ -451,8 +407,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <TouchableOpacity
           style={[styles.clearButton, loading && styles.buttonDisabled]}
           onPress={handleClearServiceConfig}
-          disabled={loading}
-        >
+          disabled={loading}>
           <Text style={styles.clearButtonText}>Clear All</Text>
         </TouchableOpacity>
       </View>
@@ -463,25 +418,21 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     <ScrollView
       style={styles.tabContent}
       contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
+      keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <Text style={styles.title}>Employee Agent Configuration</Text>
         <Text style={styles.description}>
-          Sign in with Mobile SDK to use Employee Agent. Set Agent ID below, or
-          leave blank for multi-agent.
+          Sign in with Mobile SDK to use Employee Agent. Set Agent ID below, or leave blank for
+          multi-agent.
         </Text>
       </View>
 
       {!authSupported && (
         <View style={styles.authNotAvailableCard}>
-          <Text style={styles.authNotAvailableTitle}>
-            Auth flow required
-          </Text>
+          <Text style={styles.authNotAvailableTitle}>Auth flow required</Text>
           <Text style={styles.authNotAvailableText}>
-            To use Employee Agent, this app must have an auth source (e.g.
-            Salesforce Mobile SDK) configured. Add and configure an auth flow in
-            this build to enable sign-in and launch.
+            To use Employee Agent, this app must have an auth source (e.g. Salesforce Mobile SDK)
+            configured. Add and configure an auth flow in this build to enable sign-in and launch.
           </Text>
         </View>
       )}
@@ -495,35 +446,23 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 You can launch Employee Agent from the Home screen.
               </Text>
               <TouchableOpacity
-                style={[
-                  styles.logoutButton,
-                  loading && styles.buttonDisabled,
-                ]}
+                style={[styles.logoutButton, loading && styles.buttonDisabled]}
                 onPress={handleLogoutEmployeeAgent}
-                disabled={loading}
-              >
+                disabled={loading}>
                 <Text style={styles.logoutButtonText}>Log out</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <Text style={styles.loginCardTitle}>
-                Login to access the employee agent
-              </Text>
+              <Text style={styles.loginCardTitle}>Login to access the employee agent</Text>
               <Text style={styles.loginCardDescription}>
                 Sign in with your Salesforce account to use Employee Agent.
               </Text>
               <TouchableOpacity
-                style={[
-                  styles.loginButton,
-                  loading && styles.buttonDisabled,
-                ]}
+                style={[styles.loginButton, loading && styles.buttonDisabled]}
                 onPress={handleLoginForEmployeeAgent}
-                disabled={loading}
-              >
-                <Text style={styles.loginButtonText}>
-                  {loading ? 'Signing in...' : 'Sign in'}
-                </Text>
+                disabled={loading}>
+                <Text style={styles.loginButtonText}>{loading ? 'Signing in...' : 'Sign in'}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -534,8 +473,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <View style={[styles.formContainer, { marginBottom: 16 }]}>
           <Text style={styles.label}>Agent ID</Text>
           <Text style={styles.hint}>
-            Optional. Leave blank for multi-agent (SDK uses first available
-            agent from org). Changes apply when you next launch Employee Agent.
+            Optional. Leave blank for multi-agent (SDK uses first available agent from org). Changes
+            apply when you next launch Employee Agent.
           </Text>
           <TextInput
             style={styles.input}
@@ -546,9 +485,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             autoCapitalize="none"
             autoCorrect={false}
             editable={!loading}
-            onBlur={() =>
-              AgentforceService.setEmployeeAgentId(employeeAgentId.trim())
-            }
+            onBlur={() => AgentforceService.setEmployeeAgentId(employeeAgentId.trim())}
           />
         </View>
       )}
@@ -566,10 +503,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
 
     return (
-      <ScrollView
-        style={styles.tabContent}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView style={styles.tabContent} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.title}>Feature Flags</Text>
           <Text style={styles.description}>
@@ -582,18 +516,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           {FLAG_KEYS.map((key, index) => (
             <View
               key={key}
-              style={[
-                styles.flagRow,
-                index < FLAG_KEYS.length - 1 && styles.flagRowBorder,
-              ]}
-            >
+              style={[styles.flagRow, index < FLAG_KEYS.length - 1 && styles.flagRowBorder]}>
               <View style={styles.flagLabelBlock}>
                 <Text style={styles.label}>{FLAG_LABELS[key]}</Text>
                 <Text style={styles.hint}>{FLAG_HINTS[key]}</Text>
               </View>
               <Switch
                 value={featureFlags[key]}
-                onValueChange={(value) => handleToggleFeatureFlag(key, value)}
+                onValueChange={value => handleToggleFeatureFlag(key, value)}
                 trackColor={{ false: '#ced4da', true: '#28a745' }}
                 thumbColor="#ffffff"
                 disabled={savingFlags}
@@ -608,15 +538,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {renderTabs()}
-      {UI_FEATURES.SHOW_SERVICE_AGENT &&
-        activeTab === 'service' &&
-        renderServiceAgentTab()}
-      {UI_FEATURES.SHOW_EMPLOYEE_AGENT &&
-        activeTab === 'employee' &&
-        renderEmployeeAgentTab()}
+      {UI_FEATURES.SHOW_SERVICE_AGENT && activeTab === 'service' && renderServiceAgentTab()}
+      {UI_FEATURES.SHOW_EMPLOYEE_AGENT && activeTab === 'employee' && renderEmployeeAgentTab()}
       {activeTab === 'features' && renderFeatureFlagsTab()}
     </KeyboardAvoidingView>
   );

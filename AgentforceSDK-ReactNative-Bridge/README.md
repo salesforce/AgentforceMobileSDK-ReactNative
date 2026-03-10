@@ -56,6 +56,7 @@ Include the Salesforce Mobile SDK pods in your Podfile and perform **bootconfig*
 ### Core Methods
 
 **Configure and launch:**
+
 ```typescript
 import { AgentforceService } from ‘react-native-agentforce’;
 
@@ -80,6 +81,7 @@ await AgentforceService.setAdditionalContext({
 ```
 
 **Supported types:**
+
 - `Text` - String values
 - `Number` - Numeric values
 - `Boolean` - Boolean values
@@ -89,6 +91,7 @@ await AgentforceService.setAdditionalContext({
 - `Json`, `Money`, `Ref`, `Variable` - Additional Android SDK types
 
 **Platform notes:**
+
 - Android: Uses `AgentforceContextVariable` with case-sensitive type names
 - iOS: Uses `AgentforceVariable` with `JSEncodableValue` enum; type is just a label
 - Context persists for the current conversation session

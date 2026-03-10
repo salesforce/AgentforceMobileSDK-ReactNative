@@ -1,6 +1,6 @@
 /*
  Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
- 
+
  Redistribution and use of this software in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
  * Redistributions of source code must retain the above copyright notice, this list of conditions
@@ -11,7 +11,7 @@
  * Neither the name of salesforce.com, inc. nor the names of its contributors may be used to
  endorse or promote products derived from this software without specific prior written
  permission of salesforce.com, inc.
- 
+
  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
  IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
  FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -30,7 +30,6 @@ import {
   StyleSheet,
   Alert,
   Image,
-  Linking,
   Platform,
   ScrollView,
 } from 'react-native';
@@ -80,16 +79,10 @@ const agentforceNavigation: NavigationDelegate = {
 };
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const [isServiceAgentConfigured, setIsServiceAgentConfigured] =
-    useState(false);
-  const [isEmployeeAgentConfigured, setIsEmployeeAgentConfigured] =
-    useState(false);
-  const [isEmployeeAgentAuthAvailable, setIsEmployeeAgentAuthAvailable] =
-    useState(false);
+  const [isServiceAgentConfigured, setIsServiceAgentConfigured] = useState(false);
+  const [isEmployeeAgentConfigured, setIsEmployeeAgentConfigured] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-  const [activeMode, setActiveMode] = useState<
-    'none' | 'service' | 'employee'
-  >('none');
+  const [activeMode, setActiveMode] = useState<'none' | 'service' | 'employee'>('none');
 
   useEffect(() => {
     // Register logger delegate so SDK logs are forwarded to JS
@@ -124,11 +117,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       const authSupported = await isEmployeeAgentAuthSupported();
       const fileConfigValid = isEmployeeAgentConfigValid();
-      setIsEmployeeAgentAuthAvailable(authSupported || fileConfigValid);
 
-      const hasSession = authSupported
-        ? await hasEmployeeAgentSession()
-        : false;
+      const hasSession = authSupported ? await hasEmployeeAgentSession() : false;
       const employeeConfigured = hasSession || fileConfigValid;
       setIsEmployeeAgentConfigured(employeeConfigured);
 
@@ -147,17 +137,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const handleLaunchServiceAgent = async () => {
     if (!isServiceAgentConfigured) {
-      Alert.alert(
-        'Configuration Required',
-        'Please configure Service Agent settings first.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Configure',
-            onPress: () => navigation.navigate('Settings', { tab: 'service' }),
-          },
-        ]
-      );
+      Alert.alert('Configuration Required', 'Please configure Service Agent settings first.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Configure',
+          onPress: () => navigation.navigate('Settings', { tab: 'service' }),
+        },
+      ]);
       return;
     }
 
@@ -182,10 +168,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       await AgentforceService.launchConversation();
     } catch (error) {
-      Alert.alert(
-        'Error',
-        'Failed to launch Service Agent. Please check your configuration.'
-      );
+      Alert.alert('Error', 'Failed to launch Service Agent. Please check your configuration.');
       console.error('Launch error:', error);
     }
   };
@@ -201,7 +184,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             text: 'View Settings',
             onPress: () => navigation.navigate('Settings', { tab: 'employee' }),
           },
-        ]
+        ],
       );
       return;
     }
@@ -234,8 +217,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     } catch (error: any) {
       Alert.alert(
         'Error',
-        error?.message ||
-          'Failed to launch Employee Agent. Token may be expired.'
+        error?.message || 'Failed to launch Employee Agent. Token may be expired.',
       );
       console.error('Launch error:', error);
     }
@@ -246,13 +228,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+        showsVerticalScrollIndicator={false}>
         <View style={styles.logoContainer}>
-          <Image
-            source={require('../../agentforce-icon.png')}
-            style={styles.logo}
-          />
+          <Image source={require('../../agentforce-icon.png')} style={styles.logo} />
         </View>
 
         <Text style={styles.title}>Agentforce</Text>
@@ -266,9 +244,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         {isChecking && (
           <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>
-              Checking configurations...
-            </Text>
+            <Text style={styles.loadingText}>Checking configurations...</Text>
           </View>
         )}
 
@@ -282,8 +258,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 activeMode === 'service' && styles.activeButton,
               ]}
               onPress={handleLaunchServiceAgent}
-              disabled={isChecking}
-            >
+              disabled={isChecking}>
               <View style={styles.launchButtonContent}>
                 <Text style={styles.launchButtonTitle}>Service Agent</Text>
                 <Text style={styles.launchButtonSubtitle}>
@@ -294,9 +269,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     : 'Not configured'}
                 </Text>
               </View>
-              {isServiceAgentConfigured && (
-                <Text style={styles.launchButtonArrow}>›</Text>
-              )}
+              {isServiceAgentConfigured && <Text style={styles.launchButtonArrow}>›</Text>}
             </TouchableOpacity>
           )}
 
@@ -309,8 +282,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 activeMode === 'employee' && styles.activeButtonEmployee,
               ]}
               onPress={handleLaunchEmployeeAgent}
-              disabled={isChecking}
-            >
+              disabled={isChecking}>
               <View style={styles.launchButtonContent}>
                 <Text style={styles.launchButtonTitle}>Employee Agent</Text>
                 <Text style={styles.launchButtonSubtitle}>
@@ -321,17 +293,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     : 'Sign in in Settings to configure'}
                 </Text>
               </View>
-              {isEmployeeAgentConfigured && (
-                <Text style={styles.launchButtonArrow}>›</Text>
-              )}
+              {isEmployeeAgentConfigured && <Text style={styles.launchButtonArrow}>›</Text>}
             </TouchableOpacity>
           )}
         </View>
 
         <TouchableOpacity
           style={styles.settingsButton}
-          onPress={() => navigation.navigate('Settings')}
-        >
+          onPress={() => navigation.navigate('Settings')}>
           <Text style={styles.settingsButtonText}>Settings</Text>
         </TouchableOpacity>
 

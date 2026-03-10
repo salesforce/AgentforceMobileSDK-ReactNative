@@ -25,7 +25,9 @@ interface EmployeeAgentAuthBridgeSpec {
 }
 
 const bridgeName = 'EmployeeAgentAuthBridge';
-const EmployeeAgentAuthBridge = NativeModules[bridgeName] as EmployeeAgentAuthBridgeSpec | undefined;
+const EmployeeAgentAuthBridge = NativeModules[bridgeName] as
+  | EmployeeAgentAuthBridgeSpec
+  | undefined;
 
 /**
  * Whether this build supports Employee Agent via an auth flow (e.g. Mobile SDK).
@@ -50,7 +52,10 @@ export async function isEmployeeAgentAuthSupported(): Promise<boolean> {
  * Use to enable/disable the "Login to access the employee agent" and "Launch" actions.
  */
 export async function isEmployeeAgentAuthReady(): Promise<boolean> {
-  if (!EmployeeAgentAuthBridge || typeof EmployeeAgentAuthBridge.getAuthCredentials !== 'function') {
+  if (
+    !EmployeeAgentAuthBridge ||
+    typeof EmployeeAgentAuthBridge.getAuthCredentials !== 'function'
+  ) {
     return false;
   }
   try {
@@ -83,7 +88,10 @@ export async function loginForEmployeeAgent(): Promise<AuthCredentials> {
  * Get current auth credentials if logged in; null otherwise.
  */
 export async function getEmployeeAgentCredentials(): Promise<AuthCredentials | null> {
-  if (!EmployeeAgentAuthBridge || typeof EmployeeAgentAuthBridge.getAuthCredentials !== 'function') {
+  if (
+    !EmployeeAgentAuthBridge ||
+    typeof EmployeeAgentAuthBridge.getAuthCredentials !== 'function'
+  ) {
     return null;
   }
   try {
@@ -101,8 +109,13 @@ export async function getEmployeeAgentCredentials(): Promise<AuthCredentials | n
  * @throws if no session, no refresh token, or refresh fails
  */
 export async function refreshEmployeeAgentCredentials(): Promise<AuthCredentials> {
-  if (!EmployeeAgentAuthBridge || typeof EmployeeAgentAuthBridge.refreshAuthCredentials !== 'function') {
-    throw new Error('Employee Agent auth refresh is not available. Add Mobile SDK (WithMobileSDK).');
+  if (
+    !EmployeeAgentAuthBridge ||
+    typeof EmployeeAgentAuthBridge.refreshAuthCredentials !== 'function'
+  ) {
+    throw new Error(
+      'Employee Agent auth refresh is not available. Add Mobile SDK (WithMobileSDK).',
+    );
   }
   return EmployeeAgentAuthBridge.refreshAuthCredentials();
 }
