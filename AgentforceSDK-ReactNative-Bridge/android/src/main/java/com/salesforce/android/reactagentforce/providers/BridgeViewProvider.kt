@@ -19,6 +19,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.WritableMap
 import com.salesforce.android.agentforcesdk.components.models.AgentforceComponent
 import com.salesforce.android.agentforcesdk.components.models.AgentforceViewProvider
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Implements AgentforceViewProvider by delegating to a React Native component.
@@ -28,12 +29,17 @@ class BridgeViewProvider(
     private val reactContext: ReactApplicationContext
 ) : AgentforceViewProvider {
 
-    /** Maps component definition strings to their React Native component names */
-    private var componentMap: MutableMap<String, String> = mutableMapOf()
+    /**
+     * Maps component definition strings to their React Native component names.
+     * Thread-safe: `canHandle` may be called from the SDK rendering thread while
+     * `register`/`reset` are called from the JS thread.
+     */
+    private val componentMap: ConcurrentHashMap<String, String> = ConcurrentHashMap()
 
     /** Register a 1:1 mapping of component types to React component names. */
     fun register(componentMap: Map<String, String>) {
-        this.componentMap = componentMap.toMutableMap()
+        this.componentMap.clear()
+        this.componentMap.putAll(componentMap)
     }
 
     /** Clear all registrations */
@@ -44,7 +50,7 @@ class BridgeViewProvider(
     val isRegistered: Boolean
         get() = componentMap.isNotEmpty()
 
-    // MARK: - AgentforceViewProvider
+    // region AgentforceViewProvider
 
     override fun canHandle(definition: String): Boolean {
         return componentMap.containsKey(definition)
@@ -59,18 +65,11 @@ class BridgeViewProvider(
             factory = { context ->
                 ReactRootView(context).apply {
                     val reactApp = reactContext.applicationContext as? ReactApplication
-                    val reactHost = reactApp?.reactHost
-                    // Start the React surface with the per-type component name and props
-                    startReactApplication(
-                        reactHost?.currentReactContext?.catalystInstance?.let {
-                            // For modern RN, get the instance manager from the host
-                            (reactApp as? ReactApplication)?.reactNativeHost?.reactInstanceManager
-                        },
-                        moduleName,
-                        props
-                    )
+                    val instanceManager = reactApp?.reactNativeHost?.reactInstanceManager
+                    startReactApplication(instanceManager, moduleName, props)
                 }
-            }
+            },
+            onRelease = { view -> view.unmountReactApplication() }
         )
     }
 
@@ -81,9 +80,7 @@ class BridgeViewProvider(
             component.name?.let { putString("name", it) }
             putBundle("properties", mapToBundle(component.properties))
             if (component.subComponents.isNotEmpty()) {
-                val subArray = component.subComponents.mapIndexed { i, sub ->
-                    componentToBundle(sub)
-                }.toTypedArray()
+                val subArray = component.subComponents.map { componentToBundle(it) }.toTypedArray()
                 putParcelableArray("subComponents", subArray)
             }
         }
@@ -105,7 +102,9 @@ class BridgeViewProvider(
                         putBundle(key, mapToBundle(value as Map<String, Any>))
                     }
                     is List<*> -> {
-                        // Convert list to array of strings as a safe fallback
+                        // Coerces all elements to strings via toString(). Numeric/nested
+                        // type information is lost — acceptable for the current SDK contract
+                        // where list properties are display-only string sequences.
                         putStringArray(key, value.map { it?.toString() ?: "" }.toTypedArray())
                     }
                     else -> putString(key, value.toString())
@@ -113,4 +112,6 @@ class BridgeViewProvider(
             }
         }
     }
+
+    // endregion
 }
