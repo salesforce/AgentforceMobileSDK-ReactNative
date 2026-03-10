@@ -102,15 +102,40 @@ class BridgeViewProvider(
                         putBundle(key, mapToBundle(value as Map<String, Any>))
                     }
                     is List<*> -> {
-                        // Coerces all elements to strings via toString(). Numeric/nested
-                        // type information is lost — acceptable for the current SDK contract
-                        // where list properties are display-only string sequences.
-                        putStringArray(key, value.map { it?.toString() ?: "" }.toTypedArray())
+                        putParcelableArray(key, listToBundleArray(value))
                     }
                     else -> putString(key, value.toString())
                 }
             }
         }
+    }
+
+    /**
+     * Convert a heterogeneous list to an array of Bundles.
+     * Each element is wrapped in a Bundle with a "value" key for primitives,
+     * or inlined for Map elements, preserving type information across the bridge.
+     */
+    private fun listToBundleArray(list: List<*>): Array<Bundle> {
+        return list.map { item ->
+            when (item) {
+                is Map<*, *> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    mapToBundle(item as Map<String, Any>)
+                }
+                else -> Bundle().apply {
+                    when (item) {
+                        is String -> putString("value", item)
+                        is Int -> putInt("value", item)
+                        is Long -> putLong("value", item)
+                        is Double -> putDouble("value", item)
+                        is Float -> putFloat("value", item)
+                        is Boolean -> putBoolean("value", item)
+                        is List<*> -> putParcelableArray("value", listToBundleArray(item))
+                        else -> putString("value", item?.toString() ?: "")
+                    }
+                }
+            }
+        }.toTypedArray()
     }
 
     // endregion
