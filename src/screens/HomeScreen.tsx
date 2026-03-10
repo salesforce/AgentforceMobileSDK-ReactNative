@@ -96,11 +96,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     AgentforceService.setLoggerDelegate(agentforceLogger);
     // Register navigation delegate so SDK navigation requests are forwarded to JS
     AgentforceService.setNavigationDelegate(agentforceNavigation);
-    checkConfigurations();
+    // Register custom view provider if enabled, then check configurations.
+    // Sequential to avoid a race where configure() runs before registration completes.
+    const init = async () => {
+      await registerViewProviderIfEnabled();
+      checkConfigurations();
+    };
+    init();
 
     return () => {
       AgentforceService.clearLoggerDelegate();
       AgentforceService.clearNavigationDelegate();
+      AgentforceService.clearViewProviderDelegate();
     };
   }, []);
 
@@ -110,6 +117,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     });
     return unsubscribe;
   }, [navigation]);
+
+  const registerViewProviderIfEnabled = async () => {
+    try {
+      const flags = await AgentforceService.getFeatureFlags();
+      if (flags.enableCustomViewProvider) {
+        await AgentforceService.setViewProviderDelegate({
+          componentMap: {
+            'copilot/richText': 'CustomAgentforceView',
+            'copilot/markdown': 'CustomAgentforceView',
+          },
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to register view provider:', error);
+    }
+  };
 
   const checkConfigurations = async () => {
     setIsChecking(true);
