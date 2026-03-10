@@ -364,6 +364,7 @@ class AgentforceService {
         enableMultiModalInput: false,
         enablePDFUpload: false,
         enableVoice: false,
+        enableCustomViewProvider: false,
       };
     }
     if (!AgentforceModule?.getFeatureFlags) {
@@ -372,6 +373,7 @@ class AgentforceService {
         enableMultiModalInput: false,
         enablePDFUpload: false,
         enableVoice: false,
+        enableCustomViewProvider: false,
       };
     }
     try {
@@ -381,6 +383,7 @@ class AgentforceService {
         enableMultiModalInput: flags?.enableMultiModalInput ?? false,
         enablePDFUpload: flags?.enablePDFUpload ?? false,
         enableVoice: flags?.enableVoice ?? false,
+        enableCustomViewProvider: flags?.enableCustomViewProvider ?? false,
       };
     } catch {
       return {
@@ -388,6 +391,7 @@ class AgentforceService {
         enableMultiModalInput: false,
         enablePDFUpload: false,
         enableVoice: false,
+        enableCustomViewProvider: false,
       };
     }
   }
