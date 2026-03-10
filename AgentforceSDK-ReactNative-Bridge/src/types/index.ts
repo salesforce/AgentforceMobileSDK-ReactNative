@@ -30,3 +30,6 @@ export {
   AgentforceContextVariable,
   AgentforceContextVariableType,
 } from './AgentforceContext';
+
+// View provider delegate types
+export { ViewProviderDelegate, ViewProviderComponentData } from './ViewProviderDelegate';

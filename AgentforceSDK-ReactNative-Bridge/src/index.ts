@@ -32,6 +32,8 @@ export type {
   AgentforceAdditionalContext,
   AgentforceContextVariable,
   AgentforceContextVariableType,
+  ViewProviderDelegate,
+  ViewProviderComponentData,
 } from './types';
 export { isServiceAgentConfig, isEmployeeAgentConfig, isLegacyConfig } from './types';
 
