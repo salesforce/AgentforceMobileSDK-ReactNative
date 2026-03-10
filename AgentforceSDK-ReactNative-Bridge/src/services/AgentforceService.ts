@@ -32,6 +32,7 @@ import type {
   AgentforceContextVariable,
   AgentforceContextVariableType,
 } from '../types/AgentforceContext';
+import { ViewProviderDelegate } from '../types/ViewProviderDelegate';
 
 const { AgentforceModule } = NativeModules;
 
@@ -40,6 +41,7 @@ export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags
 export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
+export type { ViewProviderDelegate };
 
 /**
  * Native module event names
@@ -121,6 +123,11 @@ class AgentforceService {
    * Subscription for navigation request events
    */
   private navigationSubscription: EmitterSubscription | null = null;
+
+  /**
+   * View provider delegate configuration (registered component types + React component name)
+   */
+  private viewProviderDelegate: ViewProviderDelegate | null = null;
 
   /**
    * Track if service has been initialized
@@ -260,6 +267,65 @@ class AgentforceService {
   }
 
   /**
+   * Register a view provider delegate to override native SDK output views
+   * with custom React Native components.
+   *
+   * Can be called before or after `configure()` — the native provider is
+   * always attached to the client and checks the component map dynamically.
+   *
+   * @param delegate - View provider delegate configuration
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setViewProviderDelegate({
+   *   componentMap: {
+   *     'copilot/richText': 'CustomRichTextView',
+   *     'copilot/markdown': 'CustomMarkdownView',
+   *   },
+   * });
+   * ```
+   */
+  async setViewProviderDelegate(delegate: ViewProviderDelegate): Promise<void> {
+    this.viewProviderDelegate = delegate;
+
+    if (!AgentforceModule?.registerViewProvider) {
+      console.warn('[AgentforceService] registerViewProvider not available on native module');
+      return;
+    }
+
+    try {
+      await AgentforceModule.registerViewProvider({
+        componentMap: delegate.componentMap,
+      });
+      console.log(
+        `[AgentforceService] View provider registered for ${Object.keys(delegate.componentMap).length} types`,
+      );
+    } catch (error) {
+      console.error('[AgentforceService] Failed to register view provider:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear the registered view provider delegate.
+   * After clearing, the native SDK will render its built-in views for all types.
+   */
+  async clearViewProviderDelegate(): Promise<void> {
+    this.viewProviderDelegate = null;
+
+    if (!AgentforceModule?.clearViewProvider) {
+      return;
+    }
+
+    try {
+      await AgentforceModule.clearViewProvider();
+      console.log('[AgentforceService] View provider delegate cleared');
+    } catch (error) {
+      console.warn('[AgentforceService] Failed to clear view provider:', error);
+    }
+  }
+
+  /**
    * Configure the SDK with either Service or Employee agent settings.
    *
    * For backward compatibility, configurations without a 'type' field are
@@ -332,6 +398,7 @@ class AgentforceService {
       console.log(
         `[AgentforceService] Configured successfully (mode: ${configWithFlags.type})`,
       );
+
       return result?.success ?? true;
     } catch (error) {
       console.error('[AgentforceService] Configuration failed:', error);
@@ -808,6 +875,12 @@ class AgentforceService {
     this.navigationSubscription?.remove();
     this.navigationSubscription = null;
     this.navigationDelegate = null;
+
+    // Clear native view provider registration before nulling the JS reference
+    if (this.viewProviderDelegate) {
+      this.clearViewProviderDelegate().catch(() => {});
+    }
+    this.viewProviderDelegate = null;
 
     this.eventEmitter = null;
     this.initialized = false;
