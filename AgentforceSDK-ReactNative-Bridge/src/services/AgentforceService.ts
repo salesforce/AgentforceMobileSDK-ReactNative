@@ -33,6 +33,7 @@ import type {
   AgentforceContextVariableType,
 } from '../types/AgentforceContext';
 import { ViewProviderDelegate } from '../types/ViewProviderDelegate';
+import type { HiddenPreChatFields } from '../types/HiddenPreChatFields';
 
 const { AgentforceModule } = NativeModules;
 
@@ -42,6 +43,7 @@ export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
 export type { ViewProviderDelegate };
+export type { HiddenPreChatFields };
 
 /**
  * Native module event names
@@ -835,6 +837,86 @@ class AgentforceService {
     } catch (error) {
       console.error('[AgentforceService] Failed to set additional context:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Pre-register hidden prechat field values for Service Agent conversations.
+   *
+   * Call this before `launchConversation()` to supply values for prechat fields
+   * hidden from the end user (e.g. ContactId, AccountId, session tokens).
+   * When the SDK initializes a Service Agent session, these values are returned
+   * to the native delegate automatically.
+   *
+   * Fields not present in the provided map are omitted (not sent as empty strings),
+   * so the SDK treats them as unset.
+   *
+   * @remarks Service Agent only. Has no effect for Employee Agent conversations.
+   *
+   * @param fields - Map of field developer names to string values
+   *
+   * @example
+   * ```typescript
+   * await AgentforceService.registerHiddenPreChatFields({
+   *   ContactId: '003xx0000001234',
+   *   AccountId: '001xx0000005678',
+   * });
+   * await AgentforceService.launchConversation();
+   * ```
+   */
+  async registerHiddenPreChatFields(fields: HiddenPreChatFields): Promise<void> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return;
+    }
+
+    if (!AgentforceModule) {
+      console.warn('[AgentforceService] Native module not available');
+      return;
+    }
+
+    try {
+      await AgentforceModule.registerHiddenPreChatFields(fields);
+      const count = Object.keys(fields).length;
+      console.log(
+        `[AgentforceService] Hidden prechat fields registered: ${count} field(s)`,
+      );
+    } catch (error) {
+      console.error(
+        '[AgentforceService] Failed to register hidden prechat fields:',
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Clear all pre-registered hidden prechat field values.
+   *
+   * @remarks Service Agent only.
+   */
+  async clearHiddenPreChatFields(): Promise<void> {
+    await this.registerHiddenPreChatFields({});
+  }
+
+  /**
+   * Get the currently registered hidden prechat field values.
+   *
+   * @returns The stored field map, or an empty object if none registered.
+   */
+  async getHiddenPreChatFields(): Promise<HiddenPreChatFields> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return {};
+    }
+
+    if (!AgentforceModule?.getHiddenPreChatFields) {
+      return {};
+    }
+
+    try {
+      const fields = await AgentforceModule.getHiddenPreChatFields();
+      return (fields as HiddenPreChatFields) ?? {};
+    } catch {
+      return {};
     }
   }
 

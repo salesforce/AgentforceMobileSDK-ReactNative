@@ -74,6 +74,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Bridge view provider for delegating native SDK views to React Native components
     private val bridgeViewProvider = BridgeViewProvider(reactContext)
 
+    // Bridge hidden prechat fields (Service Agent only)
+    private val bridgeHiddenPreChat = BridgeHiddenPreChat()
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -616,6 +619,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         currentMode = null
         credentialProvider.reset()
         bridgeViewProvider.reset()
+        bridgeHiddenPreChat.setFields(emptyMap())
         employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
         promise.resolve(Arguments.createMap().apply {
             putBoolean("success", true)
@@ -625,6 +629,38 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // endregion
 
     // region Event Emitter Support
+    // endregion
+
+    // region Hidden PreChat Fields
+
+    /**
+     * Pre-register hidden prechat field values for the next Service Agent session.
+     *
+     * TODO: Implement AgentforceHiddenPreChatFieldDelegate on BridgeHiddenPreChat
+     * and pass to client.init(hiddenPreChatFieldDelegate = bridgeHiddenPreChat).
+     * See iOS BridgeHiddenPreChat.swift for reference. Until then, fields are
+     * stored but not sent to the SDK.
+     */
+    @ReactMethod
+    fun registerHiddenPreChatFields(fields: ReadableMap, promise: Promise) {
+        val map = mutableMapOf<String, String>()
+        val iterator = fields.keySetIterator()
+        while (iterator.hasNextKey()) {
+            val key = iterator.nextKey()
+            fields.getString(key)?.let { map[key] = it }
+        }
+        bridgeHiddenPreChat.setFields(map)
+        promise.resolve(null)
+    }
+
+    @ReactMethod
+    fun getHiddenPreChatFields(promise: Promise) {
+        val result = Arguments.createMap()
+        for ((key, value) in bridgeHiddenPreChat.getFields()) {
+            result.putString(key, value)
+        }
+        promise.resolve(result)
+    }
     // endregion
 
     // region Additional Context

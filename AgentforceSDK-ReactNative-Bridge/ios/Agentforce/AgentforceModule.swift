@@ -42,6 +42,12 @@ class AgentforceModule: RCTEventEmitter {
     private let listenerLock = NSLock()
     private var _hasListeners = false
 
+    // MARK: - Hidden PreChat Fields
+
+    /// Bridge delegate for hidden prechat fields (Service Agent only).
+    /// Strongly retained here because AgentforceClient holds it as a weak reference.
+    private let bridgeHiddenPreChat = BridgeHiddenPreChat()
+
     // MARK: - Logging
 
     /// Bridge logger for forwarding SDK logs to JavaScript.
@@ -180,6 +186,7 @@ class AgentforceModule: RCTEventEmitter {
             mode: .fullConfig(fullConfiguration),
             viewProvider: bridgeViewProvider
         )
+        agentforceClient?.hiddenPreChatFieldDelegate = bridgeHiddenPreChat
     }
 
     // MARK: - Employee Agent Configuration
@@ -813,6 +820,7 @@ class AgentforceModule: RCTEventEmitter {
     private func cleanupClient() {
         currentConversation = nil
         agentforceClient = nil
+        bridgeHiddenPreChat.setFields([:])
     }
 
     /// Close the conversation
@@ -827,6 +835,36 @@ class AgentforceModule: RCTEventEmitter {
             dismissConversation()
             resolve(["success": true])
         }
+    }
+
+    // MARK: - Hidden PreChat Fields
+
+    /// Pre-register hidden prechat field values for the next Service Agent session.
+    @objc
+    func registerHiddenPreChatFields(
+        _ fields: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let dict = fields as? [String: String] else {
+            reject(
+                "INVALID_FIELDS",
+                "Hidden prechat fields must be a map of string keys to string values",
+                nil
+            )
+            return
+        }
+        bridgeHiddenPreChat.setFields(dict)
+        resolve(nil)
+    }
+
+    /// Get the currently registered hidden prechat field values.
+    @objc
+    func getHiddenPreChatFields(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        resolve(bridgeHiddenPreChat.getFields())
     }
 
     // MARK: - Additional Context
