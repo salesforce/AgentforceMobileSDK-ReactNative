@@ -173,14 +173,12 @@ class AgentforceModule: RCTEventEmitter {
             serviceApiURL: config.serviceApiURL
         )
 
-        if !bridgeViewProvider.isRegistered {
-            print("[AgentforceModule] ⚠️ No view provider registered at configure() time. Call registerViewProvider() before configure() if you want custom views.")
-        }
-
+        // Always pass bridgeViewProvider so late registrations take effect.
+        // canHandle() returns false when the map is empty, matching nil behavior.
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
             mode: .fullConfig(fullConfiguration),
-            viewProvider: bridgeViewProvider.isRegistered ? bridgeViewProvider : nil
+            viewProvider: bridgeViewProvider
         )
     }
 
@@ -252,15 +250,12 @@ class AgentforceModule: RCTEventEmitter {
             salesforceLogger: bridgeLogger
         )
 
-        if !bridgeViewProvider.isRegistered {
-            print("[AgentforceModule] ⚠️ No view provider registered at configure() time. Call registerViewProvider() before configure() if you want custom views.")
-        }
-
-        // Initialize Agentforce Client with fullConfig mode (explicit config + feature flags).
+        // Always pass bridgeViewProvider so late registrations take effect.
+        // canHandle() returns false when the map is empty, matching nil behavior.
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
             mode: .fullConfig(fullConfiguration),
-            viewProvider: bridgeViewProvider.isRegistered ? bridgeViewProvider : nil
+            viewProvider: bridgeViewProvider
         )
     }
 
@@ -785,7 +780,8 @@ class AgentforceModule: RCTEventEmitter {
     // MARK: - View Provider
 
     /// Register a React Native component as a custom view provider for specified types.
-    /// Must be called before configure() so the provider is attached at SDK init time.
+    /// Can be called before or after configure() — the provider is always attached to the
+    /// client and canHandle() checks the map dynamically.
     @objc
     func registerViewProvider(
         _ config: NSDictionary,
@@ -797,9 +793,6 @@ class AgentforceModule: RCTEventEmitter {
               !componentMap.isEmpty else {
             reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary", nil)
             return
-        }
-        if agentforceClient != nil {
-            print("[AgentforceModule] ⚠️ registerViewProvider called after configure(). The view provider will not take effect until the next configure() call.")
         }
         bridgeViewProvider.register(componentMap: componentMap)
         resolve(["success": true, "registeredTypes": Array(componentMap.keys)])

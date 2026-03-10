@@ -168,11 +168,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
-                if (bridgeViewProvider.isRegistered) {
-                    agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
-                } else {
-                    Log.w(TAG, "No view provider registered at configure() time. Call registerViewProvider() before configure() if you want custom views.")
-                }
+                // Always attach bridgeViewProvider so late registrations take effect.
+                // canHandle() returns false when the map is empty, matching no-provider behavior.
+                agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 val sdkMode = AgentforceMode.ServiceAgent(
@@ -249,11 +247,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
-                if (bridgeViewProvider.isRegistered) {
-                    agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
-                } else {
-                    Log.w(TAG, "No view provider registered at configure() time. Call registerViewProvider() before configure() if you want custom views.")
-                }
+                // Always attach bridgeViewProvider so late registrations take effect.
+                // canHandle() returns false when the map is empty, matching no-provider behavior.
+                agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 // Use FullConfig mode for Employee Agent
@@ -573,9 +569,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             return
         }
 
-        if (AgentforceClientHolder.isConfigured) {
-            Log.w(TAG, "registerViewProvider called after configure(). The view provider will not take effect until the next configure() call.")
-        }
         bridgeViewProvider.register(componentMap)
         val keysArray = Arguments.createArray().apply {
             componentMap.keys.forEach { pushString(it) }

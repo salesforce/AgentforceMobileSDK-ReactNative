@@ -270,8 +270,8 @@ class AgentforceService {
    * Register a view provider delegate to override native SDK output views
    * with custom React Native components.
    *
-   * Must be called before `configure()` so the native provider is attached
-   * at SDK initialization time.
+   * Can be called before or after `configure()` — the native provider is
+   * always attached to the client and checks the component map dynamically.
    *
    * @param delegate - View provider delegate configuration
    *
@@ -398,18 +398,6 @@ class AgentforceService {
       console.log(
         `[AgentforceService] Configured successfully (mode: ${configWithFlags.type})`,
       );
-
-      // Re-register the view provider if one was set before this configure() call,
-      // since the native client was recreated and lost the previous registration.
-      if (this.viewProviderDelegate) {
-        try {
-          await AgentforceModule.registerViewProvider({
-            componentMap: this.viewProviderDelegate.componentMap,
-          });
-        } catch (err) {
-          console.warn('[AgentforceService] Failed to re-register view provider after configure:', err);
-        }
-      }
 
       return result?.success ?? true;
     } catch (error) {
