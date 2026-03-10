@@ -96,9 +96,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     AgentforceService.setLoggerDelegate(agentforceLogger);
     // Register navigation delegate so SDK navigation requests are forwarded to JS
     AgentforceService.setNavigationDelegate(agentforceNavigation);
-    // Register custom view provider if enabled via feature flag
-    registerViewProviderIfEnabled();
-    checkConfigurations();
+    // Register custom view provider if enabled, then check configurations.
+    // Sequential to avoid a race where configure() runs before registration completes.
+    const init = async () => {
+      await registerViewProviderIfEnabled();
+      checkConfigurations();
+    };
+    init();
 
     return () => {
       AgentforceService.clearLoggerDelegate();

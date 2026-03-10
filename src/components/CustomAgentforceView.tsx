@@ -10,8 +10,10 @@
  * Register with AppRegistry and configure via AgentforceService:
  *   AppRegistry.registerComponent('CustomAgentforceView', () => CustomAgentforceView);
  *   AgentforceService.setViewProviderDelegate({
- *     componentTypes: ['copilot/richText', 'copilot/markdown'],
- *     reactComponentName: 'CustomAgentforceView',
+ *     componentMap: {
+ *       'copilot/richText': 'CustomAgentforceView',
+ *       'copilot/markdown': 'CustomAgentforceView',
+ *     },
  *   });
  */
 
