@@ -45,6 +45,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         private const val KEY_ENABLE_MULTI_MODAL_INPUT = "enableMultiModalInput"
         private const val KEY_ENABLE_PDF_UPLOAD = "enablePDFUpload"
         private const val KEY_ENABLE_VOICE = "enableVoice"
+        // Advisory only — gating is done on the JS side (HomeScreen checks this flag
+        // before calling setViewProviderDelegate). The native layer does not gate on it.
         private const val KEY_ENABLE_CUSTOM_VIEW_PROVIDER = "enableCustomViewProvider"
     }
 
