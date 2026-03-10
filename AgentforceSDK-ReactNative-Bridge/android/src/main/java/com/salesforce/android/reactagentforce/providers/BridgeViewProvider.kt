@@ -19,7 +19,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.WritableMap
 import com.salesforce.android.agentforcesdk.components.models.AgentforceComponent
 import com.salesforce.android.agentforcesdk.components.models.AgentforceViewProvider
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Implements AgentforceViewProvider by delegating to a React Native component.
@@ -31,34 +31,33 @@ class BridgeViewProvider(
 
     /**
      * Maps component definition strings to their React Native component names.
-     * Thread-safe: `canHandle` may be called from the SDK rendering thread while
-     * `register`/`reset` are called from the JS thread.
+     * Uses AtomicReference to swap the entire immutable map in one shot, so
+     * `canHandle` never sees a partially-updated (empty) map during registration.
      */
-    private val componentMap: ConcurrentHashMap<String, String> = ConcurrentHashMap()
+    private val componentMap: AtomicReference<Map<String, String>> = AtomicReference(emptyMap())
 
     /** Register a 1:1 mapping of component types to React component names. */
     fun register(componentMap: Map<String, String>) {
-        this.componentMap.clear()
-        this.componentMap.putAll(componentMap)
+        this.componentMap.set(componentMap.toMap())
     }
 
     /** Clear all registrations */
     fun reset() {
-        componentMap.clear()
+        componentMap.set(emptyMap())
     }
 
     val isRegistered: Boolean
-        get() = componentMap.isNotEmpty()
+        get() = componentMap.get().isNotEmpty()
 
     // region AgentforceViewProvider
 
     override fun canHandle(definition: String): Boolean {
-        return componentMap.containsKey(definition)
+        return componentMap.get().containsKey(definition)
     }
 
     @Composable
     override fun GetView(modifier: Modifier, view: AgentforceComponent) {
-        val moduleName = componentMap[view.definition] ?: return
+        val moduleName = componentMap.get()[view.definition] ?: return
         val props = componentToBundle(view)
         AndroidView(
             modifier = modifier,
