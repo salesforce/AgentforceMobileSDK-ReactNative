@@ -60,6 +60,14 @@ class AgentforceModule: RCTEventEmitter {
         return BridgeNavigation(module: self)
     }()
 
+    // MARK: - View Provider
+
+    /// Bridge view provider for delegating native SDK views to React Native components.
+    /// Initialized lazily so the RCT bridge is available.
+    private lazy var bridgeViewProvider: BridgeViewProvider = {
+        return BridgeViewProvider(bridge: self.bridge)
+    }()
+
     // MARK: - Module Setup
 
     override static func requiresMainQueueSetup() -> Bool {
@@ -165,12 +173,17 @@ class AgentforceModule: RCTEventEmitter {
             serviceApiURL: config.serviceApiURL
         )
 
+        if !bridgeViewProvider.isRegistered {
+            print("[AgentforceModule] ⚠️ No view provider registered at configure() time. Call registerViewProvider() before configure() if you want custom views.")
+        }
+
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
-            mode: .fullConfig(fullConfiguration)
+            mode: .fullConfig(fullConfiguration),
+            viewProvider: bridgeViewProvider.isRegistered ? bridgeViewProvider : nil
         )
     }
-    
+
     // MARK: - Employee Agent Configuration
     
     private func configureEmployeeAgent(_ configDict: [String: Any]) async throws {
@@ -239,13 +252,18 @@ class AgentforceModule: RCTEventEmitter {
             salesforceLogger: bridgeLogger
         )
         
+        if !bridgeViewProvider.isRegistered {
+            print("[AgentforceModule] ⚠️ No view provider registered at configure() time. Call registerViewProvider() before configure() if you want custom views.")
+        }
+
         // Initialize Agentforce Client with fullConfig mode (explicit config + feature flags).
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
-            mode: .fullConfig(fullConfiguration)
+            mode: .fullConfig(fullConfiguration),
+            viewProvider: bridgeViewProvider.isRegistered ? bridgeViewProvider : nil
         )
     }
-    
+
     // MARK: - Legacy Configuration Method (Backward Compatibility)
     
     /// Configure Service Agent (JavaScript-friendly interface)
@@ -764,8 +782,41 @@ class AgentforceModule: RCTEventEmitter {
         sendEvent(withName: "onNavigationRequest", body: payload)
     }
 
+    // MARK: - View Provider
+
+    /// Register a React Native component as a custom view provider for specified types.
+    /// Must be called before configure() so the provider is attached at SDK init time.
+    @objc
+    func registerViewProvider(
+        _ config: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let dict = config as? [String: Any],
+              let componentMap = dict["componentMap"] as? [String: String],
+              !componentMap.isEmpty else {
+            reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary", nil)
+            return
+        }
+        if agentforceClient != nil {
+            print("[AgentforceModule] ⚠️ registerViewProvider called after configure(). The view provider will not take effect until the next configure() call.")
+        }
+        bridgeViewProvider.register(componentMap: componentMap)
+        resolve(["success": true, "registeredTypes": Array(componentMap.keys)])
+    }
+
+    /// Clear the custom view provider registration.
+    @objc
+    func clearViewProvider(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        bridgeViewProvider.reset()
+        resolve(["success": true])
+    }
+
     // MARK: - Cleanup
-    
+
     private func cleanupClient() {
         currentConversation = nil
         agentforceClient = nil
@@ -906,6 +957,7 @@ class AgentforceModule: RCTEventEmitter {
             cleanupClient()
             currentMode = nil
             credentialProvider.reset()
+            bridgeViewProvider.reset()
             ServiceAgentManager.shared.resetToDefaults()
             UserDefaults.standard.removeObject(forKey: "EmployeeAgentId")
             resolve(["success": true])

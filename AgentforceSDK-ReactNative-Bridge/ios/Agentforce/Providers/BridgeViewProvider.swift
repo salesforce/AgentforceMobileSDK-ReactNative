@@ -1,0 +1,110 @@
+/*
+ * Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
+ *
+ * Bridges the native AgentforceViewProviding protocol to React Native.
+ * When enabled, delegates rendering of specified component types to a
+ * registered React Native component via RCTRootView.
+ */
+
+import Foundation
+import UIKit
+import SwiftUI
+import React
+import AgentforceSDK
+
+/// Implements AgentforceViewProviding by delegating to a React Native component.
+/// Component types are registered synchronously from JS; rendering uses RCTRootView.
+class BridgeViewProvider: AgentforceViewProviding {
+
+    /// Maps component definition strings to React Native component names (1:1).
+    /// e.g. ["copilot/richText": "CustomRichTextView", "copilot/markdown": "CustomMarkdownView"]
+    /// Protected by `lock` — `canHandle` may be called from the SDK rendering thread
+    /// while `register`/`reset` are called from the JS thread.
+    private var componentMap: [String: String] = [:]
+
+    /// Protects all reads/writes to `componentMap`.
+    private let lock = NSLock()
+
+    /// Reference to the RCT bridge for creating root views
+    private weak var bridge: RCTBridge?
+
+    init(bridge: RCTBridge?) {
+        self.bridge = bridge
+    }
+
+    /// Register a 1:1 mapping of component definition strings to React component names.
+    /// Called from JS via the native module before launching conversation.
+    func register(componentMap: [String: String]) {
+        lock.withLock { self.componentMap = componentMap }
+    }
+
+    /// Clear all registrations
+    func reset() {
+        lock.withLock { componentMap.removeAll() }
+    }
+
+    var isRegistered: Bool {
+        lock.withLock { !componentMap.isEmpty }
+    }
+
+    // MARK: - AgentforceViewProviding
+
+    func canHandle(type: String) -> Bool {
+        lock.withLock { componentMap[type] != nil }
+    }
+
+    @MainActor
+    func view(for type: String, data: [String: Any]) -> AnyView {
+        guard let moduleName = lock.withLock({ componentMap[type] }) else {
+            return AnyView(EmptyView())
+        }
+        // Note: The iOS SDK protocol only provides (type, data). Android's SDK
+        // provides a full AgentforceComponent with name and subComponents.
+        // Consumers should handle missing name/subComponents gracefully.
+        let props: [String: Any] = [
+            "definition": type,
+            "properties": data,
+        ]
+        return AnyView(ReactNativeViewWrapper(
+            bridge: bridge,
+            moduleName: moduleName,
+            initialProperties: props
+        ))
+    }
+}
+
+// MARK: - SwiftUI wrapper for RCTRootView
+
+/// Wraps an RCTRootView in a UIViewRepresentable for use in SwiftUI.
+/// Uses RCTRootView's intrinsic content size so SwiftUI can lay it out correctly.
+private struct ReactNativeViewWrapper: UIViewRepresentable {
+    let bridge: RCTBridge?
+    let moduleName: String
+    let initialProperties: [String: Any]
+
+    func makeUIView(context: Context) -> UIView {
+        guard let bridge = bridge else {
+            assertionFailure("[BridgeViewProvider] RCT bridge is nil — cannot render React Native view")
+            return UIView() // Return empty view; a nil bridge means setup is broken
+        }
+        let rootView = RCTRootView(
+            bridge: bridge,
+            moduleName: moduleName,
+            initialProperties: initialProperties
+        )
+        rootView.backgroundColor = .clear
+        rootView.sizeFlexibility = .widthAndHeight
+        return rootView
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // RCTRootView handles its own updates via the bridge
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIView, context: Context) -> CGSize? {
+        let width = proposal.width ?? UIScreen.main.bounds.width
+        let size = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
+        guard size.height > 0 else { return nil }
+        return CGSize(width: width, height: size.height)
+    }
+}
