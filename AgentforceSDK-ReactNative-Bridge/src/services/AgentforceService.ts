@@ -32,7 +32,7 @@ import type {
   AgentforceContextVariable,
   AgentforceContextVariableType,
 } from '../types/AgentforceContext';
-import { ViewProviderDelegate, ViewProviderComponentData } from '../types/ViewProviderDelegate';
+import { ViewProviderDelegate } from '../types/ViewProviderDelegate';
 
 const { AgentforceModule } = NativeModules;
 
@@ -41,7 +41,7 @@ export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags
 export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
-export type { ViewProviderDelegate, ViewProviderComponentData };
+export type { ViewProviderDelegate };
 
 /**
  * Native module event names
@@ -398,6 +398,19 @@ class AgentforceService {
       console.log(
         `[AgentforceService] Configured successfully (mode: ${configWithFlags.type})`,
       );
+
+      // Re-register the view provider if one was set before this configure() call,
+      // since the native client was recreated and lost the previous registration.
+      if (this.viewProviderDelegate) {
+        try {
+          await AgentforceModule.registerViewProvider({
+            componentMap: this.viewProviderDelegate.componentMap,
+          });
+        } catch (err) {
+          console.warn('[AgentforceService] Failed to re-register view provider after configure:', err);
+        }
+      }
+
       return result?.success ?? true;
     } catch (error) {
       console.error('[AgentforceService] Configuration failed:', error);
@@ -875,6 +888,10 @@ class AgentforceService {
     this.navigationSubscription = null;
     this.navigationDelegate = null;
 
+    // Clear native view provider registration before nulling the JS reference
+    if (this.viewProviderDelegate) {
+      this.clearViewProviderDelegate().catch(() => {});
+    }
     this.viewProviderDelegate = null;
 
     this.eventEmitter = null;
