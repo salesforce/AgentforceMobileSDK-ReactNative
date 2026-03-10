@@ -58,6 +58,9 @@ class BridgeViewProvider: AgentforceViewProviding {
         guard let moduleName = lock.withLock({ componentMap[type] }) else {
             return AnyView(EmptyView())
         }
+        // Note: The iOS SDK protocol only provides (type, data). Android's SDK
+        // provides a full AgentforceComponent with name and subComponents.
+        // Consumers should handle missing name/subComponents gracefully.
         let props: [String: Any] = [
             "definition": type,
             "properties": data,
@@ -79,9 +82,10 @@ private struct ReactNativeViewWrapper: UIViewRepresentable {
     let moduleName: String
     let initialProperties: [String: Any]
 
-    func makeUIView(context: Context) -> RCTRootView {
+    func makeUIView(context: Context) -> UIView {
         guard let bridge = bridge else {
-            return RCTRootView()
+            assertionFailure("[BridgeViewProvider] RCT bridge is nil — cannot render React Native view")
+            return UIView() // Return empty view; a nil bridge means setup is broken
         }
         let rootView = RCTRootView(
             bridge: bridge,
@@ -93,11 +97,11 @@ private struct ReactNativeViewWrapper: UIViewRepresentable {
         return rootView
     }
 
-    func updateUIView(_ uiView: RCTRootView, context: Context) {
+    func updateUIView(_ uiView: UIView, context: Context) {
         // RCTRootView handles its own updates via the bridge
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: RCTRootView, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIView, context: Context) -> CGSize? {
         let width = proposal.width ?? UIScreen.main.bounds.width
         let size = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
         guard size.height > 0 else { return nil }
