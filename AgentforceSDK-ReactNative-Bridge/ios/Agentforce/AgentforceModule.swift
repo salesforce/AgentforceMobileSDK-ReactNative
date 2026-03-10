@@ -173,6 +173,10 @@ class AgentforceModule: RCTEventEmitter {
             serviceApiURL: config.serviceApiURL
         )
 
+        if !bridgeViewProvider.isRegistered {
+            print("[AgentforceModule] ⚠️ No view provider registered at configure() time. Call registerViewProvider() before configure() if you want custom views.")
+        }
+
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
             mode: .fullConfig(fullConfiguration),
@@ -248,6 +252,10 @@ class AgentforceModule: RCTEventEmitter {
             salesforceLogger: bridgeLogger
         )
         
+        if !bridgeViewProvider.isRegistered {
+            print("[AgentforceModule] ⚠️ No view provider registered at configure() time. Call registerViewProvider() before configure() if you want custom views.")
+        }
+
         // Initialize Agentforce Client with fullConfig mode (explicit config + feature flags).
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
@@ -255,7 +263,7 @@ class AgentforceModule: RCTEventEmitter {
             viewProvider: bridgeViewProvider.isRegistered ? bridgeViewProvider : nil
         )
     }
-    
+
     // MARK: - Legacy Configuration Method (Backward Compatibility)
     
     /// Configure Service Agent (JavaScript-friendly interface)
@@ -789,6 +797,9 @@ class AgentforceModule: RCTEventEmitter {
               !componentMap.isEmpty else {
             reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary", nil)
             return
+        }
+        if agentforceClient != nil {
+            print("[AgentforceModule] ⚠️ registerViewProvider called after configure(). The view provider will not take effect until the next configure() call.")
         }
         bridgeViewProvider.register(componentMap: componentMap)
         resolve(["success": true, "registeredTypes": Array(componentMap.keys)])

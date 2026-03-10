@@ -18,7 +18,12 @@ class BridgeViewProvider: AgentforceViewProviding {
 
     /// Maps component definition strings to React Native component names (1:1).
     /// e.g. ["copilot/richText": "CustomRichTextView", "copilot/markdown": "CustomMarkdownView"]
+    /// Protected by `lock` — `canHandle` may be called from the SDK rendering thread
+    /// while `register`/`reset` are called from the JS thread.
     private var componentMap: [String: String] = [:]
+
+    /// Protects all reads/writes to `componentMap`.
+    private let lock = NSLock()
 
     /// Reference to the RCT bridge for creating root views
     private weak var bridge: RCTBridge?
@@ -30,27 +35,27 @@ class BridgeViewProvider: AgentforceViewProviding {
     /// Register a 1:1 mapping of component definition strings to React component names.
     /// Called from JS via the native module before launching conversation.
     func register(componentMap: [String: String]) {
-        self.componentMap = componentMap
+        lock.withLock { self.componentMap = componentMap }
     }
 
     /// Clear all registrations
     func reset() {
-        componentMap.removeAll()
+        lock.withLock { componentMap.removeAll() }
     }
 
     var isRegistered: Bool {
-        !componentMap.isEmpty
+        lock.withLock { !componentMap.isEmpty }
     }
 
     // MARK: - AgentforceViewProviding
 
     func canHandle(type: String) -> Bool {
-        componentMap[type] != nil
+        lock.withLock { componentMap[type] != nil }
     }
 
     @MainActor
     func view(for type: String, data: [String: Any]) -> AnyView {
-        guard let moduleName = componentMap[type] else {
+        guard let moduleName = lock.withLock({ componentMap[type] }) else {
             return AnyView(EmptyView())
         }
         let props: [String: Any] = [
