@@ -71,6 +71,12 @@ RCT_EXTERN_METHOD(closeConversation:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(startNewConversation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Additional Context
+
+RCT_EXTERN_METHOD(setAdditionalContext:(NSDictionary *)contextDict
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 // MARK: - Settings
 
 RCT_EXTERN_METHOD(resetSettings:(RCTPromiseResolveBlock)resolve

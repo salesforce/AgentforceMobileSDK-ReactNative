@@ -21,6 +21,8 @@ import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfigur
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
+import com.salesforce.android.agentforceservice.conversationservice.data.CopilotAdditionalContext
+import com.salesforce.android.agentforceservice.conversationservice.data.CopilotContextVariable
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
@@ -72,8 +74,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     override fun getName(): String = MODULE_NAME
 
-    // MARK: - Unified Configuration Method
-    
+    // region Unified Configuration Method
+
     /**
      * Configure the SDK with either Service or Employee agent settings.
      * Expects a map with 'type' field set to 'service' or 'employee'.
@@ -103,8 +105,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             else -> promise.reject("INVALID_CONFIG", "Invalid type '$type'. Must be 'service' or 'employee'")
         }
     }
+    // endregion
 
-    // MARK: - Service Agent Configuration
+    // region Service Agent Configuration
 
     private fun configureServiceAgent(config: ReadableMap, promise: Promise) {
         val serviceConfig = ServiceAgentModeConfig.fromReadableMap(config)
@@ -114,13 +117,16 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         }
         
         Log.d(TAG, "Configuring Service Agent - Org: ${serviceConfig.organizationId}")
-        
+
+        // Only cleanup if switching from Employee mode
+        if (currentMode is LocalAgentMode.Employee) {
+            Log.d(TAG, "⚠️ Switching from Employee to Service mode - cleaning up")
+            AgentforceClientHolder.clear()
+        }
+
         // Configure unified credential provider
         credentialProvider.configure(serviceConfig)
         currentMode = LocalAgentMode.Service(serviceConfig)
-        
-        // Clear existing client
-        AgentforceClientHolder.clear()
         
         // Also update the legacy ViewModel for backward compatibility
         ensureViewModel()
@@ -189,8 +195,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             }
         }
     }
+    // endregion
 
-    // MARK: - Employee Agent Configuration
+    // region Employee Agent Configuration
 
     private fun configureEmployeeAgent(config: ReadableMap, promise: Promise) {
         val employeeConfig = EmployeeAgentModeConfig.fromReadableMap(config)
@@ -201,16 +208,19 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
 
+        // Only cleanup if switching from Service mode
+        if (currentMode is LocalAgentMode.Service) {
+            Log.d(TAG, "⚠️ Switching from Service to Employee mode - cleaning up")
+            AgentforceClientHolder.clear()
+        }
+
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
         credentialProvider.configure(employeeConfig)
         currentMode = LocalAgentMode.Employee(employeeConfig)
-        
+
         // Persist employee agentId (editable in Settings tab)
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
-        
-        // Clear existing client
-        AgentforceClientHolder.clear()
         
         scope.launch {
             try {
@@ -263,8 +273,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             }
         }
     }
+    // endregion
 
-    // MARK: - Legacy Configuration (Backward Compatibility)
+    // region Legacy Configuration (Backward Compatibility)
 
     private fun configureLegacyServiceAgent(
         serviceApiURL: String,
@@ -280,11 +291,12 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putString("organizationId", organizationId)
             putString("esDeveloperName", esDeveloperName)
         }
-        
+
         configureServiceAgent(config, promise)
     }
+    // endregion
 
-    // MARK: - Conversation Methods
+    // region Conversation Methods
 
     /**
      * Launch the Agentforce conversation UI - works for both Service and Employee agents
@@ -367,8 +379,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putBoolean("success", true)
         })
     }
+    // endregion
 
-    // MARK: - Configuration Query Methods
+    // region Configuration Query Methods
 
     @ReactMethod
     fun isConfigured(promise: Promise) {
@@ -415,7 +428,17 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun setEmployeeAgentId(agentId: String, promise: Promise) {
-        employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, agentId ?: "").apply()
+        val oldAgentId = employeePrefs.getString(KEY_EMPLOYEE_AGENT_ID, "") ?: ""
+        val newAgentId = agentId.trim()
+
+        employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, newAgentId).apply()
+
+        // Clear conversation if agent ID changed
+        if (oldAgentId != newAgentId) {
+            Log.d(TAG, "⚠️ Agent ID changed ('$oldAgentId' → '$newAgentId') - clearing conversation")
+            AgentforceClientHolder.clear()
+        }
+
         promise.resolve(null)
     }
 
@@ -466,12 +489,21 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun setFeatureFlags(flags: ReadableMap, promise: Promise) {
+        // Get new flags
+        val newMultiAgent = flags.hasKey("enableMultiAgent") && flags.getBoolean("enableMultiAgent")
+        val newMultiModal = flags.hasKey("enableMultiModalInput") && flags.getBoolean("enableMultiModalInput")
+        val newPDF = flags.hasKey("enablePDFUpload") && flags.getBoolean("enablePDFUpload")
+        val newVoice = flags.hasKey("enableVoice") && flags.getBoolean("enableVoice")
+
+        // Save new flags (will take effect on next app restart / new conversation)
         featureFlagsPrefs.edit()
-            .putBoolean(KEY_ENABLE_MULTI_AGENT, flags.hasKey("enableMultiAgent") && flags.getBoolean("enableMultiAgent"))
-            .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, flags.hasKey("enableMultiModalInput") && flags.getBoolean("enableMultiModalInput"))
-            .putBoolean(KEY_ENABLE_PDF_UPLOAD, flags.hasKey("enablePDFUpload") && flags.getBoolean("enablePDFUpload"))
-            .putBoolean(KEY_ENABLE_VOICE, flags.hasKey("enableVoice") && flags.getBoolean("enableVoice"))
+            .putBoolean(KEY_ENABLE_MULTI_AGENT, newMultiAgent)
+            .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, newMultiModal)
+            .putBoolean(KEY_ENABLE_PDF_UPLOAD, newPDF)
+            .putBoolean(KEY_ENABLE_VOICE, newVoice)
             .apply()
+
+        Log.d(TAG, "Feature flags saved (will apply on app restart)")
         promise.resolve(null)
     }
 
@@ -501,8 +533,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun isInitialized(promise: Promise) {
         promise.resolve(AgentforceClientHolder.isConfigured)
     }
+    // endregion
 
-    // MARK: - Log Forwarding
+    // region Log Forwarding
 
     @ReactMethod
     fun enableLogForwarding(enabled: Boolean, promise: Promise) {
@@ -510,8 +543,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         Log.d(TAG, "Log forwarding ${if (enabled) "enabled" else "disabled"}")
         promise.resolve(true)
     }
+    // endregion
 
-    // MARK: - Navigation Forwarding
+    // region Navigation Forwarding
 
     @ReactMethod
     fun enableNavigationForwarding(enabled: Boolean, promise: Promise) {
@@ -519,8 +553,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         Log.d(TAG, "Navigation forwarding ${if (enabled) "enabled" else "disabled"}")
         promise.resolve(true)
     }
+    // endregion
 
-    // MARK: - Cleanup
+    // region Cleanup
 
     @ReactMethod
     fun closeConversation(promise: Promise) {
@@ -542,8 +577,113 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putBoolean("success", true)
         })
     }
+    // endregion
 
-    // MARK: - Event Emitter Support
+    // region Additional Context
+
+    /**
+     * Set additional context for the current conversation.
+     * Must be called after launching a conversation.
+     *
+     * @param context ReadableMap with "variables" array
+     * @param promise Promise to resolve/reject
+     */
+    @ReactMethod
+    fun setAdditionalContext(context: ReadableMap, promise: Promise) {
+        Log.d(TAG, "setAdditionalContext() called")
+
+        try {
+            // Validate context structure
+            val variablesArray = context.getArray("variables")
+            if (variablesArray == null) {
+                promise.reject("INVALID_CONTEXT", "Missing 'variables' array in context")
+                return
+            }
+
+            // Convert to CopilotContextVariable list (do this synchronously)
+            val contextVariables = mutableListOf<CopilotContextVariable>()
+            for (i in 0 until variablesArray.size()) {
+                val varMap = variablesArray.getMap(i)
+                if (varMap == null) {
+                    promise.reject("INVALID_CONTEXT", "Invalid variable at index $i")
+                    return
+                }
+
+                val name = varMap.getString("name")
+                val type = varMap.getString("type")
+
+                if (name == null || type == null) {
+                    promise.reject(
+                        "INVALID_CONTEXT",
+                        "Variable at index $i missing 'name' or 'type'"
+                    )
+                    return
+                }
+
+                // Extract optional fields
+                val description = varMap.getString("description")
+                val value = when {
+                    varMap.hasKey("value") && !varMap.isNull("value") -> {
+                        // Read value based on type
+                        when (varMap.getType("value")) {
+                            ReadableType.String -> varMap.getString("value")
+                            ReadableType.Number -> varMap.getDouble("value")
+                            ReadableType.Boolean -> varMap.getBoolean("value")
+                            ReadableType.Map -> varMap.getMap("value")?.toHashMap()
+                            ReadableType.Array -> varMap.getArray("value")?.toArrayList()
+                            else -> null
+                        }
+                    }
+                    else -> null
+                }
+
+                // Create CopilotContextVariable
+                val variable = CopilotContextVariable(
+                    name = name,
+                    type = type,
+                    description = description,
+                    value = value
+                )
+                contextVariables.add(variable)
+            }
+
+            // Create CopilotAdditionalContext
+            val additionalContext = CopilotAdditionalContext(variables = contextVariables)
+
+            // Apply context to conversation (async) - check conversation inside coroutine
+            scope.launch {
+                try {
+                    // Re-check conversation inside coroutine to avoid race condition
+                    val conversation = AgentforceClientHolder.currentConversation
+                    if (conversation == null) {
+                        Log.w(TAG, "No active conversation for setAdditionalContext")
+                        promise.reject(
+                            "NO_CONVERSATION",
+                            "No active conversation. Launch conversation first, then set context."
+                        )
+                        return@launch
+                    }
+
+                    conversation.setAdditionalContext(additionalContext)
+                    Log.d(TAG, "✓ Additional context set: ${contextVariables.size} variables")
+
+                    promise.resolve(Arguments.createMap().apply {
+                        putBoolean("success", true)
+                    })
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Failed to set additional context", e)
+                    promise.reject("CONTEXT_ERROR", e.message, e)
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "setAdditionalContext parsing error", e)
+            promise.reject("CONTEXT_ERROR", e.message, e)
+        }
+    }
+    // endregion
+
+    // region Event Emitter Support
 
     @ReactMethod
     fun addListener(eventName: String) {
@@ -554,8 +694,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun removeListeners(count: Int) {
         // Required for RN event emitter
     }
+    // endregion
 
-    // MARK: - Helper Methods
+    // region Helper Methods
 
     private fun ensureViewModel() {
         if (viewModel == null) {
@@ -576,4 +717,5 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         scope.cancel()
         viewModel = null
     }
+    // endregion
 }

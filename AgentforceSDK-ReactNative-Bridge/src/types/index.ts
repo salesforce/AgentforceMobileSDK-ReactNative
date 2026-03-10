@@ -23,3 +23,10 @@ export { LoggerDelegate, LogLevel } from './LoggerDelegate';
 
 // Navigation delegate types
 export { NavigationDelegate, NavigationRequest } from './NavigationDelegate';
+
+// Additional context types
+export {
+  AgentforceAdditionalContext,
+  AgentforceContextVariable,
+  AgentforceContextVariableType,
+} from './AgentforceContext';

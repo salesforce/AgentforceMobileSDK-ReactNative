@@ -384,6 +384,27 @@ npm start -- --reset-cache
 
 📖 **For more troubleshooting, see [docs/separate-agent-app-guide.md](docs/separate-agent-app-guide.md#-troubleshooting)**
 
+## 🔌 API Reference
+
+### setAdditionalContext
+
+Provide contextual data (user ID, account ID, etc.) to personalize agent responses. Must be called after launching a conversation.
+
+```typescript
+await AgentforceService.launchConversation();
+
+await AgentforceService.setAdditionalContext({
+  variables: [
+    { name: 'userId', type: 'Text', value: '005xx0000001234' },
+    { name: 'accountId', type: 'Text', value: '001xx0000001234' },
+    { name: 'score', type: 'Number', value: 95.5 },
+    { name: 'isVIP', type: 'Boolean', value: true }
+  ]
+});
+```
+
+**Supported types:** `Text`, `Number`, `Boolean`, `Date`, `DateTime`, `Object`, `List`. See [bridge README](AgentforceSDK-ReactNative-Bridge/README.md) for details.
+
 ## 📚 Documentation
 
 ### Complete Multi-App Guide

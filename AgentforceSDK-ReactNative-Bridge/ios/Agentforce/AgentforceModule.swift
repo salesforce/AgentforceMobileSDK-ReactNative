@@ -127,12 +127,15 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("serviceApiURL must be a valid URL (e.g. https://your-site.salesforce.com)")
         }
         
+        // Only cleanup if switching from Employee mode
+        if case .employee = currentMode {
+            print("[AgentforceModule] ⚠️ Switching from Employee to Service mode - cleaning up")
+            cleanupClient()
+        }
+
         // Configure unified credential provider for Service Agent mode
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
-        
-        // Clean up any existing client
-        cleanupClient()
         
         // Also update the legacy ServiceAgentManager for backward compatibility
         await MainActor.run {
@@ -175,6 +178,12 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
         }
 
+        // Only cleanup if switching from Service mode
+        if case .service = currentMode {
+            print("[AgentforceModule] ⚠️ Switching from Service to Employee mode - cleaning up")
+            cleanupClient()
+        }
+
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
         credentialProvider.configure(employeeAgent: config)
@@ -182,9 +191,6 @@ class AgentforceModule: RCTEventEmitter {
 
         // Persist employee agentId (editable in Settings tab)
         UserDefaults.standard.set(config.agentId ?? "", forKey: "EmployeeAgentId")
-
-        // Clean up any existing client
-        cleanupClient()
 
         // Get orgId and userId from Mobile SDK if available (more reliable than config)
         var userId = config.userId
@@ -538,8 +544,21 @@ class AgentforceModule: RCTEventEmitter {
         resolver resolve: @escaping RCTPromiseResolveBlock,
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
-        UserDefaults.standard.set(agentId, forKey: "EmployeeAgentId")
-        resolve(nil)
+        Task { @MainActor in
+            let oldAgentId = UserDefaults.standard.string(forKey: "EmployeeAgentId") ?? ""
+            let newAgentId = agentId.trimmingCharacters(in: .whitespaces)
+
+            UserDefaults.standard.set(newAgentId, forKey: "EmployeeAgentId")
+
+            // Clear conversation if agent ID changed
+            if oldAgentId != newAgentId {
+                print("[AgentforceModule] ⚠️ Agent ID changed ('\(oldAgentId)' → '\(newAgentId)') - clearing conversation")
+                await closeCurrentConversation()
+                cleanupClient()
+            }
+
+            resolve(nil)
+        }
     }
     
     private static let featureFlagKeys = (
@@ -602,21 +621,27 @@ class AgentforceModule: RCTEventEmitter {
         resolver resolve: @escaping RCTPromiseResolveBlock,
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
-        guard let dict = flags as? [String: Any] else {
+        Task { @MainActor in
+            guard let dict = flags as? [String: Any] else {
+                resolve(nil)
+                return
+            }
+
+            // Get new flags
+            let newMultiAgent = (dict["enableMultiAgent"] as? NSNumber)?.boolValue ?? true
+            let newMultiModal = (dict["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false
+            let newPDF = (dict["enablePDFUpload"] as? NSNumber)?.boolValue ?? false
+            let newVoice = (dict["enableVoice"] as? NSNumber)?.boolValue ?? false
+
+            // Save new flags (will take effect on next app restart / new conversation)
+            UserDefaults.standard.set(newMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
+            UserDefaults.standard.set(newMultiModal, forKey: Self.featureFlagKeys.enableMultiModalInput)
+            UserDefaults.standard.set(newPDF, forKey: Self.featureFlagKeys.enablePDFUpload)
+            UserDefaults.standard.set(newVoice, forKey: Self.featureFlagKeys.enableVoice)
+
+            print("[AgentforceModule] Feature flags saved (will apply on app restart)")
             resolve(nil)
-            return
         }
-        let enableMultiAgent = (dict["enableMultiAgent"] as? NSNumber)?.boolValue ?? true
-        let enableMultiModalInput = (dict["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false
-        let enablePDFUpload = (dict["enablePDFUpload"] as? NSNumber)?.boolValue ?? false
-        let enableVoice = (dict["enableVoice"] as? NSNumber)?.boolValue ?? false
-
-        UserDefaults.standard.set(enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
-        UserDefaults.standard.set(enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
-        UserDefaults.standard.set(enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
-        UserDefaults.standard.set(enableVoice, forKey: Self.featureFlagKeys.enableVoice)
-
-        resolve(nil)
     }
     
     /// Get current configuration values (legacy format for backward compatibility)
@@ -759,7 +784,117 @@ class AgentforceModule: RCTEventEmitter {
             resolve(["success": true])
         }
     }
-    
+
+    // MARK: - Additional Context
+
+    /// Helper function to recursively convert Any value to JSEncodableValue
+    private func convertToJSEncodableValue(_ rawValue: Any) -> JSEncodableValue? {
+        if let stringValue = rawValue as? String {
+            return .string(stringValue)
+        } else if let numberValue = rawValue as? NSNumber {
+            // Check if it's a boolean first (NSNumber can represent booleans)
+            if CFBooleanGetTypeID() == CFGetTypeID(numberValue) {
+                return .boolean(numberValue.boolValue)
+            } else {
+                return .number(numberValue.doubleValue)
+            }
+        } else if let arrayValue = rawValue as? [Any] {
+            // Recursively convert array elements
+            let encodableArray = arrayValue.compactMap { element in
+                convertToJSEncodableValue(element)
+            }
+            return .array(encodableArray)
+        } else if let dictValue = rawValue as? [String: Any] {
+            // Recursively convert dictionary values
+            var encodableDict: [String: JSEncodableValue] = [:]
+            for (key, val) in dictValue {
+                if let converted = convertToJSEncodableValue(val) {
+                    encodableDict[key] = converted
+                }
+            }
+            return .object(encodableDict)
+        } else {
+            return nil
+        }
+    }
+
+    /// Set additional context for the current conversation.
+    /// Must be called after launching a conversation.
+    ///
+    /// @param contextDict Dictionary with "variables" array
+    /// @param resolve Promise resolver
+    /// @param reject Promise rejecter
+    @objc
+    func setAdditionalContext(
+        _ contextDict: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            do {
+                // Validate context structure
+                guard let variables = contextDict["variables"] as? [[String: Any]] else {
+                    reject("INVALID_CONTEXT", "Missing or invalid 'variables' array", nil)
+                    return
+                }
+
+                // Check if conversation exists
+                guard let conversation = currentConversation else {
+                    reject(
+                        "NO_CONVERSATION",
+                        "No active conversation. Launch conversation first, then set context.",
+                        nil
+                    )
+                    return
+                }
+
+                // Convert to AgentforceVariable array
+                var agentforceVariables: [AgentforceVariable] = []
+                for (index, varDict) in variables.enumerated() {
+                    guard let name = varDict["name"] as? String,
+                          let type = varDict["type"] as? String else {
+                        reject(
+                            "INVALID_CONTEXT",
+                            "Variable at index \(index) missing 'name' or 'type'",
+                            nil
+                        )
+                        return
+                    }
+
+                    // Convert value to JSEncodableValue enum using recursive helper
+                    let value: JSEncodableValue?
+                    if let rawValue = varDict["value"] {
+                        value = convertToJSEncodableValue(rawValue)
+                        if value == nil {
+                            print("[AgentforceModule] ⚠️ Unsupported value type at index \(index)")
+                        }
+                    } else {
+                        value = nil
+                    }
+
+                    // Create AgentforceVariable
+                    // Note: iOS AgentforceVariable doesn't support description field (Android only)
+                    let variable = AgentforceVariable(
+                        name: name,
+                        type: type,
+                        value: value
+                    )
+                    agentforceVariables.append(variable)
+                }
+
+                // Set context on conversation
+                try await conversation.setAdditionalContext(context: agentforceVariables)
+
+                print("[AgentforceModule] ✓ Additional context set: \(agentforceVariables.count) variables")
+                resolve(["success": true])
+
+            } catch {
+                print("[AgentforceModule] ❌ Failed to set additional context: \(error)")
+                reject("CONTEXT_ERROR", error.localizedDescription, error)
+            }
+        }
+    }
+
     /// Reset all settings
     @objc
     func resetSettings(
