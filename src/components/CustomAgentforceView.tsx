@@ -3,18 +3,25 @@
  *
  * Example custom view provider component for Agentforce SDK.
  *
- * When the Custom View Provider feature flag is enabled and this component
- * is registered, the native SDK delegates rendering of specified component
- * types to this React Native view instead of the built-in native views.
+ * HOW VIEW PROVIDER WIRING WORKS (3 steps):
  *
- * Register with AppRegistry and configure via AgentforceService:
- *   AppRegistry.registerComponent('CustomAgentforceView', () => CustomAgentforceView);
- *   AgentforceService.setViewProviderDelegate({
- *     componentMap: {
- *       'copilot/richText': 'CustomAgentforceView',
- *       'copilot/markdown': 'CustomAgentforceView',
- *     },
- *   });
+ * 1. Register this component with AppRegistry (see index.js):
+ *      AppRegistry.registerComponent('CustomAgentforceView', () => CustomAgentforceView);
+ *
+ * 2. Tell the SDK which component types to delegate (see HomeScreen.tsx):
+ *      AgentforceService.setViewProviderDelegate({
+ *        componentMap: {
+ *          'copilot/richText': 'CustomAgentforceView',
+ *          'copilot/markdown': 'CustomAgentforceView',
+ *        },
+ *      });
+ *
+ * 3. This component receives ViewProviderComponentData as props (below).
+ *    The native SDK calls canHandle(definition) → true, then renders a
+ *    RCTRootView / ReactRootView with the matching component name.
+ *
+ * Everything below the props interface is example rendering logic — replace
+ * it with your own UI. The only requirement is accepting the props shape.
  */
 
 import React from 'react';
@@ -31,6 +38,11 @@ interface CustomAgentforceViewProps {
   properties?: Record<string, unknown>;
   subComponents?: ViewProviderComponentData[];
 }
+
+// ---------------------------------------------------------------------------
+// Rendering helpers below — this is example UI, not part of the ViewProvider
+// integration. Replace with your own rendering logic.
+// ---------------------------------------------------------------------------
 
 /** Max nesting depth to prevent runaway recursion. */
 const MAX_DEPTH = 6;
