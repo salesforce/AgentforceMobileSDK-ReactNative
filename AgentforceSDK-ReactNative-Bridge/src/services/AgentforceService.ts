@@ -49,7 +49,7 @@ const EVENTS = {
 /**
  * Valid context variable types for runtime validation
  */
-const VALID_CONTEXT_TYPES: Set<AgentforceContextVariableType> = new Set([
+const VALID_CONTEXT_TYPES: Set<AgentforceContextVariableType> = new Set<AgentforceContextVariableType>([
   'Text',
   'Number',
   'Boolean',

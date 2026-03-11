@@ -29,9 +29,9 @@ import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import FeatureFlagsScreen from './src/screens/FeatureFlagsScreen';
 
-type RootStackParamList = {
+export type RootStackParamList = {
   Home: undefined;
-  Settings: { tab?: 'service' | 'employee' | 'features' } | undefined;
+  Settings: { tab?: 'service' | 'employee' | 'features' };
   FeatureFlags: undefined;
 };
 

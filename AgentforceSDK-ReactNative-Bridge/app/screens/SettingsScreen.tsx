@@ -10,6 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../App';
 import {
   AgentforceService,
   isEmployeeAgentAuthSupported,
@@ -19,10 +21,7 @@ import {
 } from '../../src';
 // Employee Agent tab uses Mobile SDK login only; file-based config is a dev backdoor (no UI here).
 
-interface SettingsScreenProps {
-  navigation: any;
-  route?: { params?: { tab?: 'service' | 'employee' } };
-}
+type SettingsScreenProps = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 type TabType = 'service' | 'employee';
 

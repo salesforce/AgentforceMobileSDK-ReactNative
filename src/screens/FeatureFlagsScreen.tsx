@@ -4,8 +4,10 @@
 
 import React, { useEffect } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../App';
 
-type Props = NativeStackScreenProps<any, 'FeatureFlags'>;
+
+type Props = NativeStackScreenProps<RootStackParamList, 'FeatureFlags'>;
 
 /**
  * Redirects to the Settings screen's Flags tab.
