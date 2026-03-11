@@ -4,7 +4,6 @@ options:
   deploymentTarget:
     iOS: "17.0"
   generateEmptyDirectories: true
-  xcodeVersion: "15.4"  # Generate Xcode format compatible with CI runner
 
 # Align with main-branch project.pbxproj (single-app reference)
 # https://github.com/salesforce/AgentforceMobileSDK-ReactNative/blob/main/ios/ReactAgentforce.xcodeproj/project.pbxproj

@@ -21,6 +21,8 @@ import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfigur
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
+import com.salesforce.android.agentforceservice.conversationservice.data.CopilotContextVariable
+import com.salesforce.android.agentforceservice.conversationservice.data.CopilotAdditionalContext
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig

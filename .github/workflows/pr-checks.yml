@@ -108,7 +108,7 @@ jobs:
           # iOS builds (macOS runner)
           - platform: iOS
             variant: Service Agent
-            os: macos-14
+            os: macos-15
             setup-script: node installios.js service
             build-script: npm run build:ios:service
             cache-paths: ios/Pods
@@ -116,7 +116,7 @@ jobs:
 
           - platform: iOS
             variant: Employee Agent
-            os: macos-14
+            os: macos-15
             setup-script: node installios.js employee
             build-script: npm run build:ios:employee
             cache-paths: ios/Pods
