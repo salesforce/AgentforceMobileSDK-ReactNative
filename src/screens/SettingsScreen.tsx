@@ -301,47 +301,49 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     if (featureFlags == null) {
       return;
     }
-      
-  const loadHiddenPreChatFields = async () => {
-    try {
-      const fields = await AgentforceService.getHiddenPreChatFields();
-      setHiddenPreChatFields(fields);
-    } catch {
-      setHiddenPreChatFields({});
-    }
-  };
 
-  const handleAddPreChatField = () => {
-    const name = newFieldName.trim();
-    const value = newFieldValue.trim();
-    if (!name || !value) return;
-    setHiddenPreChatFields(prev => ({ ...prev, [name]: value }));
-    setNewFieldName('');
-    setNewFieldValue('');
-  };
+    const loadHiddenPreChatFields = async () => {
+      try {
+        const fields = await AgentforceService.getHiddenPreChatFields();
+        setHiddenPreChatFields(fields);
+      } catch {
+        setHiddenPreChatFields({});
+      }
+    };
 
-  const handleRemovePreChatField = (name: string) => {
-    setHiddenPreChatFields(prev => {
-      const next = { ...prev };
-      delete next[name];
-      return next;
-    });
-  };
+    const handleAddPreChatField = () => {
+      const name = newFieldName.trim();
+      const value = newFieldValue.trim();
+      if (!name || !value) {
+        return;
+      }
+      setHiddenPreChatFields(prev => ({ ...prev, [name]: value }));
+      setNewFieldName('');
+      setNewFieldValue('');
+    };
 
-  const handleClearAllPreChatFields = () => {
-    Alert.alert('Clear Hidden Fields', 'Remove all hidden prechat fields?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: () => setHiddenPreChatFields({}),
-      },
-    ]);
-  };
+    const handleRemovePreChatField = (name: string) => {
+      setHiddenPreChatFields(prev => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    };
 
-  const handleQuickAddField = (name: string) => {
-    setNewFieldName(name);
-  };
+    const handleClearAllPreChatFields = () => {
+      Alert.alert('Clear Hidden Fields', 'Remove all hidden prechat fields?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: () => setHiddenPreChatFields({}),
+        },
+      ]);
+    };
+
+    const handleQuickAddField = (name: string) => {
+      setNewFieldName(name);
+    };
 
     const next = { ...featureFlags, [key]: value };
     setFeatureFlags(next);
@@ -414,12 +416,13 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
               <View key={name} style={styles.fieldRow}>
                 <View style={styles.fieldInfo}>
                   <Text style={styles.fieldName}>{name}</Text>
-                  <Text style={styles.fieldValue} numberOfLines={1}>{value}</Text>
+                  <Text style={styles.fieldValue} numberOfLines={1}>
+                    {value}
+                  </Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => handleRemovePreChatField(name)}
-                  style={styles.deleteButton}
-                >
+                  style={styles.deleteButton}>
                   <Text style={styles.deleteButtonText}>X</Text>
                 </TouchableOpacity>
               </View>
@@ -452,8 +455,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
               (!newFieldName.trim() || !newFieldValue.trim()) && styles.buttonDisabled,
             ]}
             onPress={handleAddPreChatField}
-            disabled={!newFieldName.trim() || !newFieldValue.trim()}
-          >
+            disabled={!newFieldName.trim() || !newFieldValue.trim()}>
             <Text style={styles.addFieldButtonText}>Add</Text>
           </TouchableOpacity>
         </View>
@@ -463,18 +465,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
             <TouchableOpacity
               key={name}
               style={styles.quickAddChip}
-              onPress={() => handleQuickAddField(name)}
-            >
+              onPress={() => handleQuickAddField(name)}>
               <Text style={styles.quickAddChipText}>{name}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {fieldCount > 0 && (
-          <TouchableOpacity
-            style={styles.clearFieldsButton}
-            onPress={handleClearAllPreChatFields}
-          >
+          <TouchableOpacity style={styles.clearFieldsButton} onPress={handleClearAllPreChatFields}>
             <Text style={styles.clearFieldsButtonText}>Clear All Fields</Text>
           </TouchableOpacity>
         )}

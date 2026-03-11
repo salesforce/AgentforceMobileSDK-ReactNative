@@ -291,7 +291,9 @@ class AgentforceService {
         componentMap: delegate.componentMap,
       });
       console.log(
-        `[AgentforceService] View provider registered for ${Object.keys(delegate.componentMap).length} types`,
+        `[AgentforceService] View provider registered for ${
+          Object.keys(delegate.componentMap).length
+        } types`,
       );
     } catch (error) {
       console.error('[AgentforceService] Failed to register view provider:', error);
@@ -849,14 +851,9 @@ class AgentforceService {
     try {
       await AgentforceModule.registerHiddenPreChatFields(fields);
       const count = Object.keys(fields).length;
-      console.log(
-        `[AgentforceService] Hidden prechat fields registered: ${count} field(s)`,
-      );
+      console.log(`[AgentforceService] Hidden prechat fields registered: ${count} field(s)`);
     } catch (error) {
-      console.error(
-        '[AgentforceService] Failed to register hidden prechat fields:',
-        error,
-      );
+      console.error('[AgentforceService] Failed to register hidden prechat fields:', error);
       throw error;
     }
   }

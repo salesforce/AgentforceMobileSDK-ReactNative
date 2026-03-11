@@ -30,17 +30,29 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 /** Format a leaf value as a string. */
 function formatLeaf(value: unknown): string {
-  if (value === null || value === undefined) return '—';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (value === null || value === undefined) {
+    return '—';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
   return String(value);
 }
 
 /** Whether a value will render as a nested block (table or array). */
 function isNestedValue(v: unknown, depth: number): boolean {
-  if (depth >= MAX_DEPTH) return false;
-  if (isPlainObject(v)) return Object.keys(v).length > 0;
-  if (Array.isArray(v)) return v.length > 0;
+  if (depth >= MAX_DEPTH) {
+    return false;
+  }
+  if (isPlainObject(v)) {
+    return Object.keys(v).length > 0;
+  }
+  if (Array.isArray(v)) {
+    return v.length > 0;
+  }
   return false;
 }
 
@@ -48,26 +60,33 @@ function isNestedValue(v: unknown, depth: number): boolean {
  * Recursively renders a value. Plain objects become nested key/value tables,
  * arrays render each element, and primitives render as text.
  */
-const ValueRenderer: React.FC<{ value: unknown; depth: number }> = ({
-  value,
-  depth,
-}) => {
+const ValueRenderer: React.FC<{ value: unknown; depth: number }> = ({ value, depth }) => {
   const compact = depth >= 3; // tighter padding at deeper levels
 
   if (isPlainObject(value) && depth < MAX_DEPTH) {
     const entries = Object.entries(value);
-    if (entries.length === 0) return <Text style={styles.emptyText}>{'{ }'}</Text>;
+    if (entries.length === 0) {
+      return <Text style={styles.emptyText}>{'{ }'}</Text>;
+    }
     return (
       <View style={[styles.nestedTable, compact && styles.nestedTableCompact]}>
         {entries.map(([k, v], i) => (
-          <PropertyRow key={k} label={k} value={v} depth={depth} isLast={i === entries.length - 1} />
+          <PropertyRow
+            key={k}
+            label={k}
+            value={v}
+            depth={depth}
+            isLast={i === entries.length - 1}
+          />
         ))}
       </View>
     );
   }
 
   if (Array.isArray(value) && depth < MAX_DEPTH) {
-    if (value.length === 0) return <Text style={styles.emptyText}>{'[ ]'}</Text>;
+    if (value.length === 0) {
+      return <Text style={styles.emptyText}>{'[ ]'}</Text>;
+    }
     return (
       <View style={[styles.nestedArray, compact && styles.nestedTableCompact]}>
         {value.map((item, i) => {
@@ -78,8 +97,7 @@ const ValueRenderer: React.FC<{ value: unknown; depth: number }> = ({
               style={[
                 itemNested ? styles.arrayItemVertical : styles.arrayItem,
                 i < value.length - 1 && styles.arrayItemBorder,
-              ]}
-            >
+              ]}>
               <Text style={styles.arrayIndex}>{i}</Text>
               <View style={itemNested ? undefined : styles.arrayValue}>
                 <ValueRenderer value={item} depth={depth + 1} />
@@ -93,9 +111,7 @@ const ValueRenderer: React.FC<{ value: unknown; depth: number }> = ({
 
   // Leaf value (or max depth reached — fall back to JSON)
   const text =
-    depth >= MAX_DEPTH && typeof value === 'object'
-      ? JSON.stringify(value)
-      : formatLeaf(value);
+    depth >= MAX_DEPTH && typeof value === 'object' ? JSON.stringify(value) : formatLeaf(value);
 
   return (
     <Text style={styles.rowValue} selectable>
@@ -123,12 +139,8 @@ const PropertyRow: React.FC<{
         nested ? styles.rowVertical : styles.row,
         compact && styles.rowCompact,
         !isLast && styles.rowBorder,
-      ]}
-    >
-      <Text
-        style={[styles.rowKey, compact && styles.rowKeyCompact]}
-        numberOfLines={1}
-      >
+      ]}>
+      <Text style={[styles.rowKey, compact && styles.rowKeyCompact]} numberOfLines={1}>
         {label}
       </Text>
       <ValueRenderer value={value} depth={depth + 1} />
@@ -145,9 +157,7 @@ const ComplexAgentforceDataView: React.FC<ComplexAgentforceDataViewProps> = ({
   // If the only meaningful property is a single text-like value, show it inline
   const textKeys = ['text', 'value', 'content', 'label'];
   const singleText =
-    entries.length === 1 &&
-    textKeys.includes(entries[0][0]) &&
-    typeof entries[0][1] === 'string'
+    entries.length === 1 && textKeys.includes(entries[0][0]) && typeof entries[0][1] === 'string'
       ? (entries[0][1] as string)
       : null;
 
