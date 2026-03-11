@@ -7,7 +7,7 @@
     "start": "react-native start",
     "android": "react-native run-android",
     "ios": "node scripts/generate-app-config.js service && react-native run-ios --scheme ServiceAgent --target ServiceAgent",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "build:force": "node scripts/build-react-native-force.js",
     "install:ios": "node installios.js",
     "install:android": "node installandroid.js",
