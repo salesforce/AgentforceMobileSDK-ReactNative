@@ -43,7 +43,7 @@ import {
   loginForEmployeeAgent,
   logoutEmployeeAgent,
 } from 'react-native-agentforce';
-import type { FeatureFlags } from 'react-native-agentforce';
+import type { FeatureFlags, HiddenPreChatFields } from 'react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
 
 type TabType = 'service' | 'employee' | 'features';
@@ -53,6 +53,7 @@ const FLAG_KEYS: (keyof FeatureFlags)[] = [
   'enableMultiModalInput',
   'enablePDFUpload',
   'enableVoice',
+  'enableCustomViewProvider',
 ];
 
 const FLAG_LABELS: Record<keyof FeatureFlags, string> = {
@@ -60,6 +61,7 @@ const FLAG_LABELS: Record<keyof FeatureFlags, string> = {
   enableMultiModalInput: 'Multi-modal input',
   enablePDFUpload: 'PDF upload',
   enableVoice: 'Voice',
+  enableCustomViewProvider: 'Custom View Provider',
 };
 
 const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
@@ -67,6 +69,7 @@ const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
   enableMultiModalInput: 'Enable image/file input in addition to text',
   enablePDFUpload: 'Allow PDF file uploads',
   enableVoice: 'Enable immersive voice',
+  enableCustomViewProvider: 'Override SDK output views with React Native components',
 };
 
 interface SettingsScreenProps {
@@ -97,11 +100,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(null);
   const [savingFlags, setSavingFlags] = useState(false);
 
+  const [hiddenPreChatFields, setHiddenPreChatFields] = useState<HiddenPreChatFields>({});
+  const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldValue, setNewFieldValue] = useState('');
+
   useEffect(() => {
     loadSavedConfiguration();
     loadStoredEmployeeAgentId();
     checkAuthStatus();
     loadFeatureFlags();
+    loadHiddenPreChatFields();
   }, []);
 
   useEffect(() => {
@@ -181,6 +189,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     }
     setLoading(true);
     try {
+      // Register hidden prechat fields before configuring
+      await AgentforceService.registerHiddenPreChatFields(hiddenPreChatFields);
+
       // Get current feature flags to preserve user settings
       const currentFlags = await AgentforceService.getFeatureFlags();
 
@@ -215,6 +226,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           setServiceApiURL('');
           setOrganizationId('');
           setEsDeveloperName('');
+          setHiddenPreChatFields({});
         },
       },
     ]);
@@ -280,6 +292,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         enableMultiModalInput: false,
         enablePDFUpload: false,
         enableVoice: false,
+        enableCustomViewProvider: false,
       });
     }
   };
@@ -288,6 +301,48 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     if (featureFlags == null) {
       return;
     }
+      
+  const loadHiddenPreChatFields = async () => {
+    try {
+      const fields = await AgentforceService.getHiddenPreChatFields();
+      setHiddenPreChatFields(fields);
+    } catch {
+      setHiddenPreChatFields({});
+    }
+  };
+
+  const handleAddPreChatField = () => {
+    const name = newFieldName.trim();
+    const value = newFieldValue.trim();
+    if (!name || !value) return;
+    setHiddenPreChatFields(prev => ({ ...prev, [name]: value }));
+    setNewFieldName('');
+    setNewFieldValue('');
+  };
+
+  const handleRemovePreChatField = (name: string) => {
+    setHiddenPreChatFields(prev => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  };
+
+  const handleClearAllPreChatFields = () => {
+    Alert.alert('Clear Hidden Fields', 'Remove all hidden prechat fields?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () => setHiddenPreChatFields({}),
+      },
+    ]);
+  };
+
+  const handleQuickAddField = (name: string) => {
+    setNewFieldName(name);
+  };
+
     const next = { ...featureFlags, [key]: value };
     setFeatureFlags(next);
     setSavingFlags(true);
@@ -330,6 +385,102 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       </TouchableOpacity>
     </View>
   );
+
+  const QUICK_ADD_FIELDS = ['ContactId', 'AccountId', 'Subject', 'Email'];
+
+  const renderHiddenPreChatFieldsSection = () => {
+    const fieldEntries = Object.entries(hiddenPreChatFields);
+    const fieldCount = fieldEntries.length;
+
+    return (
+      <View style={styles.formContainer}>
+        <View style={styles.preChatHeader}>
+          <Text style={styles.label}>Hidden PreChat Fields</Text>
+          {fieldCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{fieldCount}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.hint}>
+          Key-value pairs sent as hidden prechat fields during Service Agent session start.
+        </Text>
+
+        {fieldCount === 0 ? (
+          <Text style={styles.emptyFieldsText}>No fields configured</Text>
+        ) : (
+          <View style={styles.fieldList}>
+            {fieldEntries.map(([name, value]) => (
+              <View key={name} style={styles.fieldRow}>
+                <View style={styles.fieldInfo}>
+                  <Text style={styles.fieldName}>{name}</Text>
+                  <Text style={styles.fieldValue} numberOfLines={1}>{value}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleRemovePreChatField(name)}
+                  style={styles.deleteButton}
+                >
+                  <Text style={styles.deleteButtonText}>X</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.addFieldRow}>
+          <TextInput
+            style={[styles.input, styles.addFieldInput]}
+            value={newFieldName}
+            onChangeText={setNewFieldName}
+            placeholder="Field name"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextInput
+            style={[styles.input, styles.addFieldInput]}
+            value={newFieldValue}
+            onChangeText={setNewFieldValue}
+            placeholder="Value"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TouchableOpacity
+            style={[
+              styles.addFieldButton,
+              (!newFieldName.trim() || !newFieldValue.trim()) && styles.buttonDisabled,
+            ]}
+            onPress={handleAddPreChatField}
+            disabled={!newFieldName.trim() || !newFieldValue.trim()}
+          >
+            <Text style={styles.addFieldButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.quickAddRow}>
+          {QUICK_ADD_FIELDS.map(name => (
+            <TouchableOpacity
+              key={name}
+              style={styles.quickAddChip}
+              onPress={() => handleQuickAddField(name)}
+            >
+              <Text style={styles.quickAddChipText}>{name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {fieldCount > 0 && (
+          <TouchableOpacity
+            style={styles.clearFieldsButton}
+            onPress={handleClearAllPreChatFields}
+          >
+            <Text style={styles.clearFieldsButtonText}>Clear All Fields</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   const renderServiceAgentTab = () => (
     <ScrollView
@@ -394,6 +545,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           />
         </View>
       </View>
+
+      {renderHiddenPreChatFieldsSection()}
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity
@@ -764,6 +917,123 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 13,
     color: '#28a745',
+  },
+  preChatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  badge: {
+    backgroundColor: '#7B1FA2',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  emptyFieldsText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  fieldList: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f4',
+  },
+  fieldInfo: {
+    flex: 1,
+  },
+  fieldName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#212529',
+  },
+  fieldValue: {
+    fontSize: 13,
+    color: '#6c757d',
+    marginTop: 2,
+  },
+  deleteButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f8d7da',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  deleteButtonText: {
+    color: '#dc3545',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  addFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  addFieldInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  addFieldButton: {
+    backgroundColor: '#7B1FA2',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  addFieldButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  quickAddRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  quickAddChip: {
+    backgroundColor: '#f3e5f5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#CE93D8',
+  },
+  quickAddChipText: {
+    fontSize: 12,
+    color: '#7B1FA2',
+    fontWeight: '500',
+  },
+  clearFieldsButton: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#dc3545',
+    borderRadius: 8,
+  },
+  clearFieldsButtonText: {
+    color: '#dc3545',
+    fontSize: 14,
+    fontWeight: '500',
   },
   flagRow: {
     flexDirection: 'row',

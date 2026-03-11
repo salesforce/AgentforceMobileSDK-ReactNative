@@ -71,6 +71,15 @@ RCT_EXTERN_METHOD(closeConversation:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(startNewConversation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Hidden PreChat Fields
+
+RCT_EXTERN_METHOD(registerHiddenPreChatFields:(NSDictionary *)fields
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(getHiddenPreChatFields:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 // MARK: - Additional Context
 
 RCT_EXTERN_METHOD(setAdditionalContext:(NSDictionary *)contextDict
@@ -98,6 +107,15 @@ RCT_EXTERN_METHOD(enableLogForwarding:(BOOL)enabled
 
 RCT_EXTERN_METHOD(enableNavigationForwarding:(BOOL)enabled
                   resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// MARK: - View Provider
+
+RCT_EXTERN_METHOD(registerViewProvider:(NSDictionary *)config
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(clearViewProvider:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 @end

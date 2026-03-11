@@ -33,3 +33,6 @@ export {
 
 // View provider delegate types
 export { ViewProviderDelegate, ViewProviderComponentData } from './ViewProviderDelegate';
+
+// Hidden prechat field types
+export type { HiddenPreChatFields } from './HiddenPreChatFields';

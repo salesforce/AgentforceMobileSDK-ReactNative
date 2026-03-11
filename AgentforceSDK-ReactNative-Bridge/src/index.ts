@@ -34,6 +34,7 @@ export type {
   AgentforceContextVariableType,
   ViewProviderDelegate,
   ViewProviderComponentData,
+  HiddenPreChatFields,
 } from './types';
 export { isServiceAgentConfig, isEmployeeAgentConfig, isLegacyConfig } from './types';
 

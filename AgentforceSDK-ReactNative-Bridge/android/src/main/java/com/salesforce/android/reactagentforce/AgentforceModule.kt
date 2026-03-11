@@ -21,11 +21,10 @@ import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfigur
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
-import com.salesforce.android.agentforceservice.conversationservice.data.CopilotAdditionalContext
-import com.salesforce.android.agentforceservice.conversationservice.data.CopilotContextVariable
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
+import com.salesforce.android.reactagentforce.providers.BridgeViewProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
 import kotlinx.coroutines.*
 
@@ -46,6 +45,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         private const val KEY_ENABLE_MULTI_MODAL_INPUT = "enableMultiModalInput"
         private const val KEY_ENABLE_PDF_UPLOAD = "enablePDFUpload"
         private const val KEY_ENABLE_VOICE = "enableVoice"
+        // Advisory only — gating is done on the JS side (HomeScreen checks this flag
+        // before calling setViewProviderDelegate). The native layer does not gate on it.
+        private const val KEY_ENABLE_CUSTOM_VIEW_PROVIDER = "enableCustomViewProvider"
     }
 
     private val employeePrefs: SharedPreferences
@@ -69,13 +71,19 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Bridge navigation for forwarding SDK navigation requests to JS
     private val bridgeNavigation = BridgeNavigation(reactContext)
 
+    // Bridge view provider for delegating native SDK views to React Native components
+    private val bridgeViewProvider = BridgeViewProvider(reactContext)
+
+    // Bridge hidden prechat fields (Service Agent only)
+    private val bridgeHiddenPreChat = BridgeHiddenPreChat()
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun getName(): String = MODULE_NAME
 
     // region Unified Configuration Method
-
+    
     /**
      * Configure the SDK with either Service or Employee agent settings.
      * Expects a map with 'type' field set to 'service' or 'employee'.
@@ -105,6 +113,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             else -> promise.reject("INVALID_CONFIG", "Invalid type '$type'. Must be 'service' or 'employee'")
         }
     }
+
     // endregion
 
     // region Service Agent Configuration
@@ -117,16 +126,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         }
         
         Log.d(TAG, "Configuring Service Agent - Org: ${serviceConfig.organizationId}")
-
-        // Only cleanup if switching from Employee mode
-        if (currentMode is LocalAgentMode.Employee) {
-            Log.d(TAG, "⚠️ Switching from Employee to Service mode - cleaning up")
-            AgentforceClientHolder.clear()
-        }
-
+        
         // Configure unified credential provider
         credentialProvider.configure(serviceConfig)
         currentMode = LocalAgentMode.Service(serviceConfig)
+        
+        // Clear existing client
+        AgentforceClientHolder.clear()
         
         // Also update the legacy ViewModel for backward compatibility
         ensureViewModel()
@@ -168,6 +174,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
+                // Always attach bridgeViewProvider so late registrations take effect.
+                // canHandle() returns false when the map is empty, matching no-provider behavior.
+                agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 val sdkMode = AgentforceMode.ServiceAgent(
@@ -195,6 +204,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             }
         }
     }
+
     // endregion
 
     // region Employee Agent Configuration
@@ -208,19 +218,16 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
 
-        // Only cleanup if switching from Service mode
-        if (currentMode is LocalAgentMode.Service) {
-            Log.d(TAG, "⚠️ Switching from Service to Employee mode - cleaning up")
-            AgentforceClientHolder.clear()
-        }
-
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
         credentialProvider.configure(employeeConfig)
         currentMode = LocalAgentMode.Employee(employeeConfig)
-
+        
         // Persist employee agentId (editable in Settings tab)
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
+        
+        // Clear existing client
+        AgentforceClientHolder.clear()
         
         scope.launch {
             try {
@@ -246,6 +253,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
+                // Always attach bridgeViewProvider so late registrations take effect.
+                // canHandle() returns false when the map is empty, matching no-provider behavior.
+                agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 // Use FullConfig mode for Employee Agent
@@ -273,6 +283,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             }
         }
     }
+
     // endregion
 
     // region Legacy Configuration (Backward Compatibility)
@@ -291,9 +302,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putString("organizationId", organizationId)
             putString("esDeveloperName", esDeveloperName)
         }
-
+        
         configureServiceAgent(config, promise)
     }
+
     // endregion
 
     // region Conversation Methods
@@ -379,6 +391,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putBoolean("success", true)
         })
     }
+
     // endregion
 
     // region Configuration Query Methods
@@ -428,17 +441,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun setEmployeeAgentId(agentId: String, promise: Promise) {
-        val oldAgentId = employeePrefs.getString(KEY_EMPLOYEE_AGENT_ID, "") ?: ""
-        val newAgentId = agentId.trim()
-
-        employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, newAgentId).apply()
-
-        // Clear conversation if agent ID changed
-        if (oldAgentId != newAgentId) {
-            Log.d(TAG, "⚠️ Agent ID changed ('$oldAgentId' → '$newAgentId') - clearing conversation")
-            AgentforceClientHolder.clear()
-        }
-
+        employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, agentId ?: "").apply()
         promise.resolve(null)
     }
 
@@ -446,7 +449,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val enableMultiAgent: Boolean,
         val enableMultiModalInput: Boolean,
         val enablePDFUpload: Boolean,
-        val enableVoice: Boolean
+        val enableVoice: Boolean,
+        val enableCustomViewProvider: Boolean
     )
 
     private fun getFeatureFlagsFromConfigOrPrefs(config: ReadableMap): FeatureFlags {
@@ -456,14 +460,16 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 enableMultiAgent = featureFlagsMap.hasKey("enableMultiAgent") && featureFlagsMap.getBoolean("enableMultiAgent"),
                 enableMultiModalInput = featureFlagsMap.hasKey("enableMultiModalInput") && featureFlagsMap.getBoolean("enableMultiModalInput"),
                 enablePDFUpload = featureFlagsMap.hasKey("enablePDFUpload") && featureFlagsMap.getBoolean("enablePDFUpload"),
-                enableVoice = featureFlagsMap.hasKey("enableVoice") && featureFlagsMap.getBoolean("enableVoice")
+                enableVoice = featureFlagsMap.hasKey("enableVoice") && featureFlagsMap.getBoolean("enableVoice"),
+                enableCustomViewProvider = featureFlagsMap.hasKey("enableCustomViewProvider") && featureFlagsMap.getBoolean("enableCustomViewProvider")
             )
         } else {
             FeatureFlags(
                 enableMultiAgent = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true),
                 enableMultiModalInput = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false),
                 enablePDFUpload = featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false),
-                enableVoice = featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false)
+                enableVoice = featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false),
+                enableCustomViewProvider = featureFlagsPrefs.getBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, false)
             )
         }
     }
@@ -474,6 +480,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, flags.enableMultiModalInput)
             .putBoolean(KEY_ENABLE_PDF_UPLOAD, flags.enablePDFUpload)
             .putBoolean(KEY_ENABLE_VOICE, flags.enableVoice)
+            .putBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, flags.enableCustomViewProvider)
             .apply()
     }
 
@@ -484,26 +491,19 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             putBoolean("enableMultiModalInput", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false))
             putBoolean("enablePDFUpload", featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
             putBoolean("enableVoice", featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false))
+            putBoolean("enableCustomViewProvider", featureFlagsPrefs.getBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, false))
         })
     }
 
     @ReactMethod
     fun setFeatureFlags(flags: ReadableMap, promise: Promise) {
-        // Get new flags
-        val newMultiAgent = flags.hasKey("enableMultiAgent") && flags.getBoolean("enableMultiAgent")
-        val newMultiModal = flags.hasKey("enableMultiModalInput") && flags.getBoolean("enableMultiModalInput")
-        val newPDF = flags.hasKey("enablePDFUpload") && flags.getBoolean("enablePDFUpload")
-        val newVoice = flags.hasKey("enableVoice") && flags.getBoolean("enableVoice")
-
-        // Save new flags (will take effect on next app restart / new conversation)
         featureFlagsPrefs.edit()
-            .putBoolean(KEY_ENABLE_MULTI_AGENT, newMultiAgent)
-            .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, newMultiModal)
-            .putBoolean(KEY_ENABLE_PDF_UPLOAD, newPDF)
-            .putBoolean(KEY_ENABLE_VOICE, newVoice)
+            .putBoolean(KEY_ENABLE_MULTI_AGENT, flags.hasKey("enableMultiAgent") && flags.getBoolean("enableMultiAgent"))
+            .putBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, flags.hasKey("enableMultiModalInput") && flags.getBoolean("enableMultiModalInput"))
+            .putBoolean(KEY_ENABLE_PDF_UPLOAD, flags.hasKey("enablePDFUpload") && flags.getBoolean("enablePDFUpload"))
+            .putBoolean(KEY_ENABLE_VOICE, flags.hasKey("enableVoice") && flags.getBoolean("enableVoice"))
+            .putBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, flags.hasKey("enableCustomViewProvider") && flags.getBoolean("enableCustomViewProvider"))
             .apply()
-
-        Log.d(TAG, "Feature flags saved (will apply on app restart)")
         promise.resolve(null)
     }
 
@@ -533,6 +533,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun isInitialized(promise: Promise) {
         promise.resolve(AgentforceClientHolder.isConfigured)
     }
+
     // endregion
 
     // region Log Forwarding
@@ -543,6 +544,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         Log.d(TAG, "Log forwarding ${if (enabled) "enabled" else "disabled"}")
         promise.resolve(true)
     }
+
     // endregion
 
     // region Navigation Forwarding
@@ -553,6 +555,50 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         Log.d(TAG, "Navigation forwarding ${if (enabled) "enabled" else "disabled"}")
         promise.resolve(true)
     }
+
+    // endregion
+
+    // region View Provider
+
+    @ReactMethod
+    fun registerViewProvider(config: ReadableMap, promise: Promise) {
+        val mapData = config.getMap("componentMap")
+
+        if (mapData == null) {
+            promise.reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary")
+            return
+        }
+
+        val componentMap = mutableMapOf<String, String>()
+        val iterator = mapData.keySetIterator()
+        while (iterator.hasNextKey()) {
+            val key = iterator.nextKey()
+            mapData.getString(key)?.let { componentMap[key] = it }
+        }
+
+        if (componentMap.isEmpty()) {
+            promise.reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary")
+            return
+        }
+
+        bridgeViewProvider.register(componentMap)
+        val keysArray = Arguments.createArray().apply {
+            componentMap.keys.forEach { pushString(it) }
+        }
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+            putArray("registeredTypes", keysArray)
+        })
+    }
+
+    @ReactMethod
+    fun clearViewProvider(promise: Promise) {
+        bridgeViewProvider.reset()
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+        })
+    }
+
     // endregion
 
     // region Cleanup
@@ -572,10 +618,48 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         viewModel?.resetConfiguration()
         currentMode = null
         credentialProvider.reset()
+        bridgeViewProvider.reset()
+        bridgeHiddenPreChat.setFields(emptyMap())
         employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
         promise.resolve(Arguments.createMap().apply {
             putBoolean("success", true)
         })
+    }
+
+    // endregion
+
+    // region Event Emitter Support
+    // endregion
+
+    // region Hidden PreChat Fields
+
+    /**
+     * Pre-register hidden prechat field values for the next Service Agent session.
+     *
+     * TODO: Implement AgentforceHiddenPreChatFieldDelegate on BridgeHiddenPreChat
+     * and pass to client.init(hiddenPreChatFieldDelegate = bridgeHiddenPreChat).
+     * See iOS BridgeHiddenPreChat.swift for reference. Until then, fields are
+     * stored but not sent to the SDK.
+     */
+    @ReactMethod
+    fun registerHiddenPreChatFields(fields: ReadableMap, promise: Promise) {
+        val map = mutableMapOf<String, String>()
+        val iterator = fields.keySetIterator()
+        while (iterator.hasNextKey()) {
+            val key = iterator.nextKey()
+            fields.getString(key)?.let { map[key] = it }
+        }
+        bridgeHiddenPreChat.setFields(map)
+        promise.resolve(null)
+    }
+
+    @ReactMethod
+    fun getHiddenPreChatFields(promise: Promise) {
+        val result = Arguments.createMap()
+        for ((key, value) in bridgeHiddenPreChat.getFields()) {
+            result.putString(key, value)
+        }
+        promise.resolve(result)
     }
     // endregion
 
@@ -683,7 +767,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     }
     // endregion
 
-    // region Event Emitter Support
 
     @ReactMethod
     fun addListener(eventName: String) {
@@ -694,6 +777,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun removeListeners(count: Int) {
         // Required for RN event emitter
     }
+
     // endregion
 
     // region Helper Methods
@@ -717,5 +801,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         scope.cancel()
         viewModel = null
     }
+
     // endregion
 }

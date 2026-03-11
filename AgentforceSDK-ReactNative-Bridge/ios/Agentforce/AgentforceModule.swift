@@ -21,7 +21,7 @@ import SalesforceSDKCore
 /// Supports both Service Agent (guest) and Employee Agent (authenticated) modes
 @objc(AgentforceModule)
 class AgentforceModule: RCTEventEmitter {
-    
+
     // MARK: - Properties
 
     /// Unified credential provider for both Service and Employee agents
@@ -42,6 +42,12 @@ class AgentforceModule: RCTEventEmitter {
     private let listenerLock = NSLock()
     private var _hasListeners = false
 
+    // MARK: - Hidden PreChat Fields
+
+    /// Bridge delegate for hidden prechat fields (Service Agent only).
+    /// Strongly retained here because AgentforceClient holds it as a weak reference.
+    private let bridgeHiddenPreChat = BridgeHiddenPreChat()
+
     // MARK: - Logging
 
     /// Bridge logger for forwarding SDK logs to JavaScript.
@@ -58,6 +64,14 @@ class AgentforceModule: RCTEventEmitter {
     /// is in configure methods which run on @MainActor.
     private lazy var bridgeNavigation: BridgeNavigation = {
         return BridgeNavigation(module: self)
+    }()
+
+    // MARK: - View Provider
+
+    /// Bridge view provider for delegating native SDK views to React Native components.
+    /// Initialized lazily so the RCT bridge is available.
+    private lazy var bridgeViewProvider: BridgeViewProvider = {
+        return BridgeViewProvider(bridge: self.bridge)
     }()
 
     // MARK: - Module Setup
@@ -79,7 +93,7 @@ class AgentforceModule: RCTEventEmitter {
     }
 
     // MARK: - Unified Configuration Method
-    
+
     /// Configure the SDK with either Service or Employee agent settings.
     /// Expects a dictionary with 'type' field set to 'service' or 'employee'.
     /// This is the new unified configuration method.
@@ -94,18 +108,18 @@ class AgentforceModule: RCTEventEmitter {
             reject("INVALID_CONFIG", "Missing 'type' field (must be 'service' or 'employee')", nil)
             return
         }
-        
+
         Task { @MainActor in
             do {
                 switch type {
                 case "service":
                     try await configureServiceAgent(configDict)
                     resolve(["success": true, "mode": "service"])
-                    
+
                 case "employee":
                     try await configureEmployeeAgent(configDict)
                     resolve(["success": true, "mode": "employee"])
-                    
+
                 default:
                     reject("INVALID_CONFIG", "Invalid type '\(type)'. Must be 'service' or 'employee'", nil)
                 }
@@ -115,9 +129,9 @@ class AgentforceModule: RCTEventEmitter {
             }
         }
     }
-    
+
     // MARK: - Service Agent Configuration
-    
+
     private func configureServiceAgent(_ configDict: [String: Any]) async throws {
         guard let config = ServiceAgentModeConfig.from(dictionary: configDict) else {
             throw AgentConfigError.missingRequiredField("serviceApiURL, organizationId, or esDeveloperName")
@@ -126,7 +140,7 @@ class AgentforceModule: RCTEventEmitter {
         guard URL(string: config.serviceApiURL) != nil else {
             throw AgentConfigError.missingRequiredField("serviceApiURL must be a valid URL (e.g. https://your-site.salesforce.com)")
         }
-        
+
         // Only cleanup if switching from Employee mode
         if case .employee = currentMode {
             print("[AgentforceModule] ⚠️ Switching from Employee to Service mode - cleaning up")
@@ -136,7 +150,7 @@ class AgentforceModule: RCTEventEmitter {
         // Configure unified credential provider for Service Agent mode
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
-        
+
         // Also update the legacy ServiceAgentManager for backward compatibility
         await MainActor.run {
             ServiceAgentManager.shared.configure(
@@ -145,7 +159,7 @@ class AgentforceModule: RCTEventEmitter {
                 siteUrl: config.serviceApiURL
             )
         }
-        
+
         // Using fullConfig instead of .serviceAgent() to inject bridgeLogger and bridgeNavigation.
         // TODO: Migrate to .serviceAgent(config) when ServiceAgentConfiguration supports logger/navigation parameters.
         let serviceUser = User(
@@ -165,14 +179,18 @@ class AgentforceModule: RCTEventEmitter {
             serviceApiURL: config.serviceApiURL
         )
 
+        // Always pass bridgeViewProvider so late registrations take effect.
+        // canHandle() returns false when the map is empty, matching nil behavior.
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
-            mode: .fullConfig(fullConfiguration)
+            mode: .fullConfig(fullConfiguration),
+            viewProvider: bridgeViewProvider
         )
+        agentforceClient?.hiddenPreChatFieldDelegate = bridgeHiddenPreChat
     }
-    
+
     // MARK: - Employee Agent Configuration
-    
+
     private func configureEmployeeAgent(_ configDict: [String: Any]) async throws {
         guard let config = EmployeeAgentModeConfig.from(dictionary: configDict) else {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
@@ -216,7 +234,7 @@ class AgentforceModule: RCTEventEmitter {
             username: userId,
             displayName: userId
         )
-        
+
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
@@ -227,7 +245,7 @@ class AgentforceModule: RCTEventEmitter {
             enableOnboarding: false,
             internalFlags: [:]
         )
-        
+
         // Build full configuration so we control agentforceFeatureFlagSettings.
         // Passing nil for optional params uses SDK defaults (network, imageProvider, theme, etc.).
         let fullConfiguration = AgentforceConfiguration(
@@ -238,16 +256,18 @@ class AgentforceModule: RCTEventEmitter {
             salesforceNavigation: bridgeNavigation,
             salesforceLogger: bridgeLogger
         )
-        
-        // Initialize Agentforce Client with fullConfig mode (explicit config + feature flags).
+
+        // Always pass bridgeViewProvider so late registrations take effect.
+        // canHandle() returns false when the map is empty, matching nil behavior.
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
-            mode: .fullConfig(fullConfiguration)
+            mode: .fullConfig(fullConfiguration),
+            viewProvider: bridgeViewProvider
         )
     }
-    
+
     // MARK: - Legacy Configuration Method (Backward Compatibility)
-    
+
     /// Configure Service Agent (JavaScript-friendly interface)
     /// This is the legacy method for backward compatibility
     @objc
@@ -265,10 +285,10 @@ class AgentforceModule: RCTEventEmitter {
             "organizationId": organizationId,
             "esDeveloperName": esDeveloperName
         ]
-        
+
         configureWithConfig(config as NSDictionary, resolver: resolve, rejecter: reject)
     }
-    
+
     /// Legacy method for initializing Service Agent
     @objc
     func initializeServiceAgent(
@@ -285,12 +305,12 @@ class AgentforceModule: RCTEventEmitter {
             "organizationId": orgUrl,
             "esDeveloperName": devName
         ]
-        
+
         configureWithConfig(config as NSDictionary, resolver: resolve, rejecter: reject)
     }
-    
+
     // MARK: - Conversation Methods (Unified for both modes)
-    
+
     /// Launch the conversation UI - works for both Service and Employee agents
     @objc
     func launchConversation(
@@ -325,7 +345,7 @@ class AgentforceModule: RCTEventEmitter {
                     resolve(["success": true])
                     return
                 }
-                
+
                 // Fall back to legacy ServiceAgentManager path
                 if !ServiceAgentManager.shared.isInitialized {
                     guard ServiceAgentManager.shared.isConfigured else {
@@ -333,7 +353,7 @@ class AgentforceModule: RCTEventEmitter {
                     }
                     try ServiceAgentManager.shared.initializeSDK()
                 }
-                
+
                 guard let client = ServiceAgentManager.shared.getClient() else {
                     throw ServiceAgentError.sdkNotInitialized
                 }
@@ -357,7 +377,7 @@ class AgentforceModule: RCTEventEmitter {
                         }
                     }
                 )
-                
+
                 presentConversationView(chatView)
                 resolve(["success": true])
             } catch {
@@ -372,7 +392,7 @@ class AgentforceModule: RCTEventEmitter {
             }
         }
     }
-    
+
     /// Start a new conversation (closes existing one and launches fresh)
     @objc
     func startNewConversation(
@@ -383,7 +403,7 @@ class AgentforceModule: RCTEventEmitter {
             do {
                 // Close existing conversation
                 await closeCurrentConversation()
-                
+
                 // Try new unified path first
                 if let client = agentforceClient, let mode = currentMode {
                     let conversation = try getOrCreateConversation(client: client, mode: mode, forceNew: true)
@@ -405,12 +425,12 @@ class AgentforceModule: RCTEventEmitter {
                             }
                         }
                     )
-                    
+
                     presentConversationView(chatView)
                     resolve(["success": true])
                     return
                 }
-                
+
                 // Fall back to legacy path
                 if !ServiceAgentManager.shared.isInitialized {
                     guard ServiceAgentManager.shared.isConfigured else {
@@ -418,7 +438,7 @@ class AgentforceModule: RCTEventEmitter {
                     }
                     try ServiceAgentManager.shared.initializeSDK()
                 }
-                
+
                 guard let client = ServiceAgentManager.shared.getClient() else {
                     throw ServiceAgentError.sdkNotInitialized
                 }
@@ -442,7 +462,7 @@ class AgentforceModule: RCTEventEmitter {
                         }
                     }
                 )
-                
+
                 presentConversationView(chatView)
                 resolve(["success": true])
             } catch {
@@ -451,9 +471,9 @@ class AgentforceModule: RCTEventEmitter {
             }
         }
     }
-    
+
     // MARK: - Conversation Helpers
-    
+
     private func getOrCreateConversation(client: AgentforceClient, mode: AgentMode, forceNew: Bool = false) throws -> AgentConversation {
         // Return existing if available and not forcing new
         if !forceNew, let existing = currentConversation {
@@ -495,7 +515,7 @@ class AgentforceModule: RCTEventEmitter {
         currentConversation = conversation
         return conversation
     }
-    
+
     private func closeCurrentConversation() async {
         if let conversation = currentConversation {
             do {
@@ -506,9 +526,9 @@ class AgentforceModule: RCTEventEmitter {
         }
         currentConversation = nil
     }
-    
+
     // MARK: - Configuration Query Methods
-    
+
     /// Check if SDK is configured
     @objc
     func isConfigured(
@@ -526,7 +546,7 @@ class AgentforceModule: RCTEventEmitter {
             resolve(configured)
         }
     }
-    
+
     /// Get stored Employee Agent ID (set in Settings > Employee Agent tab)
     @objc
     func getEmployeeAgentId(
@@ -536,7 +556,7 @@ class AgentforceModule: RCTEventEmitter {
         let agentId = UserDefaults.standard.string(forKey: "EmployeeAgentId") ?? ""
         resolve(agentId)
     }
-    
+
     /// Set Employee Agent ID (from Settings > Employee Agent tab)
     @objc
     func setEmployeeAgentId(
@@ -560,21 +580,21 @@ class AgentforceModule: RCTEventEmitter {
             resolve(nil)
         }
     }
-    
+
     private static let featureFlagKeys = (
         enableMultiAgent: "AgentforceFF_enableMultiAgent",
         enableMultiModalInput: "AgentforceFF_enableMultiModalInput",
         enablePDFUpload: "AgentforceFF_enablePDFUpload",
         enableVoice: "AgentforceFF_enableVoice"
     )
-    
+
     private struct FeatureFlags {
         let enableMultiAgent: Bool
         let enableMultiModalInput: Bool
         let enablePDFUpload: Bool
         let enableVoice: Bool
     }
-    
+
     private func getFeatureFlagsFromConfigOrUserDefaults(_ configDict: [String: Any]) -> FeatureFlags {
         if let featureFlags = configDict["featureFlags"] as? [String: Any] {
             return FeatureFlags(
@@ -592,14 +612,14 @@ class AgentforceModule: RCTEventEmitter {
             enableVoice: ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
         )
     }
-    
+
     private func saveFeatureFlagsToUserDefaults(_ flags: FeatureFlags) {
         UserDefaults.standard.set(flags.enableMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
         UserDefaults.standard.set(flags.enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
         UserDefaults.standard.set(flags.enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
         UserDefaults.standard.set(flags.enableVoice, forKey: Self.featureFlagKeys.enableVoice)
     }
-    
+
     @objc
     func getFeatureFlags(
         _ resolve: @escaping RCTPromiseResolveBlock,
@@ -643,7 +663,7 @@ class AgentforceModule: RCTEventEmitter {
             resolve(nil)
         }
     }
-    
+
     /// Get current configuration values (legacy format for backward compatibility)
     @objc
     func getConfiguration(
@@ -661,7 +681,7 @@ class AgentforceModule: RCTEventEmitter {
                 resolve(configDict)
                 return
             }
-            
+
             // Fall back to legacy ServiceAgentManager
             let config: [String: String] = [
                 "serviceApiURL": ServiceAgentManager.shared.siteUrl,
@@ -671,7 +691,7 @@ class AgentforceModule: RCTEventEmitter {
             resolve(config)
         }
     }
-    
+
     /// Get detailed configuration info including mode
     @objc
     func getConfigurationInfo(
@@ -699,7 +719,7 @@ class AgentforceModule: RCTEventEmitter {
             }
         }
     }
-    
+
     /// Check if SDK is initialized and ready
     @objc
     func isInitialized(
@@ -764,13 +784,45 @@ class AgentforceModule: RCTEventEmitter {
         sendEvent(withName: "onNavigationRequest", body: payload)
     }
 
+    // MARK: - View Provider
+
+    /// Register a React Native component as a custom view provider for specified types.
+    /// Can be called before or after configure() — the provider is always attached to the
+    /// client and canHandle() checks the map dynamically.
+    @objc
+    func registerViewProvider(
+        _ config: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let dict = config as? [String: Any],
+              let componentMap = dict["componentMap"] as? [String: String],
+              !componentMap.isEmpty else {
+            reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary", nil)
+            return
+        }
+        bridgeViewProvider.register(componentMap: componentMap)
+        resolve(["success": true, "registeredTypes": Array(componentMap.keys)])
+    }
+
+    /// Clear the custom view provider registration.
+    @objc
+    func clearViewProvider(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        bridgeViewProvider.reset()
+        resolve(["success": true])
+    }
+
     // MARK: - Cleanup
-    
+
     private func cleanupClient() {
         currentConversation = nil
         agentforceClient = nil
+        bridgeHiddenPreChat.setFields([:])
     }
-    
+
     /// Close the conversation
     @objc
     func closeConversation(
@@ -783,6 +835,36 @@ class AgentforceModule: RCTEventEmitter {
             dismissConversation()
             resolve(["success": true])
         }
+    }
+
+    // MARK: - Hidden PreChat Fields
+
+    /// Pre-register hidden prechat field values for the next Service Agent session.
+    @objc
+    func registerHiddenPreChatFields(
+        _ fields: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let dict = fields as? [String: String] else {
+            reject(
+                "INVALID_FIELDS",
+                "Hidden prechat fields must be a map of string keys to string values",
+                nil
+            )
+            return
+        }
+        bridgeHiddenPreChat.setFields(dict)
+        resolve(nil)
+    }
+
+    /// Get the currently registered hidden prechat field values.
+    @objc
+    func getHiddenPreChatFields(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        resolve(bridgeHiddenPreChat.getFields())
     }
 
     // MARK: - Additional Context
@@ -906,40 +988,41 @@ class AgentforceModule: RCTEventEmitter {
             cleanupClient()
             currentMode = nil
             credentialProvider.reset()
+            bridgeViewProvider.reset()
             ServiceAgentManager.shared.resetToDefaults()
             UserDefaults.standard.removeObject(forKey: "EmployeeAgentId")
             resolve(["success": true])
         }
     }
-    
+
     // MARK: - UI Presentation Helpers
-    
+
     @MainActor
     private func presentConversationView<Content: View>(_ conversationView: Content) {
         guard let rootViewController = getRootViewController() else {
             print("[AgentforceModule] ⚠️ Could not find root view controller")
             return
         }
-        
+
         let hostingController = UIHostingController(rootView: conversationView)
         hostingController.modalPresentationStyle = .fullScreen
         hostingController.modalTransitionStyle = .coverVertical
-        
+
         rootViewController.present(hostingController, animated: true)
     }
-    
+
     @MainActor
     private func dismissConversation() {
         guard let rootViewController = getRootViewController() else {
             print("[AgentforceModule] ⚠️ Could not find root view controller for dismissal")
             return
         }
-        
+
         if rootViewController.presentedViewController != nil {
             rootViewController.dismiss(animated: true)
         }
     }
-    
+
     @MainActor
     private func getRootViewController() -> UIViewController? {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
