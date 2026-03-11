@@ -612,9 +612,8 @@ These features are planned but not yet implemented:
 
 For questions or issues with CI/CD:
 
-- **Agentforce Mobile Team**: [Slack channel or email]
-- **CI/CD Maintainer**: [Name/contact]
-- **GitHub Issues**: Report infrastructure problems
+- **GitHub Issues**: [Report infrastructure problems](https://github.com/salesforce/AgentforceMobileSDK-ReactNative/issues)
+- **Pull Requests**: Suggest improvements via PR
 
 ---
 
@@ -643,7 +642,6 @@ Key CI/CD configuration files:
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines
 - [README.md](../README.md) - Project setup and usage
-- [MEMORY.md](../.claude/memory/MEMORY.md) - Project memory (bootconfig rules)
 
 ---
 

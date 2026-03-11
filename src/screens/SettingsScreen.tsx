@@ -297,54 +297,53 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     }
   };
 
+  const loadHiddenPreChatFields = async () => {
+    try {
+      const fields = await AgentforceService.getHiddenPreChatFields();
+      setHiddenPreChatFields(fields);
+    } catch {
+      setHiddenPreChatFields({});
+    }
+  };
+
+  const handleAddPreChatField = () => {
+    const name = newFieldName.trim();
+    const fieldValue = newFieldValue.trim();
+    if (!name || !fieldValue) {
+      return;
+    }
+    setHiddenPreChatFields(prev => ({ ...prev, [name]: fieldValue }));
+    setNewFieldName('');
+    setNewFieldValue('');
+  };
+
+  const handleRemovePreChatField = (name: string) => {
+    setHiddenPreChatFields(prev => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  };
+
+  const handleClearAllPreChatFields = () => {
+    Alert.alert('Clear Hidden Fields', 'Remove all hidden prechat fields?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () => setHiddenPreChatFields({}),
+      },
+    ]);
+  };
+
+  const handleQuickAddField = (name: string) => {
+    setNewFieldName(name);
+  };
+
   const handleToggleFeatureFlag = async (key: keyof FeatureFlags, value: boolean) => {
     if (featureFlags == null) {
       return;
     }
-
-    const loadHiddenPreChatFields = async () => {
-      try {
-        const fields = await AgentforceService.getHiddenPreChatFields();
-        setHiddenPreChatFields(fields);
-      } catch {
-        setHiddenPreChatFields({});
-      }
-    };
-
-    const handleAddPreChatField = () => {
-      const name = newFieldName.trim();
-      const value = newFieldValue.trim();
-      if (!name || !value) {
-        return;
-      }
-      setHiddenPreChatFields(prev => ({ ...prev, [name]: value }));
-      setNewFieldName('');
-      setNewFieldValue('');
-    };
-
-    const handleRemovePreChatField = (name: string) => {
-      setHiddenPreChatFields(prev => {
-        const next = { ...prev };
-        delete next[name];
-        return next;
-      });
-    };
-
-    const handleClearAllPreChatFields = () => {
-      Alert.alert('Clear Hidden Fields', 'Remove all hidden prechat fields?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: () => setHiddenPreChatFields({}),
-        },
-      ]);
-    };
-
-    const handleQuickAddField = (name: string) => {
-      setNewFieldName(name);
-    };
-
     const next = { ...featureFlags, [key]: value };
     setFeatureFlags(next);
     setSavingFlags(true);

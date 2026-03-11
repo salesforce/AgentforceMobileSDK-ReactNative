@@ -1,11 +1,11 @@
 name: PR Validation
 
-# Trigger on pull requests to main and pushes to main (for verification)
+# Trigger on pull requests to dev and pushes to dev (for verification)
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ dev ]
   push:
-    branches: [ main ]
+    branches: [ dev ]
 
 # Cancel in-progress runs for the same PR/branch
 concurrency:
