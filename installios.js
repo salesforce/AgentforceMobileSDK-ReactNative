@@ -42,7 +42,7 @@ function validateEnvironment() {
   // Report errors
   if (errors.length > 0) {
     console.error('\n❌ Environment validation failed:\n');
-    errors.forEach(function(err) {
+    errors.forEach(function (err) {
       console.error('   • ' + err);
     });
     process.exit(1);
@@ -51,7 +51,7 @@ function validateEnvironment() {
   // Report warnings
   if (warnings.length > 0) {
     console.warn('\n⚠️  Warnings:\n');
-    warnings.forEach(function(warn) {
+    warnings.forEach(function (warn) {
       console.warn('   • ' + warn);
     });
   }
@@ -87,7 +87,14 @@ validateEnvironment();
 console.log('📋 Installation Plan:');
 console.log('   Target: ' + target);
 console.log('   Mobile SDK: ' + (target === 'service' ? '❌ Not included' : '✅ Included'));
-console.log('   Apps to build: ' + (target === 'all' ? 'ServiceAgent + EmployeeAgent' : target === 'service' ? 'ServiceAgent' : 'EmployeeAgent'));
+console.log(
+  '   Apps to build: ' +
+    (target === 'all'
+      ? 'ServiceAgent + EmployeeAgent'
+      : target === 'service'
+      ? 'ServiceAgent'
+      : 'EmployeeAgent'),
+);
 console.log('\n🔧 Steps:');
 console.log('   1. Install npm dependencies');
 console.log('   2. Apply patches (patch-package)');
@@ -158,8 +165,8 @@ execSync('echo export NODE_BINARY=' + nodePath + ' > .xcode.env', { stdio: 'pipe
 console.log('✅ Step 4/8: Node.js path configured (ios/.xcode.env)\n');
 
 // Use separate Podfiles: service = subset, employee/all = full (employee Podfile)
-var podfileName = (target === 'service') ? 'Podfile.service' : 'Podfile.employee';
-var lockFileName = (target === 'service') ? 'Podfile.service.lock' : 'Podfile.employee.lock';
+var podfileName = target === 'service' ? 'Podfile.service' : 'Podfile.employee';
+var lockFileName = target === 'service' ? 'Podfile.service.lock' : 'Podfile.employee.lock';
 var iosDir = path.join(__dirname, 'ios');
 var sourcePodfile = path.join(iosDir, podfileName);
 var activePodfile = path.join(iosDir, 'Podfile');
@@ -167,13 +174,21 @@ var activeLock = path.join(iosDir, 'Podfile.lock');
 var sourceLock = path.join(iosDir, lockFileName);
 
 console.log('📋 Preparing Podfile for target: ' + target);
-console.log('   Using: ' + podfileName + ' (' + (target === 'service' ? 'Service Agent only' : 'Employee Agent / both apps') + ')');
+console.log(
+  '   Using: ' +
+    podfileName +
+    ' (' +
+    (target === 'service' ? 'Service Agent only' : 'Employee Agent / both apps') +
+    ')',
+);
 fs.copyFileSync(sourcePodfile, activePodfile);
 if (fs.existsSync(sourceLock)) {
   fs.copyFileSync(sourceLock, activeLock);
   console.log('   Restored: ' + lockFileName);
 } else {
-  if (fs.existsSync(activeLock)) { fs.unlinkSync(activeLock); }
+  if (fs.existsSync(activeLock)) {
+    fs.unlinkSync(activeLock);
+  }
   console.log('   No existing lock file found (will generate new one)');
 }
 console.log('');
@@ -184,7 +199,9 @@ try {
   execSync('xcodegen generate', { stdio: [0, 1, 2], cwd: 'ios' });
   console.log('✅ Step 5/8: Xcode project generated\n');
 } catch (e) {
-  console.error('❌ xcodegen generation failed. Ensure xcodegen is installed: brew install xcodegen');
+  console.error(
+    '❌ xcodegen generation failed. Ensure xcodegen is installed: brew install xcodegen',
+  );
   process.exit(1);
 }
 

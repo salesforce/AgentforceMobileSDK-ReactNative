@@ -18,22 +18,26 @@ The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI plat
 ## ✨ Features
 
 ### Multi-App Architecture
+
 - **Two Separate Apps** - Service Agent and Employee Agent from one codebase
 - **Selective Installation** - Install only what you need
 - **Independent Releases** - Deploy Service Agent and Employee Agent separately
 - **Side-by-Side Installation** - Both apps on same device
 
 ### Service Agent App
+
 - **Anonymous Authentication** - URL-based configuration, no login required
 - **Lightweight** - No Mobile SDK dependency
 - **Customer-Facing** - Optimized for public service scenarios
 
 ### Employee Agent App
+
 - **OAuth Authentication** - Salesforce Mobile SDK integration
 - **Full SDK Access** - Complete Mobile SDK features for workforce apps
 - **Published Artifacts** - Uses Mobile SDK from Maven Central & CocoaPods
 
 ### Shared Features
+
 - **Service Agent Configuration** - Configure and initialize the SDK with Service Agent settings
 - **Employee Agent Configuration** - OAuth-based authenticated sessions
 - **Full UI Experience** - Use the pre-built chat interface provided by the Agentforce SDK
@@ -49,12 +53,14 @@ This repository uses a **multi-target/multi-flavor** approach to build two separ
 ### Multi-App Structure
 
 **iOS (XcodeGen + CocoaPods):**
+
 - Two Xcode targets: `ServiceAgent` and `EmployeeAgent`
 - Conditional pod installation based on target
 - Service Agent: Uses `ReactNativeAgentforce/Core` (no Mobile SDK)
 - Employee Agent: Uses `ReactNativeAgentforce/WithMobileSDK` (with Mobile SDK)
 
 **Android (Product Flavors + Gradle):**
+
 - Two flavors: `serviceAgent` and `employeeAgent`
 - Creates 4 build variants (service/employee × debug/release)
 - Service Agent: No Mobile SDK dependency
@@ -63,12 +69,14 @@ This repository uses a **multi-target/multi-flavor** approach to build two separ
 ### Bridge Layer
 
 This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `AgentforceSDK-ReactNative-Bridge/`) for all Agentforce functionality. The bridge provides:
+
 - **JS API**: `AgentforceService` from `react-native-agentforce`
 - **Native modules**: Android (auto-linked) and iOS (CocoaPods)
 - **Runtime detection**: Automatically detects Mobile SDK availability
 - **Subspecs/Variants**: Core (Service Agent) and WithMobileSDK (Employee Agent)
 
 ### JavaScript Layer (100% Shared)
+
 - **Framework**: React Native + TypeScript
 - **Navigation**: React Navigation
 - **Agentforce API**: `AgentforceService` from `react-native-agentforce` (bridge package)
@@ -78,6 +86,7 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 ## 📋 Prerequisites
 
 ### General
+
 - **Node.js** (LTS recommended; 18+ required, 20.19.4+ preferred). Install and verify:
   - **macOS:** `brew install node` (requires [Homebrew](https://brew.sh)). Or use [nvm](https://github.com/nvm-sh/nvm): `nvm install --lts`.
   - **Windows:** Install from [nodejs.org](https://nodejs.org/) or `choco install nodejs-lts`. Or use [nvm-windows](https://github.com/coreybutler/nvm-windows).
@@ -88,6 +97,7 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 - Git
 
 ### Android
+
 - Android Studio
 - Android SDK 24+
 - Gradle 8.0+
@@ -101,6 +111,7 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
   - Run `java -version` to confirm. Full details: [React Native – Set up your environment (Android)](https://reactnative.dev/docs/set-up-your-environment?platform=android).
 
 ### iOS
+
 - macOS
 - Xcode 15+
 - CocoaPods
@@ -160,14 +171,17 @@ Instructions for deploying [Enhanced Chat In-App available here.](https://help.s
 When you first launch the app, navigate to **Settings** and configure:
 
 1. **Service API URL** (required)
+
    - Your Salesforce Service Agent URL
    - Example: `https://your-domain.my.salesforce-scrt.com`
 
 2. **Organization ID** (required)
+
    - Your 15 or 18 character Enhanced Chat Org ID
    - Example: `00D000000000000`
 
 3. **ES Developer Name** (required)
+
    - The API name of your Enhanced Chat Service Agent
    - Example: `Your_Service_Agent_Name`
 
@@ -213,9 +227,11 @@ AgentforceSDK-ReactNative/
 ### Employee Agent Settings
 
 #### Configure an External Client App
+
 Follow the instructions in the [Developer Guide](https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html#create-a-salesforce-app)
 
 #### Building the Employee Agent App
+
 The Employee Agent app is built from this repository using selective installation:
 
 ```bash
@@ -292,16 +308,19 @@ npm run build:android:employee
 ### Manual Testing Flow
 
 1. **Configuration Test**
+
    - Open Settings
    - Fill in all Service Agent fields
    - Save and verify success message
 
 2. **Initialization Test**
+
    - Return to Home screen
    - Tap "Launch Agentforce"
    - Verify "Initializing..." message appears
 
 3. **Conversation Test**
+
    - Wait for conversation UI to load
    - Send a test message
    - Verify response from Service Agent
@@ -315,6 +334,7 @@ npm run build:android:employee
 ### Installation Issues
 
 **"Invalid target" error**
+
 ```bash
 # Use service, employee, or all
 node installios.js service   # ✅ Correct
@@ -322,6 +342,7 @@ node installios.js xyz       # ❌ Wrong
 ```
 
 **Service Agent build fails with "Mobile SDK not found"**
+
 ```bash
 # You tried to build Employee Agent after installing Service Agent only
 # Solution: Install Employee Agent dependencies
@@ -332,6 +353,7 @@ node installandroid.js employee
 ### iOS Issues
 
 **Pod install fails**
+
 ```bash
 cd ios
 xcodegen generate
@@ -341,6 +363,7 @@ pod install --repo-update
 ```
 
 **Build fails in Xcode**
+
 ```bash
 # Clean build folder
 cd ios
@@ -350,6 +373,7 @@ npm run ios:service
 ```
 
 **"Scheme not found"**
+
 ```bash
 # Regenerate Xcode project
 cd ios
@@ -360,6 +384,7 @@ pod install
 ### Android Issues
 
 **Gradle sync fails**
+
 ```bash
 cd android
 ./gradlew clean
@@ -367,6 +392,7 @@ cd android
 ```
 
 **App crashes on launch**
+
 - Check Android logcat: `npx react-native log-android`
 - Verify SDK dependencies in `build.gradle`
 - Ensure minimum SDK version is 24+
@@ -374,11 +400,13 @@ cd android
 ### JavaScript Issues
 
 **Metro bundler errors**
+
 ```bash
 npm start -- --reset-cache
 ```
 
 **Navigation not working**
+
 - Verify `react-native-gesture-handler` is imported in `index.js`
 - Check that `GestureHandlerRootView` wraps the app
 
@@ -398,8 +426,8 @@ await AgentforceService.setAdditionalContext({
     { name: 'userId', type: 'Text', value: '005xx0000001234' },
     { name: 'accountId', type: 'Text', value: '001xx0000001234' },
     { name: 'score', type: 'Number', value: 95.5 },
-    { name: 'isVIP', type: 'Boolean', value: true }
-  ]
+    { name: 'isVIP', type: 'Boolean', value: true },
+  ],
 });
 ```
 
@@ -408,7 +436,9 @@ await AgentforceService.setAdditionalContext({
 ## 📚 Documentation
 
 ### Complete Multi-App Guide
+
 **[docs/separate-agent-app-guide.md](docs/separate-agent-app-guide.md)** - Comprehensive guide covering:
+
 - Detailed installation instructions (selective install)
 - Building and running both apps
 - Project structure and architecture
@@ -418,15 +448,15 @@ await AgentforceService.setAdditionalContext({
 
 ### Quick Reference
 
-| Topic | Command |
-|-------|---------|
-| **Install Service Agent only** | `node installios.js service` |
-| **Install Employee Agent only** | `node installios.js employee` |
-| **Install both apps** | `node installios.js all` |
-| **Run Service Agent** | `npm run ios:service` or `npm run android:service` |
-| **Run Employee Agent** | `npm run ios:employee` or `npm run android:employee` |
-| **Build Service Agent** | `npm run build:ios:service` or `npm run build:android:service` |
-| **Build Employee Agent** | `npm run build:ios:employee` or `npm run build:android:employee` |
+| Topic                           | Command                                                          |
+| ------------------------------- | ---------------------------------------------------------------- |
+| **Install Service Agent only**  | `node installios.js service`                                     |
+| **Install Employee Agent only** | `node installios.js employee`                                    |
+| **Install both apps**           | `node installios.js all`                                         |
+| **Run Service Agent**           | `npm run ios:service` or `npm run android:service`               |
+| **Run Employee Agent**          | `npm run ios:employee` or `npm run android:employee`             |
+| **Build Service Agent**         | `npm run build:ios:service` or `npm run build:android:service`   |
+| **Build Employee Agent**        | `npm run build:ios:employee` or `npm run build:android:employee` |
 
 ## 🤝 Contributing
 

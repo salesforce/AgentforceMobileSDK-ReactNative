@@ -5,12 +5,7 @@
  * Supports both Service Agent (anonymous/guest) and Employee Agent (authenticated) modes.
  */
 
-import {
-  NativeModules,
-  NativeEventEmitter,
-  Platform,
-  EmitterSubscription,
-} from 'react-native';
+import { NativeModules, NativeEventEmitter, Platform, EmitterSubscription } from 'react-native';
 
 import {
   AgentConfig,
@@ -20,8 +15,6 @@ import {
   ConfigurationResult,
   ConfigurationInfo,
   FeatureFlags,
-  isServiceAgentConfig,
-  isEmployeeAgentConfig,
   isLegacyConfig,
 } from '../types/AgentConfig';
 
@@ -145,23 +138,17 @@ class AgentforceService {
    */
   private initializeEventEmitter(): void {
     if (!AgentforceModule) {
-      console.warn(
-        '[AgentforceService] Native module not available - events will not work',
-      );
+      console.warn('[AgentforceService] Native module not available - events will not work');
       return;
     }
-  
+
     try {
       this.eventEmitter = new NativeEventEmitter(AgentforceModule);
       this.initialized = true;
     } catch (error) {
-      console.warn(
-        '[AgentforceService] Failed to initialize event emitter:',
-        error,
-      );
+      console.warn('[AgentforceService] Failed to initialize event emitter:', error);
     }
   }
-
 
   /**
    * Register a logger delegate to receive log messages from the native Agentforce SDK.
@@ -202,7 +189,9 @@ class AgentforceService {
    */
   private setupLoggerListener(): void {
     this.loggerSubscription?.remove();
-    if (!this.eventEmitter) return;
+    if (!this.eventEmitter) {
+      return;
+    }
 
     this.loggerSubscription = this.eventEmitter.addListener(
       EVENTS.LOG_MESSAGE,
@@ -258,7 +247,9 @@ class AgentforceService {
    */
   private setupNavigationListener(): void {
     this.navigationSubscription?.remove();
-    if (!this.eventEmitter) return;
+    if (!this.eventEmitter) {
+      return;
+    }
 
     this.navigationSubscription = this.eventEmitter.addListener(
       EVENTS.NAVIGATION_REQUEST,
@@ -300,7 +291,9 @@ class AgentforceService {
         componentMap: delegate.componentMap,
       });
       console.log(
-        `[AgentforceService] View provider registered for ${Object.keys(delegate.componentMap).length} types`,
+        `[AgentforceService] View provider registered for ${
+          Object.keys(delegate.componentMap).length
+        } types`,
       );
     } catch (error) {
       console.error('[AgentforceService] Failed to register view provider:', error);
@@ -365,9 +358,7 @@ class AgentforceService {
    * });
    * ```
    */
-  async configure(
-    config: AgentConfig | LegacyServiceAgentConfig,
-  ): Promise<boolean> {
+  async configure(config: AgentConfig | LegacyServiceAgentConfig): Promise<boolean> {
     if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
       console.warn('Agentforce only supported on Android and iOS');
       return false;
@@ -388,7 +379,7 @@ class AgentforceService {
       // Call native module with the unified config object
       // iOS uses configureWithConfig, Android uses configure with object
       let result: ConfigurationResult;
-      
+
       if (Platform.OS === 'ios') {
         // iOS: Use the new unified method that accepts NSDictionary
         result = await AgentforceModule.configureWithConfig(configWithFlags);
@@ -397,10 +388,7 @@ class AgentforceService {
         result = await AgentforceModule.configure(configWithFlags);
       }
 
-      console.log(
-        `[AgentforceService] Configured successfully (mode: ${configWithFlags.type})`,
-      );
-
+      console.log(`[AgentforceService] Configured successfully (mode: ${configWithFlags.type})`);
       return result?.success ?? true;
     } catch (error) {
       console.error('[AgentforceService] Configuration failed:', error);
@@ -412,9 +400,7 @@ class AgentforceService {
    * Merge stored feature flags into config if config does not already have featureFlags.
    * So the native layer receives a single source of truth (config.featureFlags or stored).
    */
-  private async mergeFeatureFlagsIntoConfig(
-    config: AgentConfig,
-  ): Promise<AgentConfig> {
+  private async mergeFeatureFlagsIntoConfig(config: AgentConfig): Promise<AgentConfig> {
     if (config.featureFlags != null) {
       return config;
     }
@@ -487,14 +473,10 @@ class AgentforceService {
    * Normalize configuration to ensure it has a type field.
    * Handles backward compatibility with legacy Service Agent config format.
    */
-  private normalizeConfig(
-    config: AgentConfig | LegacyServiceAgentConfig,
-  ): AgentConfig {
+  private normalizeConfig(config: AgentConfig | LegacyServiceAgentConfig): AgentConfig {
     // If it's a legacy config (no type field), convert to new format
     if (isLegacyConfig(config)) {
-      console.log(
-        '[AgentforceService] Converting legacy config to new format',
-      );
+      console.log('[AgentforceService] Converting legacy config to new format');
       return {
         type: 'service',
         serviceApiURL: config.serviceApiURL,
@@ -506,7 +488,6 @@ class AgentforceService {
     // Already has type field
     return config;
   }
-
 
   /**
    * Launch the Agentforce conversation UI.
@@ -646,11 +627,7 @@ class AgentforceService {
       const config = await AgentforceModule.getConfiguration();
 
       // Return null if all fields are empty (no saved config)
-      if (
-        !config?.serviceApiURL &&
-        !config?.organizationId &&
-        !config?.esDeveloperName
-      ) {
+      if (!config?.serviceApiURL && !config?.organizationId && !config?.esDeveloperName) {
         return null;
       }
 
@@ -700,10 +677,7 @@ class AgentforceService {
         mode: configured ? 'service' : null, // Assume service for legacy
       };
     } catch (error) {
-      console.error(
-        '[AgentforceService] Failed to get configuration info:',
-        error,
-      );
+      console.error('[AgentforceService] Failed to get configuration info:', error);
       return { configured: false, mode: null };
     }
   }
@@ -823,7 +797,7 @@ class AgentforceService {
       if (!VALID_CONTEXT_TYPES.has(variable.type as AgentforceContextVariableType)) {
         throw new Error(
           `Invalid context variable at index ${i}: unknown type "${variable.type}". ` +
-            `Valid types: ${Array.from(VALID_CONTEXT_TYPES).join(', ')}`
+            `Valid types: ${Array.from(VALID_CONTEXT_TYPES).join(', ')}`,
         );
       }
     }
@@ -831,7 +805,7 @@ class AgentforceService {
     try {
       const result = await AgentforceModule.setAdditionalContext(context);
       console.log(
-        `[AgentforceService] Additional context set: ${context.variables.length} variables`
+        `[AgentforceService] Additional context set: ${context.variables.length} variables`,
       );
       return result?.success ?? true;
     } catch (error) {
@@ -877,14 +851,9 @@ class AgentforceService {
     try {
       await AgentforceModule.registerHiddenPreChatFields(fields);
       const count = Object.keys(fields).length;
-      console.log(
-        `[AgentforceService] Hidden prechat fields registered: ${count} field(s)`,
-      );
+      console.log(`[AgentforceService] Hidden prechat fields registered: ${count} field(s)`);
     } catch (error) {
-      console.error(
-        '[AgentforceService] Failed to register hidden prechat fields:',
-        error,
-      );
+      console.error('[AgentforceService] Failed to register hidden prechat fields:', error);
       throw error;
     }
   }

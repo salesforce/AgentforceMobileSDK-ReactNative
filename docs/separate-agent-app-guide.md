@@ -34,12 +34,14 @@ Both apps share >98% of code (JavaScript/TypeScript and core native code), with 
 ## 📱 App Types
 
 ### Service Agent
+
 - **Purpose**: Customer-facing, public service app
 - **Authentication**: Anonymous (URL-based configuration)
 - **Display Name**: "Service Agent"
 - **Mobile SDK**: NOT included
 
 ### Employee Agent
+
 - **Purpose**: Internal workforce app
 - **Authentication**: OAuth via Salesforce Mobile SDK
 - **Display Name**: "Employee Agent"
@@ -52,12 +54,14 @@ Both apps share >98% of code (JavaScript/TypeScript and core native code), with 
 ### Prerequisites
 
 **iOS:**
+
 - Xcode 15.0 or later
 - CocoaPods
 - XcodeGen (`brew install xcodegen`)
 - Node.js >= 18
 
 **Android:**
+
 - Android Studio or Android SDK
 - Gradle
 - Node.js >= 18
@@ -110,15 +114,16 @@ node installandroid.js          # Same as 'all'
 
 ### What Gets Installed
 
-| Target | Mobile SDK | CocoaPods/Gradle |
-|--------|-----------|------------------|
-| **service** | ❌ Not included | Service Agent only |
+| Target       | Mobile SDK              | CocoaPods/Gradle    |
+| ------------ | ----------------------- | ------------------- |
+| **service**  | ❌ Not included         | Service Agent only  |
 | **employee** | ✅ From Maven/CocoaPods | Employee Agent only |
-| **all** | ✅ From Maven/CocoaPods | Both targets |
+| **all**      | ✅ From Maven/CocoaPods | Both targets        |
 
 **What each script does:**
 
 #### installios.js [service|employee|all]
+
 1. Installs npm dependencies (always)
 2. **[employee/all only]** Builds react-native-force (Mobile SDK React Native bridge)
 3. Configures Node.js path for Xcode (always)
@@ -126,6 +131,7 @@ node installandroid.js          # Same as 'all'
 5. Installs CocoaPods (only for selected target)
 
 #### installandroid.js [service|employee|all]
+
 1. Installs npm dependencies (always)
 2. Applies React Native Gradle plugin patches (always)
 3. **[employee/all only]** Builds react-native-force (Mobile SDK React Native bridge)
@@ -133,6 +139,7 @@ node installandroid.js          # Same as 'all'
 ### Mobile SDK Dependencies
 
 Employee Agent uses Salesforce Mobile SDK from published artifacts:
+
 - **iOS**: CocoaPods specs (`SalesforceSDKCore` via `ReactNativeAgentforce/WithMobileSDK`)
 - **Android**: Maven Central (`com.salesforce.mobilesdk:SalesforceReact:13.1.1`)
 
@@ -169,12 +176,14 @@ npm run build:android:employee
 ### Manual Builds
 
 **iOS (Xcode):**
+
 1. Open `ios/ReactAgentforce.xcworkspace` (NOT .xcodeproj)
 2. Select scheme: **ServiceAgent** or **EmployeeAgent**
 3. Select target device
 4. Build and run (Cmd+R)
 
 **Android (Gradle):**
+
 ```bash
 cd android
 
@@ -191,6 +200,7 @@ cd android
 ### Output Locations
 
 **Android APKs:**
+
 ```
 android/app/build/outputs/apk/
 ├── serviceAgent/
@@ -202,6 +212,7 @@ android/app/build/outputs/apk/
 ```
 
 **iOS IPAs:**
+
 1. Open Xcode
 2. Window → Organizer
 3. Select archive
@@ -268,18 +279,21 @@ All JavaScript/TypeScript code is **100% shared** between both apps. No changes 
 **Single Project, Two Targets (XcodeGen + CocoaPods):**
 
 This project uses a **single Xcode project with two targets** approach, which provides:
+
 - **Platform consistency**: Matches Android's product flavor architecture
 - **Maximum code reuse**: >98% shared code, minimal duplication
 - **Selective installation**: Install service-only or employee with Mobile SDK
 - **React Native CLI compatibility**: Works seamlessly with standard RN tooling
 
 **Alternative Considered:** Separate projects (one for each app) with independent project.yml/Podfile per app was evaluated but rejected because it would:
+
 - Double disk space and build time (2x Pods directories)
 - Break React Native CLI conventions (expects single ios/ directory)
 - Create platform inconsistency (Android uses flavors, not separate projects)
 - Duplicate most configuration for minimal benefit
 
 **Architecture Details:**
+
 - `project.yml` defines two targets (ServiceAgent, EmployeeAgent)
 - `xcodegen generate` creates `.xcodeproj` with both targets
 - **Two Podfiles**: `Podfile.service` (Service Agent only, subset) and `Podfile.employee` (both targets, full deps). `installios.js` copies the right one to `Podfile` and uses the matching lock (`Podfile.service.lock` or `Podfile.employee.lock`). "all" uses the employee Podfile so both apps share one dependency set.
@@ -288,6 +302,7 @@ This project uses a **single Xcode project with two targets** approach, which pr
 - EmployeeAgent uses `ReactNativeAgentforce/WithMobileSDK` (includes Mobile SDK)
 
 **Mobile SDK Dependencies:**
+
 ```ruby
 # EmployeeAgent target
 pod 'SalesforceReact', :path => '../node_modules/react-native-force'
@@ -301,12 +316,14 @@ The `Podfile.common.rb` includes an `add_pods_target_dependency` function that a
 ### Android Architecture
 
 **Product Flavors + Gradle:**
+
 - `build.gradle` defines two flavors: `serviceAgent`, `employeeAgent`
 - Creates 4 build variants (service/employee × debug/release)
 - ServiceAgent flavor: NO Mobile SDK dependency
 - EmployeeAgent flavor: Mobile SDK from Maven Central
 
 **Mobile SDK Dependency:**
+
 ```gradle
 // build.gradle - Employee Agent only
 employeeAgentImplementation("com.salesforce.mobilesdk:SalesforceReact:13.1.1")
@@ -317,6 +334,7 @@ employeeAgentImplementation("com.salesforce.mobilesdk:SalesforceReact:13.1.1")
 The bridge automatically detects Mobile SDK availability:
 
 **Android (AgentforcePackage.kt):**
+
 ```kotlin
 private fun isMobileSdkAvailable(): Boolean {
     return try {
@@ -329,6 +347,7 @@ private fun isMobileSdkAvailable(): Boolean {
 ```
 
 **iOS (Subspecs):**
+
 - `Core` subspec: Service Agent only, no Mobile SDK
 - `WithMobileSDK` subspec: Includes `SalesforceSDKCore` dependency
 
@@ -337,6 +356,7 @@ private fun isMobileSdkAvailable(): Boolean {
 Employee Agent requires SDK initialization at app startup:
 
 **Android (Conditional in Shared MainApplication):**
+
 ```java
 // android/app/src/main/java/.../MainApplication.java
 public void onCreate() {
@@ -353,6 +373,7 @@ public void onCreate() {
 ```
 
 **iOS (Flavor-Specific AppDelegate):**
+
 ```objc
 // ios/EmployeeAgent/AppDelegate.m (overrides Shared/AppDelegate.m)
 #import <SalesforceReact/SalesforceReactSDKManager.h>
@@ -365,6 +386,7 @@ public void onCreate() {
 ```
 
 **Configuration Files:**
+
 - Android: `android/app/src/employeeAgent/res/values/bootconfig.xml`
 - iOS: `ios/EmployeeAgent/bootconfig.plist`
 
@@ -375,21 +397,25 @@ These files contain OAuth client configuration for Mobile SDK authentication.
 ## ✨ Benefits
 
 ### 1. Separate Apps
+
 - Both installable side-by-side
 - Independent release cycles
 - Clear separation of concerns
 
 ### 2. Code Reuse
-- >98% shared code
+
+- > 98% shared code
 - Single codebase maintenance
 - Consistent features across apps
 
 ### 3. Selective Installation
+
 - Install only what you need (service/employee/all)
 - Service Agent: No Mobile SDK required
 - Employee Agent: Full Mobile SDK from published artifacts
 
 ### 4. Developer Experience
+
 - Service Agent devs don't need to understand Mobile SDK
 - Employee Agent devs get full Mobile SDK integration
 - Flexible workflow for different development needs
@@ -410,31 +436,39 @@ These files contain OAuth client configuration for Mobile SDK authentication.
 **Solution**:
 
 1. **Use the correct install order and do not re-run XcodeGen after Pods are installed:**
+
    ```bash
    node installios.js service   # or employee, or all
    ```
+
    This runs `xcodegen generate` then `pod install`. CocoaPods then:
+
    - Wires each app target to its `Pods-<Target>.(debug|release).xcconfig`
    - Runs the `post_install` hook which adds explicit Pods target dependencies
 
    If you need to change `project.yml`, run the full install again so that XcodeGen runs first and then CocoaPods re-applies the xcconfig references and dependencies.
 
 2. **Always open the workspace:**
+
    ```bash
    open ios/ReactAgentforce.xcworkspace
    ```
+
    In Xcode, select the **ServiceAgent** or **EmployeeAgent** scheme (matching what you installed) and build.
 
 3. **If you already ran XcodeGen after pod install**, re-run the installer so CocoaPods can re-attach the xcconfig and dependencies:
+
    ```bash
    node installios.js service   # or employee / all
    ```
 
 4. **Verify Pods target dependencies**: After running `installios.js`, check the output for:
+
    ```
    ✅ Added ServiceAgent -> Pods-ServiceAgent target dependency
    ✅ Added EmployeeAgent -> Pods-EmployeeAgent target dependency
    ```
+
    This confirms the build order is properly configured.
 
 5. **UIKit / CoreGraphics / Foundation “module not found”** – Often fixed by the Podfile `post_install` settings (`CLANG_ENABLE_MODULES`, `CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES`). If you still see this, ensure you are building with the workspace and the correct scheme.
@@ -452,34 +486,43 @@ node installios.js service  # or employee / all
 ```
 
 ### "Invalid target" error
+
 ```
 ❌ Invalid target: xyz
 ```
+
 **Solution**: Use `service`, `employee`, or `all`:
+
 ```bash
 node installios.js service   # ✅ Correct
 ```
 
 ### Service Agent build fails with "Mobile SDK not found"
+
 **Cause**: Ran `node installios.js service` but trying to build Employee Agent
 
 **Solution**: Install Employee Agent dependencies:
+
 ```bash
 node installios.js employee
 node installandroid.js employee
 ```
 
 ### Employee Agent crashes with Mobile SDK errors
+
 **Cause**: CocoaPods or Gradle cache corruption
 
 **Solution**: Clean and reinstall:
+
 ```bash
 cd ios && pod deintegrate && pod install
 cd android && ./gradlew clean
 ```
 
 ### iOS: "Scheme not found"
+
 **Solution**:
+
 ```bash
 cd ios
 xcodegen generate
@@ -487,23 +530,28 @@ pod install
 ```
 
 ### iOS: "Target not found" during pod install
+
 **Cause**: Ran `node installios.js service` but Podfile expects Employee target
 
 **Solution**: This is expected - Service Agent install skips Employee pods:
+
 ```bash
 npm run ios:service  # Build Service Agent only
 ```
 
 ### Android: Gradle sync fails
+
 **Cause**: Corrupted build cache
 
 **Solution**: Clean and reinstall:
+
 ```bash
 rm -rf android/build android/app/build
 node installandroid.js employee
 ```
 
 ### iOS: CocoaPods warnings about build settings
+
 These warnings are cosmetic and don't affect functionality.
 
 ---
@@ -513,6 +561,7 @@ These warnings are cosmetic and don't affect functionality.
 ### Q: Can I switch between `service` and `employee` installs?
 
 **A:** Yes! Just run the install script again with the new target:
+
 ```bash
 node installios.js service    # Install Service Agent only
 # ... do Service Agent work ...
@@ -530,6 +579,7 @@ node installios.js employee   # Add Employee Agent + Mobile SDK
 ### Q: Which install should I use for CI/CD?
 
 **A:** Depends on your pipeline:
+
 - Separate pipelines → Use specific targets (`service` or `employee`)
 - Monolithic pipeline → Use `all`
 
@@ -544,6 +594,7 @@ node installios.js employee   # Add Employee Agent + Mobile SDK
 This project uses a **single Xcode project with two targets** approach (not separate projects). This decision was made after careful analysis:
 
 **Advantages:**
+
 - ✅ **Platform consistency**: Matches Android's product flavor architecture
 - ✅ **Maximum code reuse**: >98% shared code between targets
 - ✅ **Single build graph**: Pods installed once, shared between targets
@@ -553,6 +604,7 @@ This project uses a **single Xcode project with two targets** approach (not sepa
 
 **Alternative Considered (Rejected):**
 Separate projects (ServiceAgent-ios/, EmployeeAgent-ios/) with independent configurations were evaluated but would introduce:
+
 - ❌ 2x disk space (separate Pods directories)
 - ❌ 2x pod install time
 - ❌ Platform inconsistency (Android uses flavors, not separate gradle projects)
@@ -560,6 +612,7 @@ Separate projects (ServiceAgent-ios/, EmployeeAgent-ios/) with independent confi
 - ❌ Configuration duplication (most settings identical)
 
 **The Current Issues (Now Fixed):**
+
 1. ~~Build order problems requiring scheme patching workaround~~ → **Fixed** with proper Pods target dependencies
 2. ~~Podfile switching complexity~~ → **Improved** with clear logging and validation
 3. ~~Two lock files to maintain separately~~ → **Improved** with explicit lock file management
@@ -607,57 +660,63 @@ Separate projects (ServiceAgent-ios/, EmployeeAgent-ios/) with independent confi
 ### Key Technical Decisions
 
 **iOS:**
+
 - **XcodeGen**: Makes project structure version-controllable (YAML)
 - **Two Podfiles + locks**: Install script selects Podfile.service or Podfile.employee and the matching lock
 - **Published specs**: Uses SalesforceReact from npm + CocoaPods specs
 
 **Android:**
+
 - **Product flavors**: Standard Android approach for app variants
 - **Flavor-specific dependencies**: `employeeAgentImplementation` only for Employee Agent
 
 **Both:**
+
 - **Backward compatible**: No argument = `all` (same as before)
 - **Idempotent scripts**: Can run multiple times safely
 - **Published artifacts**: Uses Maven/CocoaPods for Mobile SDK
 
 ### Code Sharing
 
-| Component | Shared % |
-|-----------|----------|
-| JavaScript/TypeScript | 100% |
-| iOS native (AppDelegate, main) | 100% |
-| Android native (MainActivity, Application) | 100% |
+| Component                                    | Shared %          |
+| -------------------------------------------- | ----------------- |
+| JavaScript/TypeScript                        | 100%              |
+| iOS native (AppDelegate, main)               | 100%              |
+| Android native (MainActivity, Application)   | 100%              |
 | iOS configuration (Info.plist, entitlements) | 0% (app-specific) |
-| Android configuration (strings.xml) | 0% (app-specific) |
-| **Overall** | **>98%** |
+| Android configuration (strings.xml)          | 0% (app-specific) |
+| **Overall**                                  | **>98%**          |
 
 ---
 
 ## 📊 Comparison
 
-| Aspect | Service Agent | Employee Agent |
-|--------|---------------|----------------|
-| **Mobile SDK** | ❌ Not included | ✅ From Maven/CocoaPods |
-| **Authentication** | Anonymous | OAuth |
-| **Use case** | Customer-facing | Internal workforce |
+| Aspect             | Service Agent   | Employee Agent          |
+| ------------------ | --------------- | ----------------------- |
+| **Mobile SDK**     | ❌ Not included | ✅ From Maven/CocoaPods |
+| **Authentication** | Anonymous       | OAuth                   |
+| **Use case**       | Customer-facing | Internal workforce      |
 
 ---
 
 ## 🎯 Recommended Workflows
 
 ### Solo Developer (Service Agent only)
+
 ```bash
 node installios.js service
 node installandroid.js service
 ```
 
 ### Solo Developer (Employee Agent only)
+
 ```bash
 node installios.js employee
 node installandroid.js employee
 ```
 
 ### Full Team (both apps)
+
 ```bash
 node installios.js all
 node installandroid.js all
@@ -665,6 +724,7 @@ node installandroid.js all
 ```
 
 ### CI/CD (separate pipelines)
+
 ```yaml
 service-pipeline:
   script:
@@ -678,6 +738,7 @@ employee-pipeline:
 ```
 
 ### CI/CD (monolithic pipeline)
+
 ```yaml
 full-pipeline:
   script:
@@ -699,6 +760,7 @@ full-pipeline:
 ## Summary
 
 This guide covered:
+
 - ✅ Installing Service Agent and Employee Agent separately
 - ✅ Building and running both apps
 - ✅ Understanding the multi-app architecture

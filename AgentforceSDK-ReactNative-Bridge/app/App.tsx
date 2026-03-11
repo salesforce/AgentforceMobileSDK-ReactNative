@@ -24,8 +24,7 @@ const App = (): JSX.Element => {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
-        }}
-      >
+        }}>
         <Stack.Screen
           name="Home"
           component={HomeScreen}

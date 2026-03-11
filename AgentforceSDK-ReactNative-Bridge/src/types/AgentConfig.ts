@@ -159,9 +159,7 @@ export function isServiceAgentConfig(
  * }
  * ```
  */
-export function isEmployeeAgentConfig(
-  config: AgentConfig,
-): config is EmployeeAgentConfig {
+export function isEmployeeAgentConfig(config: AgentConfig): config is EmployeeAgentConfig {
   return config.type === 'employee';
 }
 

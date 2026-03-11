@@ -25,7 +25,6 @@ interface HomeScreenProps {
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [isServiceAgentConfigured, setIsServiceAgentConfigured] = useState(false);
   const [isEmployeeAgentConfigured, setIsEmployeeAgentConfigured] = useState(false);
-  const [isEmployeeAgentAuthAvailable, setIsEmployeeAgentAuthAvailable] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [activeMode, setActiveMode] = useState<'none' | 'service' | 'employee'>('none');
 
@@ -56,7 +55,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       // Employee Agent is available when EITHER auth flow (e.g. Mobile SDK) OR file-based config
       const authSupported = await isEmployeeAgentAuthSupported();
       const fileConfigValid = isEmployeeAgentConfigValid();
-      setIsEmployeeAgentAuthAvailable(authSupported || fileConfigValid);
 
       // Prefer Mobile SDK session over file config: configured = session OR (no session and file valid)
       const hasSession = authSupported ? await hasEmployeeAgentSession() : false;
@@ -79,17 +77,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const handleLaunchServiceAgent = async () => {
     if (!isServiceAgentConfigured) {
-      Alert.alert(
-        'Configuration Required',
-        'Please configure Service Agent settings first.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Configure',
-            onPress: () => navigation.navigate('Settings', { tab: 'service' }),
-          },
-        ]
-      );
+      Alert.alert('Configuration Required', 'Please configure Service Agent settings first.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Configure',
+          onPress: () => navigation.navigate('Settings', { tab: 'service' }),
+        },
+      ]);
       return;
     }
 
@@ -110,10 +104,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       await AgentforceService.launchConversation();
     } catch (error) {
-      Alert.alert(
-        'Error',
-        'Failed to launch Service Agent. Please check your configuration.'
-      );
+      Alert.alert('Error', 'Failed to launch Service Agent. Please check your configuration.');
       console.error('Launch error:', error);
     }
   };
@@ -129,7 +120,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             text: 'View Settings',
             onPress: () => navigation.navigate('Settings', { tab: 'employee' }),
           },
-        ]
+        ],
       );
       return;
     }
@@ -158,7 +149,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     } catch (error: any) {
       Alert.alert(
         'Error',
-        error?.message || 'Failed to launch Employee Agent. Token may be expired.'
+        error?.message || 'Failed to launch Employee Agent. Token may be expired.',
       );
       console.error('Launch error:', error);
     }
@@ -169,21 +160,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+        showsVerticalScrollIndicator={false}>
         {/* Logo */}
         <View style={styles.logoContainer}>
-          <Image
-            source={require('../../agentforce-icon.png')}
-            style={styles.logo}
-          />
+          <Image source={require('../../agentforce-icon.png')} style={styles.logo} />
         </View>
 
         {/* Title */}
         <Text style={styles.title}>Agentforce</Text>
-        <Text style={styles.subtitle}>
-          Choose an agent type to launch
-        </Text>
+        <Text style={styles.subtitle}>Choose an agent type to launch</Text>
 
         {/* Loading State */}
         {isChecking && (
@@ -203,8 +188,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               activeMode === 'service' && styles.activeButton,
             ]}
             onPress={handleLaunchServiceAgent}
-            disabled={isChecking}
-          >
+            disabled={isChecking}>
             <Text style={styles.launchButtonIcon}>💬</Text>
             <View style={styles.launchButtonContent}>
               <Text style={styles.launchButtonTitle}>Service Agent</Text>
@@ -216,9 +200,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   : 'Not configured'}
               </Text>
             </View>
-            {isServiceAgentConfigured && (
-              <Text style={styles.launchButtonArrow}>→</Text>
-            )}
+            {isServiceAgentConfigured && <Text style={styles.launchButtonArrow}>→</Text>}
           </TouchableOpacity>
 
           {/* Employee Agent Button - disabled when not configured (no .local and no session) */}
@@ -230,8 +212,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               activeMode === 'employee' && styles.activeButtonEmployee,
             ]}
             onPress={handleLaunchEmployeeAgent}
-            disabled={isChecking}
-          >
+            disabled={isChecking}>
             <Text style={styles.launchButtonIcon}>👤</Text>
             <View style={styles.launchButtonContent}>
               <Text style={styles.launchButtonTitle}>Employee Agent</Text>
@@ -243,9 +224,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   : 'Sign in in Settings to configure'}
               </Text>
             </View>
-            {isEmployeeAgentConfigured && (
-              <Text style={styles.launchButtonArrow}>→</Text>
-            )}
+            {isEmployeeAgentConfigured && <Text style={styles.launchButtonArrow}>→</Text>}
           </TouchableOpacity>
         </View>
 
@@ -269,8 +248,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         {/* Settings Button */}
         <TouchableOpacity
           style={styles.settingsButton}
-          onPress={() => navigation.navigate('Settings')}
-        >
+          onPress={() => navigation.navigate('Settings')}>
           <Text style={styles.settingsButtonText}>⚙️ Settings</Text>
         </TouchableOpacity>
 

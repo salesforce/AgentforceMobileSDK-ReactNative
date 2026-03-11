@@ -21,7 +21,12 @@
     "build:ios:employee": "node scripts/generate-app-config.js employee && xcodebuild -workspace ios/ReactAgentforce.xcworkspace -scheme EmployeeAgent -configuration Release",
     "generate:xcode": "cd ios && xcodegen generate",
     "install:pods": "cd ios && pod install",
-    "postinstall": "patch-package && node scripts/generate-app-config.js service"
+    "postinstall": "patch-package && node scripts/generate-app-config.js service",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "format:fix": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@react-navigation/native": "^6.1.9",
