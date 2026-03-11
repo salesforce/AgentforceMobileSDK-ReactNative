@@ -49,19 +49,20 @@ const EVENTS = {
 /**
  * Valid context variable types for runtime validation
  */
-const VALID_CONTEXT_TYPES: Set<AgentforceContextVariableType> = new Set<AgentforceContextVariableType>([
-  'Text',
-  'Number',
-  'Boolean',
-  'Date',
-  'DateTime',
-  'Json',
-  'List',
-  'Money',
-  'Object',
-  'Ref',
-  'Variable',
-]);
+const VALID_CONTEXT_TYPES: Set<AgentforceContextVariableType> =
+  new Set<AgentforceContextVariableType>([
+    'Text',
+    'Number',
+    'Boolean',
+    'Date',
+    'DateTime',
+    'Json',
+    'List',
+    'Money',
+    'Object',
+    'Ref',
+    'Variable',
+  ]);
 
 /**
  * Service class for interacting with native Agentforce SDK.

@@ -6,7 +6,6 @@ import React, { useEffect } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
 
-
 type Props = NativeStackScreenProps<RootStackParamList, 'FeatureFlags'>;
 
 /**

@@ -74,7 +74,6 @@ const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
   enableCustomViewProvider: 'Override SDK output views with React Native components',
 };
 
-
 type SettingsScreenProps = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) => {
