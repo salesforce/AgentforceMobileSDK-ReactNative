@@ -4,9 +4,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from './screens/HomeScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
-type RootStackParamList = {
+export type RootStackParamList = {
   Home: undefined;
-  Settings: { tab?: 'service' | 'employee' } | undefined;
+  Settings: { tab?: 'service' | 'employee' };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

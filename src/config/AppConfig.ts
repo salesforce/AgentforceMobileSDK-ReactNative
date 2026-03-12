@@ -31,12 +31,15 @@
 
 import { APP_MODE } from './AppConfig.generated';
 
+// Widen the type for comparison - APP_MODE can be 'service', 'employee', or 'all'
+const appMode: 'service' | 'employee' | 'all' = APP_MODE as any;
+
 /**
  * Feature flags derived from APP_MODE
  */
 export const FEATURES = {
-  SHOW_SERVICE_AGENT: APP_MODE === 'all' || APP_MODE === 'service',
-  SHOW_EMPLOYEE_AGENT: APP_MODE === 'all' || APP_MODE === 'employee',
+  SHOW_SERVICE_AGENT: appMode === 'all' || appMode === 'service',
+  SHOW_EMPLOYEE_AGENT: appMode === 'all' || appMode === 'employee',
 };
 
 /**

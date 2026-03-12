@@ -36,6 +36,8 @@ import {
   Switch,
   ActivityIndicator,
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../App';
 import {
   AgentforceService,
   isEmployeeAgentAuthSupported,
@@ -72,10 +74,7 @@ const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
   enableCustomViewProvider: 'Override SDK output views with React Native components',
 };
 
-interface SettingsScreenProps {
-  navigation: any;
-  route?: { params?: { tab?: TabType } };
-}
+type SettingsScreenProps = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) => {
   const [activeTab, setActiveTab] = useState<TabType>(

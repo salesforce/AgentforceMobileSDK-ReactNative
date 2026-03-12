@@ -84,7 +84,6 @@ local.properties
 node_modules
 *.log
 .nvm
-package-lock.json
 
 # OS X
 .DS_Store
