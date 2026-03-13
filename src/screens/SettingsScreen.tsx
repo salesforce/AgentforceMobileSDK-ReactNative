@@ -52,10 +52,7 @@ import type {
   AgentforceContextVariableType,
 } from 'react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
-import {
-  getContextVariables,
-  setContextVariables,
-} from '../store/ContextVariablesStore';
+import { getContextVariables, setContextVariables } from '../store/ContextVariablesStore';
 
 type TabType = 'service' | 'employee' | 'features';
 
@@ -103,9 +100,7 @@ function parseContextVariableValue(
   return trimmed;
 }
 
-function formatContextVariableValue(
-  value: AgentforceContextVariable['value'],
-): string {
+function formatContextVariableValue(value: AgentforceContextVariable['value']): string {
   if (value == null) {
     return '';
   }
@@ -600,8 +595,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     const newName = agentType === 'service' ? newServiceCtxName : newEmployeeCtxName;
     const setNewName = agentType === 'service' ? setNewServiceCtxName : setNewEmployeeCtxName;
     const newType = agentType === 'service' ? newServiceCtxType : newEmployeeCtxType;
-    const setNewType =
-      agentType === 'service' ? setNewServiceCtxType : setNewEmployeeCtxType;
+    const setNewType = agentType === 'service' ? setNewServiceCtxType : setNewEmployeeCtxType;
     const newValue = agentType === 'service' ? newServiceCtxValue : newEmployeeCtxValue;
     const setNewValue = agentType === 'service' ? setNewServiceCtxValue : setNewEmployeeCtxValue;
 

@@ -353,10 +353,28 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             return
         }
 
-        // Launch conversation
+        // Create conversation before launching Activity so setAdditionalContext
+        // can find it immediately after the promise resolves (matches iOS behavior).
+        if (AgentforceClientHolder.currentConversation == null) {
+            val client = AgentforceClientHolder.agentforceClient
+            if (client != null) {
+                try {
+                    val agentIdParam = AgentforceClientHolder.agentId?.takeIf { it.isNotBlank() }
+                    val conversation = client.startAgentforceConversation(agentId = agentIdParam)
+                    AgentforceClientHolder.setConversation(conversation)
+                    Log.d(TAG, "Conversation created in module (agentId=${agentIdParam ?: "null/multi-agent"})")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to create conversation", e)
+                    promise.reject("LAUNCH_ERROR", "Failed to start conversation: ${e.message}", e)
+                    return
+                }
+            }
+        }
+
+        // Launch conversation UI
         val intent = Intent(activity, AgentforceConversationActivity::class.java)
         activity.startActivity(intent)
-        
+
         Log.d(TAG, "Conversation activity launched")
         promise.resolve(Arguments.createMap().apply {
             putBoolean("success", true)
@@ -384,6 +402,22 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Clear existing conversation
         AgentforceClientHolder.clearConversation()
         viewModel?.closeConversation()
+
+        // Create new conversation before launching Activity so setAdditionalContext
+        // can find it immediately after the promise resolves (matches iOS behavior).
+        val client = AgentforceClientHolder.agentforceClient
+        if (client != null) {
+            try {
+                val agentIdParam = AgentforceClientHolder.agentId?.takeIf { it.isNotBlank() }
+                val conversation = client.startAgentforceConversation(agentId = agentIdParam)
+                AgentforceClientHolder.setConversation(conversation)
+                Log.d(TAG, "New conversation created in module (agentId=${agentIdParam ?: "null/multi-agent"})")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create new conversation", e)
+                promise.reject("START_NEW_ERROR", "Failed to start new conversation: ${e.message}", e)
+                return
+            }
+        }
 
         val intent = Intent(activity, AgentforceConversationActivity::class.java)
         activity.startActivity(intent)
