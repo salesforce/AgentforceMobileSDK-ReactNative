@@ -106,11 +106,12 @@ class ServiceAgentManager: ObservableObject {
         cleanupSDK()
         
         // Create Service Agent Configuration
-        // For Service Agent mode, we need: esDeveloperName, organizationId, and serviceApiURL
+        // For Service Agent mode, we need: esDeveloperName, organizationId, serviceApiURL, and forceConfigEndPoint
         let serviceConfig = ServiceAgentConfiguration(
             esDeveloperName: devName,
             organizationId: orgUrl,
-            serviceApiURL: siteUrl
+            serviceApiURL: siteUrl,
+            forceConfigEndPoint: siteUrl // Use siteUrl as the config endpoint
         )
         
         // Initialize Agentforce Client with Service Agent mode
