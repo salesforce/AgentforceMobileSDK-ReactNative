@@ -100,6 +100,7 @@ Each nightly build:
 5. On success after previous failure: Auto-closes the related issue
 
 **Issue Labels:**
+
 - `CI` - Created by automated CI
 - `sdk-integration` - SDK integration testing failure
 - `ios` or `android` - Platform-specific
@@ -110,6 +111,7 @@ Each nightly build:
 **For Internal SDK Team:**
 
 **iOS:**
+
 ```bash
 node installios.js all
 npm run build:ios:service
@@ -117,6 +119,7 @@ npm run build:ios:employee
 ```
 
 **Android:**
+
 ```bash
 node installandroid.js all
 npm run build:android:service
@@ -126,6 +129,7 @@ npm run build:android:employee
 **For React Native Maintainers:**
 
 When an SDK integration issue is created:
+
 1. Check build logs and SDK version in the issue
 2. Try to reproduce locally with that SDK version
 3. Fix the React Native bridge or sample app code
@@ -236,6 +240,7 @@ git push
 #### Build Failures
 
 **Android:**
+
 ```bash
 node installandroid.js service  # or employee
 npm run build:android:service   # or employee
@@ -244,6 +249,7 @@ cd android && ./gradlew clean && ./gradlew :app:assembleServiceAgentRelease --st
 ```
 
 **iOS:**
+
 ```bash
 node installios.js service      # or employee
 rm -rf ios/build                # Clean build folder
@@ -253,11 +259,13 @@ npm run build:ios:service       # or employee
 #### Cache Issues
 
 Clear GitHub Actions cache:
+
 1. Go to repository → Actions → Caches
 2. Delete relevant caches
 3. Re-run workflow
 
 Or bump cache version in workflow:
+
 ```yaml
 key: ${{ runner.os }}-gradle-v2-${{ hashFiles('**/*.gradle*') }}
 ```
@@ -265,13 +273,15 @@ key: ${{ runner.os }}-gradle-v2-${{ hashFiles('**/*.gradle*') }}
 #### Timeout Errors
 
 Re-run the workflow or increase timeout in `.github/workflows/pr-checks.yml`:
+
 ```yaml
-timeout-minutes: 45  # Increase from 30
+timeout-minutes: 45 # Increase from 30
 ```
 
 #### Out of Memory Errors (Android)
 
 Update `android/gradle.properties`:
+
 ```properties
 org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g
 ```
@@ -281,11 +291,13 @@ org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g
 **Symptom:** GitHub issue created by internal SDK nightly build
 
 **Indicates:**
+
 - Breaking changes in internal SDK affecting React Native bridge
 - API changes requiring bridge updates
 - Build configuration issues
 
 **Resolution:**
+
 1. Review issue for platform, SDK version, error logs
 2. Check `AgentforceSDK-ReactNative-Bridge/` for needed updates
 3. Reproduce locally if possible
@@ -296,14 +308,17 @@ org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g
 ### Viewing Build Logs
 
 **In Pull Request:**
+
 1. Scroll to "Checks" section
 2. Click failing check → "Details"
 
 **In Actions Tab:**
+
 1. Go to Actions → Click workflow run
 2. Click failing job → Expand steps
 
 **Download Artifacts:**
+
 1. Go to workflow run → "Artifacts" section
 2. Download `build-logs-<platform>-<variant>.zip`
 
