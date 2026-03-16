@@ -185,12 +185,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     serviceAgentConfiguration = sdkServiceConfig,
                     agentforceConfiguration = agentforceConfig
                 )
-                
+
                 // Initialize client
                 val client = AgentforceClient()
                 client.init(
                     agentforceMode = sdkMode,
-                    application = reactApplicationContext.applicationContext as Application
+                    application = reactApplicationContext.applicationContext as Application,
+                    hiddenPreChatFieldDelegate = bridgeHiddenPreChat
                 )
                 
                 AgentforceClientHolder.setClient(client)
@@ -637,11 +638,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     /**
      * Pre-register hidden prechat field values for the next Service Agent session.
-     *
-     * TODO: Implement AgentforceHiddenPreChatFieldDelegate on BridgeHiddenPreChat
-     * and pass to client.init(hiddenPreChatFieldDelegate = bridgeHiddenPreChat).
-     * See iOS BridgeHiddenPreChat.swift for reference. Until then, fields are
-     * stored but not sent to the SDK.
      */
     @ReactMethod
     fun registerHiddenPreChatFields(fields: ReadableMap, promise: Promise) {
