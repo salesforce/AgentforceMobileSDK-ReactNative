@@ -139,12 +139,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
 
-  const [serviceContextVars, setServiceContextVars] = useState<AgentforceContextVariable[]>([]);
+  const [serviceContextVars, setServiceContextVars] = useState<AgentforceContextVariable[]>(() =>
+    getContextVariables('service'),
+  );
   const [newServiceCtxName, setNewServiceCtxName] = useState('');
   const [newServiceCtxType, setNewServiceCtxType] = useState<AgentforceContextVariableType>('Text');
   const [newServiceCtxValue, setNewServiceCtxValue] = useState('');
 
-  const [employeeContextVars, setEmployeeContextVars] = useState<AgentforceContextVariable[]>([]);
+  const [employeeContextVars, setEmployeeContextVars] = useState<AgentforceContextVariable[]>(() =>
+    getContextVariables('employee'),
+  );
   const [newEmployeeCtxName, setNewEmployeeCtxName] = useState('');
   const [newEmployeeCtxType, setNewEmployeeCtxType] =
     useState<AgentforceContextVariableType>('Text');
@@ -156,8 +160,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     checkAuthStatus();
     loadFeatureFlags();
     loadHiddenPreChatFields();
-    setServiceContextVars(getContextVariables('service'));
-    setEmployeeContextVars(getContextVariables('employee'));
   }, []);
 
   useEffect(() => {
@@ -276,6 +278,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           setEsDeveloperName('');
           setHiddenPreChatFields({});
           setServiceContextVars([]);
+          setEmployeeContextVars([]);
         },
       },
     ]);
