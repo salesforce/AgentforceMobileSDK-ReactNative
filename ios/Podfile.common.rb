@@ -16,7 +16,7 @@ def shared_pods
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  pod 'AgentforceSDK'
+  pod 'AgentforceSDK', '15.0.7'
   pod 'Messaging-InApp-Core', '> 1.10.0'
 
   # JWTKit is required by AgentforceService but not resolved automatically

@@ -175,4 +175,47 @@ dependencies {
     }
 }
 
+// ============================================================================
+// Auto-generate AppConfig based on build variant
+// ============================================================================
+
+// Hook the generation task to run before preBuild for all variants
+android.applicationVariants.all { variant ->
+    def variantName = variant.name.capitalize()
+    def flavorName = variant.flavorName
+
+    // Determine APP_MODE based on flavor
+    def appMode = 'all' // default
+    if (flavorName == 'serviceAgent') {
+        appMode = 'service'
+    } else if (flavorName == 'employeeAgent') {
+        appMode = 'employee'
+    }
+
+    // Create a variant-specific task
+    def taskName = "generateAppConfigFor${variantName}"
+
+    if (!tasks.findByName(taskName)) {
+        tasks.create(taskName) {
+            description = "Auto-generates AppConfig.generated.ts for ${variantName}"
+
+            doLast {
+                println "🎯 Auto-detected variant: ${variant.name} (flavor: ${flavorName}) → APP_MODE=${appMode}"
+
+                // Run the Node.js script to generate the config
+                def projectRoot = project.rootDir.parent
+                exec {
+                    workingDir projectRoot
+                    commandLine 'node', 'scripts/generate-app-config.js', appMode
+                }
+            }
+        }
+    }
+
+    def preBuildTask = tasks.findByName("pre${variantName}Build")
+    if (preBuildTask) {
+        preBuildTask.dependsOn taskName
+    }
+}
+
 apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)

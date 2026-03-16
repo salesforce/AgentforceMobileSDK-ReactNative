@@ -8,4 +8,4 @@
  * node scripts/generate-app-config.js [service|employee|all]
  */
 
-export const APP_MODE = 'service' as const;
+export const APP_MODE = 'employee' as const;

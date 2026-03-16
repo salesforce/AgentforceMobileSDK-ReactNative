@@ -57,6 +57,25 @@ targetTemplates:
           fi
         shell: /bin/sh
         showEnvVars: false
+      - name: "Generate AppConfig from Target"
+        script: |
+          set -e
+          cd "${SRCROOT}/.."
+
+          # Detect target: ServiceAgent or EmployeeAgent
+          if [ "$TARGET_NAME" = "ServiceAgent" ]; then
+            APP_MODE="service"
+          elif [ "$TARGET_NAME" = "EmployeeAgent" ]; then
+            APP_MODE="employee"
+          else
+            echo "warning: Unknown target $TARGET_NAME, defaulting to 'all'"
+            APP_MODE="all"
+          fi
+
+          echo "🎯 Auto-detected target: $TARGET_NAME → APP_MODE=$APP_MODE"
+          node scripts/generate-app-config.js "$APP_MODE"
+        shell: /bin/sh
+        showEnvVars: false
       - name: "Bundle React Native code and images"
         script: |
           set -e
