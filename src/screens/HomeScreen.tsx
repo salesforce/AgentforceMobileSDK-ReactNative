@@ -46,6 +46,7 @@ import {
   NavigationRequest,
 } from 'react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
+import { getContextVariables } from '../store/ContextVariablesStore';
 
 interface HomeScreenProps {
   navigation: any;
@@ -190,6 +191,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       }
 
       await AgentforceService.launchConversation();
+
+      const contextVars = getContextVariables('service');
+      if (contextVars.length > 0) {
+        try {
+          await AgentforceService.setAdditionalContext({ variables: contextVars });
+        } catch (ctxError) {
+          console.warn('Failed to set service agent context variables:', ctxError);
+        }
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to launch Service Agent. Please check your configuration.');
       console.error('Launch error:', error);
@@ -237,6 +247,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       setActiveMode('employee');
 
       await AgentforceService.launchConversation();
+
+      const contextVars = getContextVariables('employee');
+      if (contextVars.length > 0) {
+        try {
+          await AgentforceService.setAdditionalContext({ variables: contextVars });
+        } catch (ctxError) {
+          console.warn('Failed to set employee agent context variables:', ctxError);
+        }
+      }
     } catch (error: any) {
       Alert.alert(
         'Error',

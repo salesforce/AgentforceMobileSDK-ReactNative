@@ -45,8 +45,14 @@ import {
   loginForEmployeeAgent,
   logoutEmployeeAgent,
 } from 'react-native-agentforce';
-import type { FeatureFlags, HiddenPreChatFields } from 'react-native-agentforce';
+import type {
+  FeatureFlags,
+  HiddenPreChatFields,
+  AgentforceContextVariable,
+  AgentforceContextVariableType,
+} from 'react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
+import { getContextVariables, setContextVariables } from '../store/ContextVariablesStore';
 
 type TabType = 'service' | 'employee' | 'features';
 
@@ -73,6 +79,36 @@ const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
   enableVoice: 'Enable immersive voice',
   enableCustomViewProvider: 'Override SDK output views with React Native components',
 };
+
+const DEFAULT_CONTEXT_VARIABLES: AgentforceContextVariable[] = [
+  { name: 'result', type: 'Text', value: 'my result' },
+  { name: 'filters', type: 'List', value: ['filter 1', 'filter 2'] },
+  { name: 'facets', type: 'List', value: ['my facets1', 'my facets2'] },
+];
+
+function parseContextVariableValue(
+  type: AgentforceContextVariableType,
+  raw: string,
+): string | string[] | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return null;
+  }
+  if (type === 'List') {
+    return trimmed.split(',').map(s => s.trim());
+  }
+  return trimmed;
+}
+
+function formatContextVariableValue(value: AgentforceContextVariable['value']): string {
+  if (value == null) {
+    return '';
+  }
+  if (Array.isArray(value)) {
+    return `[${value.length} items]`;
+  }
+  return String(value);
+}
 
 type SettingsScreenProps = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -102,6 +138,21 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   const [hiddenPreChatFields, setHiddenPreChatFields] = useState<HiddenPreChatFields>({});
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
+
+  const [serviceContextVars, setServiceContextVars] = useState<AgentforceContextVariable[]>(() =>
+    getContextVariables('service'),
+  );
+  const [newServiceCtxName, setNewServiceCtxName] = useState('');
+  const [newServiceCtxType, setNewServiceCtxType] = useState<AgentforceContextVariableType>('Text');
+  const [newServiceCtxValue, setNewServiceCtxValue] = useState('');
+
+  const [employeeContextVars, setEmployeeContextVars] = useState<AgentforceContextVariable[]>(() =>
+    getContextVariables('employee'),
+  );
+  const [newEmployeeCtxName, setNewEmployeeCtxName] = useState('');
+  const [newEmployeeCtxType, setNewEmployeeCtxType] =
+    useState<AgentforceContextVariableType>('Text');
+  const [newEmployeeCtxValue, setNewEmployeeCtxValue] = useState('');
 
   useEffect(() => {
     loadSavedConfiguration();
@@ -226,6 +277,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           setOrganizationId('');
           setEsDeveloperName('');
           setHiddenPreChatFields({});
+          setServiceContextVars([]);
+          setEmployeeContextVars([]);
         },
       },
     ]);
@@ -356,6 +409,68 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     }
   };
 
+  // Sync context variables to store whenever they change
+  useEffect(() => {
+    setContextVariables('service', serviceContextVars);
+  }, [serviceContextVars]);
+
+  useEffect(() => {
+    setContextVariables('employee', employeeContextVars);
+  }, [employeeContextVars]);
+
+  const handleAddContextVariable = (agentType: 'service' | 'employee') => {
+    const name = agentType === 'service' ? newServiceCtxName : newEmployeeCtxName;
+    const type = agentType === 'service' ? newServiceCtxType : newEmployeeCtxType;
+    const rawValue = agentType === 'service' ? newServiceCtxValue : newEmployeeCtxValue;
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return;
+    }
+
+    const value = parseContextVariableValue(type, rawValue);
+    const variable: AgentforceContextVariable = { name: trimmedName, type, value };
+
+    if (agentType === 'service') {
+      setServiceContextVars(prev => [...prev, variable]);
+      setNewServiceCtxName('');
+      setNewServiceCtxType('Text');
+      setNewServiceCtxValue('');
+    } else {
+      setEmployeeContextVars(prev => [...prev, variable]);
+      setNewEmployeeCtxName('');
+      setNewEmployeeCtxType('Text');
+      setNewEmployeeCtxValue('');
+    }
+  };
+
+  const handleRemoveContextVariable = (agentType: 'service' | 'employee', index: number) => {
+    const setter = agentType === 'service' ? setServiceContextVars : setEmployeeContextVars;
+    setter(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleClearAllContextVariables = (agentType: 'service' | 'employee') => {
+    Alert.alert('Clear Context Variables', 'Remove all context variables?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () => {
+          if (agentType === 'service') {
+            setServiceContextVars([]);
+          } else {
+            setEmployeeContextVars([]);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleAddDefaultContextVariables = (agentType: 'service' | 'employee') => {
+    const setter = agentType === 'service' ? setServiceContextVars : setEmployeeContextVars;
+    setter(prev => [...prev, ...DEFAULT_CONTEXT_VARIABLES]);
+  };
+
   const renderTabs = () => (
     <View style={styles.tabContainer}>
       {UI_FEATURES.SHOW_SERVICE_AGENT && (
@@ -478,6 +593,129 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     );
   };
 
+  const renderContextVariablesSection = (agentType: 'service' | 'employee') => {
+    const variables = agentType === 'service' ? serviceContextVars : employeeContextVars;
+    const newName = agentType === 'service' ? newServiceCtxName : newEmployeeCtxName;
+    const setNewName = agentType === 'service' ? setNewServiceCtxName : setNewEmployeeCtxName;
+    const newType = agentType === 'service' ? newServiceCtxType : newEmployeeCtxType;
+    const setNewType = agentType === 'service' ? setNewServiceCtxType : setNewEmployeeCtxType;
+    const newValue = agentType === 'service' ? newServiceCtxValue : newEmployeeCtxValue;
+    const setNewValue = agentType === 'service' ? setNewServiceCtxValue : setNewEmployeeCtxValue;
+
+    return (
+      <View style={styles.formContainer}>
+        <View style={styles.preChatHeader}>
+          <Text style={styles.label}>Context Variables</Text>
+          {variables.length > 0 && (
+            <View style={[styles.badge, styles.ctxBadge]}>
+              <Text style={styles.badgeText}>{variables.length}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.hint}>
+          Variables passed to the agent via setAdditionalContext after conversation launch.
+        </Text>
+
+        {variables.length === 0 ? (
+          <View>
+            <Text style={styles.emptyFieldsText}>No variables configured</Text>
+            <TouchableOpacity
+              style={styles.ctxDefaultsButton}
+              onPress={() => handleAddDefaultContextVariables(agentType)}>
+              <Text style={styles.ctxDefaultsButtonText}>Add Default Variables</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.fieldList}>
+            {variables.map((variable, index) => (
+              <View key={`${variable.name}-${index}`} style={styles.fieldRow}>
+                <View style={styles.fieldInfo}>
+                  <View style={styles.ctxVarHeader}>
+                    <Text style={styles.fieldName}>{variable.name}</Text>
+                    <View style={styles.ctxTypeTag}>
+                      <Text style={styles.ctxTypeTagText}>{variable.type}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.fieldValue} numberOfLines={1}>
+                    {formatContextVariableValue(variable.value)}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleRemoveContextVariable(agentType, index)}
+                  style={styles.deleteButton}>
+                  <Text style={styles.deleteButtonText}>X</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.ctxAddSection}>
+          <View style={styles.ctxAddRow}>
+            <TextInput
+              style={[styles.input, styles.ctxAddInput]}
+              value={newName}
+              onChangeText={setNewName}
+              placeholder="Variable name"
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.ctxSegmented}>
+              <TouchableOpacity
+                style={[styles.ctxSegmentedButton, newType === 'Text' && styles.ctxSegmentedActive]}
+                onPress={() => setNewType('Text')}>
+                <Text
+                  style={[
+                    styles.ctxSegmentedText,
+                    newType === 'Text' && styles.ctxSegmentedTextActive,
+                  ]}>
+                  Text
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.ctxSegmentedButton, newType === 'List' && styles.ctxSegmentedActive]}
+                onPress={() => setNewType('List')}>
+                <Text
+                  style={[
+                    styles.ctxSegmentedText,
+                    newType === 'List' && styles.ctxSegmentedTextActive,
+                  ]}>
+                  Array
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.ctxAddRow}>
+            <TextInput
+              style={[styles.input, styles.ctxAddInput]}
+              value={newValue}
+              onChangeText={setNewValue}
+              placeholder={newType === 'List' ? 'Comma-separated values' : 'Value'}
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              style={[styles.addFieldButton, !newName.trim() && styles.buttonDisabled]}
+              onPress={() => handleAddContextVariable(agentType)}
+              disabled={!newName.trim()}>
+              <Text style={styles.addFieldButtonText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {variables.length > 0 && (
+          <TouchableOpacity
+            style={styles.clearFieldsButton}
+            onPress={() => handleClearAllContextVariables(agentType)}>
+            <Text style={styles.clearFieldsButtonText}>Clear All Variables</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   const renderServiceAgentTab = () => (
     <ScrollView
       style={styles.tabContent}
@@ -543,6 +781,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       </View>
 
       {renderHiddenPreChatFieldsSection()}
+
+      {renderContextVariablesSection('service')}
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity
@@ -638,6 +878,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           />
         </View>
       )}
+
+      {authSupported && renderContextVariablesSection('employee')}
     </ScrollView>
   );
 
@@ -1044,6 +1286,75 @@ const styles = StyleSheet.create({
   flagLabelBlock: {
     flex: 1,
     marginRight: 16,
+  },
+  ctxBadge: {
+    backgroundColor: '#2e7d32',
+  },
+  ctxVarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ctxTypeTag: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  ctxTypeTagText: {
+    fontSize: 11,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  ctxAddSection: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  ctxAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ctxAddInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  ctxSegmented: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#ced4da',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  ctxSegmentedButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
+  },
+  ctxSegmentedActive: {
+    backgroundColor: '#e8f5e9',
+  },
+  ctxSegmentedText: {
+    fontSize: 13,
+    color: '#6c757d',
+    fontWeight: '500',
+  },
+  ctxSegmentedTextActive: {
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  ctxDefaultsButton: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2e7d32',
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  ctxDefaultsButtonText: {
+    color: '#2e7d32',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 
