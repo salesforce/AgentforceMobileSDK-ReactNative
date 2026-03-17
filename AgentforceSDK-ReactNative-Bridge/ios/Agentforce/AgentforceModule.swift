@@ -161,7 +161,6 @@ class AgentforceModule: RCTEventEmitter {
         }
 
         // Use .serviceAgent() mode with overrides for logger and navigation.
-        // SDK 260.1+ supports the fluent builder pattern for customization.
         let serviceConfig = ServiceAgentConfiguration(
             esDeveloperName: config.esDeveloperName,
             organizationId: config.organizationId,
@@ -218,7 +217,6 @@ class AgentforceModule: RCTEventEmitter {
         #endif
 
         // Use .fullConfig() for Employee Agent to support custom feature flags.
-        // SDK 260.1's .employeeAgent() mode doesn't support feature flag customization via overrides.
         let user = User(
             userId: userId,
             org: Org(id: organizationId),
