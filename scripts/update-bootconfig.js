@@ -8,7 +8,19 @@ function backupBootconfig(filePath) {
     throw new Error('Bootconfig file not found: ' + filePath);
   }
 
-  var backupPath = filePath + '.backup';
+  // For Android, place backup outside res/ directory to avoid resource merger errors
+  // Android resource merger only processes files in res/ directories and expects .xml extension
+  var backupPath;
+  if (filePath.includes('android') && filePath.includes('/res/')) {
+    // Move backup to flavor directory (outside res/)
+    var resIndex = filePath.lastIndexOf('/res/');
+    var flavorDir = filePath.substring(0, resIndex);
+    backupPath = path.join(flavorDir, 'bootconfig.xml.backup');
+  } else {
+    // For iOS, keep backup next to original file
+    backupPath = filePath + '.backup';
+  }
+
   fs.copyFileSync(filePath, backupPath);
   console.log('   📋 Backup created: ' + path.basename(backupPath));
   return backupPath;
