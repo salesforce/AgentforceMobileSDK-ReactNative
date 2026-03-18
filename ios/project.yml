@@ -57,6 +57,40 @@ targetTemplates:
           fi
         shell: /bin/sh
         showEnvVars: false
+      - name: "Generate AppConfig from Target"
+        script: |
+          set -e
+
+          # Source React Native's environment setup to get NODE_BINARY
+          WITH_ENVIRONMENT="${SRCROOT}/../node_modules/react-native/scripts/xcode/with-environment.sh"
+          if [ -f "$WITH_ENVIRONMENT" ]; then
+            . "$WITH_ENVIRONMENT"
+          fi
+
+          cd "${SRCROOT}/.."
+
+          # Detect target: ServiceAgent or EmployeeAgent
+          if [ "$TARGET_NAME" = "ServiceAgent" ]; then
+            APP_MODE="service"
+          elif [ "$TARGET_NAME" = "EmployeeAgent" ]; then
+            APP_MODE="employee"
+          else
+            echo "warning: Unknown target $TARGET_NAME, defaulting to 'all'"
+            APP_MODE="all"
+          fi
+
+          echo "🎯 Auto-detected target: $TARGET_NAME → APP_MODE=$APP_MODE"
+
+          # Use NODE_BINARY from environment, or fallback to searching PATH
+          NODE_BINARY="${NODE_BINARY:-$(command -v node || echo "")}"
+          if [ -z "$NODE_BINARY" ]; then
+            echo "error: node not found. Please ensure Node.js is installed."
+            exit 2
+          fi
+
+          "$NODE_BINARY" scripts/generate-app-config.js "$APP_MODE"
+        shell: /bin/sh
+        showEnvVars: false
       - name: "Bundle React Native code and images"
         script: |
           set -e

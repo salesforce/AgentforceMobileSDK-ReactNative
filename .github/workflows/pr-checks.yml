@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps --ignore-scripts
 
+      - name: Generate app config
+        run: node scripts/generate-app-config.js service
+
       - name: Run ESLint
         run: npm run lint
 
@@ -60,6 +63,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps --ignore-scripts
+
+      - name: Generate app config
+        run: node scripts/generate-app-config.js service
 
       - name: Run tests
         run: npm test -- --coverage --maxWorkers=2
@@ -184,6 +190,9 @@ jobs:
 
       - name: Install npm dependencies
         run: npm ci --legacy-peer-deps --ignore-scripts
+
+      - name: Generate app config
+        run: node scripts/generate-app-config.js ${{ matrix.variant == 'Service Agent' && 'service' || 'employee' }}
 
       - name: Run platform setup
         run: ${{ matrix.setup-script }}

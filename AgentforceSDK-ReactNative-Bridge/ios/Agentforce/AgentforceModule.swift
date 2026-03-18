@@ -160,30 +160,21 @@ class AgentforceModule: RCTEventEmitter {
             )
         }
 
-        // Using fullConfig instead of .serviceAgent() to inject bridgeLogger and bridgeNavigation.
-        // TODO: Migrate to .serviceAgent(config) when ServiceAgentConfiguration supports logger/navigation parameters.
-        let serviceUser = User(
-            userId: "",
-            org: Org(id: config.organizationId),
-            username: "service_user",
-            displayName: "Service User"
+        // Use .serviceAgent() mode with overrides for logger and navigation.
+        let serviceConfig = ServiceAgentConfiguration(
+            esDeveloperName: config.esDeveloperName,
+            organizationId: config.organizationId,
+            serviceApiURL: config.serviceApiURL,
+            forceConfigEndPoint: config.serviceApiURL
         )
-
-        let fullConfiguration = AgentforceConfiguration(
-            user: serviceUser,
-            forceConfigEndpoint: config.serviceApiURL,
-            agentforceFeatureFlagSettings: AgentforceFeatureFlagSettings(),
-            salesforceNetwork: nil,
-            salesforceNavigation: bridgeNavigation,
-            salesforceLogger: bridgeLogger,
-            serviceApiURL: config.serviceApiURL
-        )
+        .withLogger(bridgeLogger)
+        .withNavigation(bridgeNavigation)
 
         // Always pass bridgeViewProvider so late registrations take effect.
         // canHandle() returns false when the map is empty, matching nil behavior.
         agentforceClient = AgentforceClient(
             credentialProvider: credentialProvider,
-            mode: .fullConfig(fullConfiguration),
+            mode: .serviceAgent(serviceConfig),
             viewProvider: bridgeViewProvider
         )
         agentforceClient?.hiddenPreChatFieldDelegate = bridgeHiddenPreChat
@@ -225,9 +216,7 @@ class AgentforceModule: RCTEventEmitter {
         }
         #endif
 
-        // Create User for FullConfig mode (SDK 14.x). We use .fullConfig(AgentforceConfiguration)
-        // instead of .employeeAgent so we can set feature flags explicitly (e.g. multiAgent only).
-        // TODO: Migrate to .employeeAgent(config) when EmployeeAgentConfiguration supports logger/navigation parameters.
+        // Use .fullConfig() for Employee Agent to support custom feature flags.
         let user = User(
             userId: userId,
             org: Org(id: organizationId),
@@ -246,7 +235,7 @@ class AgentforceModule: RCTEventEmitter {
             internalFlags: [:]
         )
 
-        // Build full configuration so we control agentforceFeatureFlagSettings.
+        // Build full configuration so we can control feature flags explicitly.
         // Passing nil for optional params uses SDK defaults (network, imageProvider, theme, etc.).
         let fullConfiguration = AgentforceConfiguration(
             user: user,
@@ -830,7 +819,6 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
-            await closeCurrentConversation()
             await ServiceAgentManager.shared.closeConversation()
             dismissConversation()
             resolve(["success": true])
@@ -1019,7 +1007,12 @@ class AgentforceModule: RCTEventEmitter {
         }
 
         if rootViewController.presentedViewController != nil {
-            rootViewController.dismiss(animated: true)
+            rootViewController.dismiss(animated: true) { [weak self] in
+                // Clear the conversation reference after dismissal so next launch creates a new one
+                Task { @MainActor in
+                    await self?.closeCurrentConversation()
+                }
+            }
         }
     }
 

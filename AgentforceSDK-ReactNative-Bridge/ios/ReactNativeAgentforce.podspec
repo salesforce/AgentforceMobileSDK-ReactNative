@@ -21,7 +21,7 @@ Pod::Spec.new do |s|
   s.author       = "Salesforce"
   s.source       = { :git => "https://github.com/salesforce/AgentforceMobileSDK-ReactNative.git", :tag => "v#{s.version}" }
   s.requires_arc = true
-  s.platforms    = { :ios => "15.0" }
+  s.platforms    = { :ios => "17.0" }
   s.swift_version = "5.0"
 
   # Default: Service Agent (no Mobile SDK required). Use subspec 'WithMobileSDK' for Employee Agent auth.
