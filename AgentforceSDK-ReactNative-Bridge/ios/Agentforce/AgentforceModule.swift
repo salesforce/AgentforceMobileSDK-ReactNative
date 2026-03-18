@@ -819,7 +819,6 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
-            await closeCurrentConversation()
             await ServiceAgentManager.shared.closeConversation()
             dismissConversation()
             resolve(["success": true])
