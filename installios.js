@@ -4,6 +4,8 @@ var packageJson = require('./package.json');
 var execSync = require('child_process').execSync;
 var path = require('path');
 var fs = require('fs');
+var interactiveOAuth = require('./scripts/interactive-oauth');
+var bootconfig = require('./scripts/update-bootconfig');
 
 // ============================================================================
 // Validation Functions
@@ -63,6 +65,28 @@ function validateEnvironment() {
 // Main Installation Flow
 // ============================================================================
 
+// Check for help flag
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+  console.log('║       iOS Multi-App Installation - AgentforceSDK              ║');
+  console.log('╚═══════════════════════════════════════════════════════════════╝\n');
+  console.log('Usage:');
+  console.log('  node installios.js [target]\n');
+  console.log('Target:');
+  console.log('  service        Install Service Agent only (no Mobile SDK)');
+  console.log('  employee       Install Employee Agent only (with Mobile SDK)');
+  console.log('  all            Install both apps (default)\n');
+  console.log('Examples:');
+  console.log('  node installios.js service   # Service Agent only');
+  console.log('  node installios.js employee  # Employee Agent only');
+  console.log('  node installios.js all       # Both apps');
+  console.log('  node installios.js           # Same as "all"\n');
+  console.log('OAuth Configuration:');
+  console.log('  When installing Employee Agent, you will be prompted to configure');
+  console.log('  OAuth credentials interactively during installation.\n');
+  process.exit(0);
+}
+
 // Parse target argument: service, employee, all (default: all)
 var target = process.argv[2] || 'all';
 if (!['service', 'employee', 'all'].includes(target)) {
@@ -99,6 +123,7 @@ console.log('\n🔧 Steps:');
 console.log('   1. Install npm dependencies');
 console.log('   2. Apply patches (patch-package)');
 if (target !== 'service') {
+  console.log('   2.5. Configure OAuth (Employee Agent)');
   console.log('   3. Build react-native-force (Mobile SDK bridge)');
 }
 console.log('   4. Configure Node.js path');
@@ -128,6 +153,51 @@ try {
   console.warn('⚠️  patch-package failed (optional if no patches)\n');
 }
 
+// Step 2.5: Configure OAuth for Employee Agent (async)
+async function configureOAuthStep() {
+  if (target === 'employee' || target === 'all') {
+    console.log('🔐 Step 2.5/8: Configuring OAuth (Employee Agent only)...\n');
+
+    try {
+      var oauthConfig = await interactiveOAuth.promptOAuthConfig();
+
+      if (oauthConfig) {
+        var bootconfigPath = path.join(__dirname, 'ios/EmployeeAgent/bootconfig.plist');
+        console.log('   📝 Updating bootconfig.plist...');
+
+        bootconfig.backupBootconfig(bootconfigPath);
+        var result = bootconfig.updateIOSBootconfig(bootconfigPath, oauthConfig);
+
+        if (result.modified) {
+          console.log('   ✅ OAuth configuration updated successfully\n');
+        }
+
+        if (result.warnings.length > 0) {
+          console.warn('   ⚠️  Warnings during configuration:');
+          result.warnings.forEach(function (warn) {
+            console.warn('      • ' + warn);
+          });
+          console.log('');
+        }
+
+        bootconfig.printSecurityWarning();
+      }
+    } catch (err) {
+      console.error('❌ Failed to configure OAuth: ' + err.message);
+      process.exit(1);
+    }
+  }
+}
+
+// Run OAuth configuration (async)
+(async function() {
+  await configureOAuthStep();
+
+  // Continue with remaining steps
+  continueInstallation();
+})();
+
+function continueInstallation() {
 // Step 3: Build react-native-force for Employee Agent (provides Mobile SDK React Native bridge)
 if (target === 'employee' || target === 'all') {
   console.log('📦 Step 3/8: Building react-native-force (Mobile SDK React Native bridge)...');
@@ -255,3 +325,5 @@ if (target === 'service') {
   console.log('      Select scheme: ServiceAgent or EmployeeAgent');
 }
 console.log('\n═══════════════════════════════════════════════════════════════\n');
+
+} // End of continueInstallation()

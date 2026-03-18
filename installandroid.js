@@ -5,6 +5,30 @@ var execSync = require('child_process').execSync;
 var path = require('path');
 var fs = require('fs');
 var rimraf = require('rimraf');
+var interactiveOAuth = require('./scripts/interactive-oauth');
+var bootconfig = require('./scripts/update-bootconfig');
+
+// Check for help flag
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+  console.log('║     Android Multi-App Installation - AgentforceSDK            ║');
+  console.log('╚═══════════════════════════════════════════════════════════════╝\n');
+  console.log('Usage:');
+  console.log('  node installandroid.js [target]\n');
+  console.log('Target:');
+  console.log('  service        Install Service Agent only (no Mobile SDK)');
+  console.log('  employee       Install Employee Agent only (with Mobile SDK)');
+  console.log('  all            Install both apps (default)\n');
+  console.log('Examples:');
+  console.log('  node installandroid.js service   # Service Agent only');
+  console.log('  node installandroid.js employee  # Employee Agent only');
+  console.log('  node installandroid.js all       # Both apps');
+  console.log('  node installandroid.js           # Same as "all"\n');
+  console.log('OAuth Configuration:');
+  console.log('  When installing Employee Agent, you will be prompted to configure');
+  console.log('  OAuth credentials interactively during installation.\n');
+  process.exit(0);
+}
 
 // Parse target argument: service, employee, all (default: all)
 var target = process.argv[2] || 'all';
@@ -136,6 +160,51 @@ if (fs.existsSync(bundleHermesCTaskPath)) {
   }
 }
 
+// Step 2.5: Configure OAuth for Employee Agent (async)
+async function configureOAuthStep() {
+  if (target === 'employee' || target === 'all') {
+    console.log('\n🔐 Step 2.5/3: Configuring OAuth (Employee Agent only)...\n');
+
+    try {
+      var oauthConfig = await interactiveOAuth.promptOAuthConfig();
+
+      if (oauthConfig) {
+        var bootconfigPath = path.join(__dirname, 'android/app/src/employeeAgent/res/values/bootconfig.xml');
+        console.log('   📝 Updating bootconfig.xml...');
+
+        bootconfig.backupBootconfig(bootconfigPath);
+        var result = bootconfig.updateAndroidBootconfig(bootconfigPath, oauthConfig);
+
+        if (result.modified) {
+          console.log('   ✅ OAuth configuration updated successfully\n');
+        }
+
+        if (result.warnings.length > 0) {
+          console.warn('   ⚠️  Warnings during configuration:');
+          result.warnings.forEach(function (warn) {
+            console.warn('      • ' + warn);
+          });
+          console.log('');
+        }
+
+        bootconfig.printSecurityWarning();
+      }
+    } catch (err) {
+      console.error('❌ Failed to configure OAuth: ' + err.message);
+      process.exit(1);
+    }
+  }
+}
+
+// Run OAuth configuration (async)
+(async function() {
+  await configureOAuthStep();
+
+  // Continue with remaining steps
+  continueInstallation();
+})();
+
+function continueInstallation() {
 // Build react-native-force for Employee Agent (provides Mobile SDK React Native bridge)
 if (target === 'employee' || target === 'all') {
   console.log('\n📦 Building react-native-force (Mobile SDK React Native bridge)...');
@@ -156,3 +225,5 @@ if (target === 'service') {
   console.log('      npm run android:service  (Service Agent)');
   console.log('      npm run android:employee (Employee Agent)');
 }
+
+} // End of continueInstallation()
