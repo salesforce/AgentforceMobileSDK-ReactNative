@@ -178,6 +178,7 @@ node installandroid.js employee
 **⚠️ CRITICAL:** Never commit bootconfig files with real credentials to git.
 
 **Getting OAuth Credentials:**
+
 1. Create a Connected App in Salesforce Setup → Enable OAuth settings
 2. Copy Consumer Key and Callback URL
 3. Use these values when prompted during installation
