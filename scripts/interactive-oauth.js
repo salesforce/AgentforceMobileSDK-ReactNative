@@ -7,8 +7,15 @@ function isCIEnvironment() {
     return true;
   }
 
-  var ciEnvVars = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'CIRCLECI', 'TRAVIS'];
-  return ciEnvVars.some(function(envVar) {
+  var ciEnvVars = [
+    'CI',
+    'CONTINUOUS_INTEGRATION',
+    'GITHUB_ACTIONS',
+    'GITLAB_CI',
+    'CIRCLECI',
+    'TRAVIS',
+  ];
+  return ciEnvVars.some(function (envVar) {
     return process.env[envVar];
   });
 }
@@ -16,13 +23,13 @@ function isCIEnvironment() {
 function createInterface() {
   return readline.createInterface({
     input: process.stdin,
-    output: process.stdout
+    output: process.stdout,
   });
 }
 
 function prompt(rl, question) {
-  return new Promise(function(resolve) {
-    rl.question(question, function(answer) {
+  return new Promise(function (resolve) {
+    rl.question(question, function (answer) {
       resolve(answer.trim());
     });
   });
@@ -62,20 +69,29 @@ async function promptOAuthConfig() {
 
     while (true) {
       config.consumerKey = await prompt(rl, '🔑 OAuth Consumer Key: ');
-      if (config.consumerKey && config.consumerKey.length > 0) break;
+      if (config.consumerKey && config.consumerKey.length > 0) {
+        break;
+      }
       console.log('   ❌ Cannot be empty');
     }
 
     while (true) {
       config.redirectUri = await prompt(rl, '🔗 OAuth Redirect URI: ');
-      if (config.redirectUri && isValidUrl(config.redirectUri)) break;
+      if (config.redirectUri && isValidUrl(config.redirectUri)) {
+        break;
+      }
       console.log('   ❌ Must be a valid URL');
     }
 
     var scopesInput = await prompt(rl, '📝 OAuth Scopes (default: web,api): ');
     config.scopes = scopesInput.length > 0 ? scopesInput : 'web,api';
 
-    var scopeList = config.scopes.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    var scopeList = config.scopes
+      .split(',')
+      .map(function (s) {
+        return s.trim();
+      })
+      .filter(Boolean);
     if (scopeList.length === 0) {
       config.scopes = 'web,api';
     }
@@ -87,7 +103,6 @@ async function promptOAuthConfig() {
 
     rl.close();
     return config;
-
   } catch (error) {
     rl.close();
     throw error;
@@ -95,5 +110,5 @@ async function promptOAuthConfig() {
 }
 
 module.exports = {
-  promptOAuthConfig: promptOAuthConfig
+  promptOAuthConfig: promptOAuthConfig,
 };

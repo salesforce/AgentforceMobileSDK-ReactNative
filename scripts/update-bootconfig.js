@@ -51,10 +51,17 @@ function updateIOSBootconfig(filePath, config) {
     warnings.push('oauthRedirectURI pattern not found');
   }
 
-  var scopeList = config.scopes.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-  var scopesArray = scopeList.map(function(scope) {
-    return '\t\t<string>' + scope + '</string>';
-  }).join('\n');
+  var scopeList = config.scopes
+    .split(',')
+    .map(function (s) {
+      return s.trim();
+    })
+    .filter(Boolean);
+  var scopesArray = scopeList
+    .map(function (scope) {
+      return '\t\t<string>' + scope + '</string>';
+    })
+    .join('\n');
 
   var scopesPattern = /(<key>oauthScopes<\/key>\s*<array>)([\s\S]*?)(<\/array>)/;
   if (scopesPattern.test(content)) {
@@ -96,10 +103,17 @@ function updateAndroidBootconfig(filePath, config) {
     warnings.push('oauthRedirectURI pattern not found');
   }
 
-  var scopeList = config.scopes.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-  var scopesArray = scopeList.map(function(scope) {
-    return '        <item>' + scope + '</item>';
-  }).join('\n');
+  var scopeList = config.scopes
+    .split(',')
+    .map(function (s) {
+      return s.trim();
+    })
+    .filter(Boolean);
+  var scopesArray = scopeList
+    .map(function (scope) {
+      return '        <item>' + scope + '</item>';
+    })
+    .join('\n');
 
   var scopesPattern = /(<string-array name="oauthScopes">)([\s\S]*?)(<\/string-array>)/;
   if (scopesPattern.test(content)) {
@@ -126,5 +140,5 @@ module.exports = {
   backupBootconfig: backupBootconfig,
   updateIOSBootconfig: updateIOSBootconfig,
   updateAndroidBootconfig: updateAndroidBootconfig,
-  printSecurityWarning: printSecurityWarning
+  printSecurityWarning: printSecurityWarning,
 };

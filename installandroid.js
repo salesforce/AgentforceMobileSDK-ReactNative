@@ -169,7 +169,10 @@ async function configureOAuthStep() {
       var oauthConfig = await interactiveOAuth.promptOAuthConfig();
 
       if (oauthConfig) {
-        var bootconfigPath = path.join(__dirname, 'android/app/src/employeeAgent/res/values/bootconfig.xml');
+        var bootconfigPath = path.join(
+          __dirname,
+          'android/app/src/employeeAgent/res/values/bootconfig.xml',
+        );
         console.log('   📝 Updating bootconfig.xml...');
 
         bootconfig.backupBootconfig(bootconfigPath);
@@ -197,7 +200,7 @@ async function configureOAuthStep() {
 }
 
 // Run OAuth configuration (async)
-(async function() {
+(async function () {
   await configureOAuthStep();
 
   // Continue with remaining steps
@@ -205,25 +208,24 @@ async function configureOAuthStep() {
 })();
 
 function continueInstallation() {
-// Build react-native-force for Employee Agent (provides Mobile SDK React Native bridge)
-if (target === 'employee' || target === 'all') {
-  console.log('\n📦 Building react-native-force (Mobile SDK React Native bridge)...');
-  try {
-    execSync('npm run build:force', { stdio: [0, 1, 2] });
-  } catch (e) {
-    console.warn('⚠️  build:force failed (optional if already built)');
+  // Build react-native-force for Employee Agent (provides Mobile SDK React Native bridge)
+  if (target === 'employee' || target === 'all') {
+    console.log('\n📦 Building react-native-force (Mobile SDK React Native bridge)...');
+    try {
+      execSync('npm run build:force', { stdio: [0, 1, 2] });
+    } catch (e) {
+      console.warn('⚠️  build:force failed (optional if already built)');
+    }
   }
-}
 
-console.log('\n✅ Android setup complete.');
-if (target === 'service') {
-  console.log('   🚀 Service Agent ready: npm run android:service');
-} else if (target === 'employee') {
-  console.log('   🚀 Employee Agent ready: npm run android:employee');
-} else {
-  console.log('   🚀 Both apps ready:');
-  console.log('      npm run android:service  (Service Agent)');
-  console.log('      npm run android:employee (Employee Agent)');
-}
-
+  console.log('\n✅ Android setup complete.');
+  if (target === 'service') {
+    console.log('   🚀 Service Agent ready: npm run android:service');
+  } else if (target === 'employee') {
+    console.log('   🚀 Employee Agent ready: npm run android:employee');
+  } else {
+    console.log('   🚀 Both apps ready:');
+    console.log('      npm run android:service  (Service Agent)');
+    console.log('      npm run android:employee (Employee Agent)');
+  }
 } // End of continueInstallation()
