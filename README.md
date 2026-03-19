@@ -174,9 +174,6 @@ node installandroid.js employee
 # You'll be asked to configure OAuth credentials interactively
 # (prompts are automatically skipped in CI environments)
 ```
-
-**⚠️ CRITICAL:** Never commit bootconfig files with real credentials to git.
-
 **Getting OAuth Credentials:**
 
 1. Create a Connected App in Salesforce Setup → Enable OAuth settings
