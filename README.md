@@ -162,6 +162,27 @@ npm run android:service # or android:employee
 
 📖 **For detailed installation guide, see [docs/separate-agent-app-guide.md](docs/separate-agent-app-guide.md)**
 
+### OAuth Configuration (Employee Agent)
+
+Employee Agent requires OAuth credentials for Salesforce authentication. You'll be prompted during installation:
+
+```bash
+node installios.js employee
+# or
+node installandroid.js employee
+
+# You'll be asked to configure OAuth credentials interactively
+# (prompts are automatically skipped in CI environments)
+```
+
+**Getting OAuth Credentials:**
+
+1. Create a Connected App in Salesforce Setup → Enable OAuth settings
+2. Copy Consumer Key and Callback URL
+3. Use these values when prompted during installation
+
+See: [Mobile SDK Setup Guide](https://developer.salesforce.com/docs/atlas.en-us.mobile_sdk.meta/mobile_sdk/oauth_configure_connected_app.htm)
+
 ## ⚙️ Configuration
 
 ### Service Agent Settings
