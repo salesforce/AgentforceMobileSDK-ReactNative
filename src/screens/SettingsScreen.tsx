@@ -80,12 +80,6 @@ const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
   enableCustomViewProvider: 'Override SDK output views with React Native components',
 };
 
-const DEFAULT_CONTEXT_VARIABLES: AgentforceContextVariable[] = [
-  { name: 'result', type: 'Text', value: 'my result' },
-  { name: 'filters', type: 'List', value: ['filter 1', 'filter 2'] },
-  { name: 'facets', type: 'List', value: ['my facets1', 'my facets2'] },
-];
-
 function parseContextVariableValue(
   type: AgentforceContextVariableType,
   raw: string,
@@ -138,13 +132,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   const [hiddenPreChatFields, setHiddenPreChatFields] = useState<HiddenPreChatFields>({});
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
-
-  const [serviceContextVars, setServiceContextVars] = useState<AgentforceContextVariable[]>(() =>
-    getContextVariables('service'),
-  );
-  const [newServiceCtxName, setNewServiceCtxName] = useState('');
-  const [newServiceCtxType, setNewServiceCtxType] = useState<AgentforceContextVariableType>('Text');
-  const [newServiceCtxValue, setNewServiceCtxValue] = useState('');
 
   const [employeeContextVars, setEmployeeContextVars] = useState<AgentforceContextVariable[]>(() =>
     getContextVariables('employee'),
@@ -277,8 +264,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           setOrganizationId('');
           setEsDeveloperName('');
           setHiddenPreChatFields({});
-          setServiceContextVars([]);
-          setEmployeeContextVars([]);
         },
       },
     ]);
@@ -411,64 +396,39 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
   // Sync context variables to store whenever they change
   useEffect(() => {
-    setContextVariables('service', serviceContextVars);
-  }, [serviceContextVars]);
-
-  useEffect(() => {
     setContextVariables('employee', employeeContextVars);
   }, [employeeContextVars]);
 
-  const handleAddContextVariable = (agentType: 'service' | 'employee') => {
-    const name = agentType === 'service' ? newServiceCtxName : newEmployeeCtxName;
-    const type = agentType === 'service' ? newServiceCtxType : newEmployeeCtxType;
-    const rawValue = agentType === 'service' ? newServiceCtxValue : newEmployeeCtxValue;
-
-    const trimmedName = name.trim();
+  const handleAddContextVariable = () => {
+    const trimmedName = newEmployeeCtxName.trim();
     if (!trimmedName) {
       return;
     }
 
-    const value = parseContextVariableValue(type, rawValue);
-    const variable: AgentforceContextVariable = { name: trimmedName, type, value };
+    const value = parseContextVariableValue(newEmployeeCtxType, newEmployeeCtxValue);
+    const variable: AgentforceContextVariable = { name: trimmedName, type: newEmployeeCtxType, value };
 
-    if (agentType === 'service') {
-      setServiceContextVars(prev => [...prev, variable]);
-      setNewServiceCtxName('');
-      setNewServiceCtxType('Text');
-      setNewServiceCtxValue('');
-    } else {
-      setEmployeeContextVars(prev => [...prev, variable]);
-      setNewEmployeeCtxName('');
-      setNewEmployeeCtxType('Text');
-      setNewEmployeeCtxValue('');
-    }
+    setEmployeeContextVars(prev => [...prev, variable]);
+    setNewEmployeeCtxName('');
+    setNewEmployeeCtxType('Text');
+    setNewEmployeeCtxValue('');
   };
 
-  const handleRemoveContextVariable = (agentType: 'service' | 'employee', index: number) => {
-    const setter = agentType === 'service' ? setServiceContextVars : setEmployeeContextVars;
-    setter(prev => prev.filter((_, i) => i !== index));
+  const handleRemoveContextVariable = (index: number) => {
+    setEmployeeContextVars(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleClearAllContextVariables = (agentType: 'service' | 'employee') => {
+  const handleClearAllContextVariables = () => {
     Alert.alert('Clear Context Variables', 'Remove all context variables?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Clear',
         style: 'destructive',
         onPress: () => {
-          if (agentType === 'service') {
-            setServiceContextVars([]);
-          } else {
-            setEmployeeContextVars([]);
-          }
+          setEmployeeContextVars([]);
         },
       },
     ]);
-  };
-
-  const handleAddDefaultContextVariables = (agentType: 'service' | 'employee') => {
-    const setter = agentType === 'service' ? setServiceContextVars : setEmployeeContextVars;
-    setter(prev => [...prev, ...DEFAULT_CONTEXT_VARIABLES]);
   };
 
   const renderTabs = () => (
@@ -593,22 +553,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     );
   };
 
-  const renderContextVariablesSection = (agentType: 'service' | 'employee') => {
-    const variables = agentType === 'service' ? serviceContextVars : employeeContextVars;
-    const newName = agentType === 'service' ? newServiceCtxName : newEmployeeCtxName;
-    const setNewName = agentType === 'service' ? setNewServiceCtxName : setNewEmployeeCtxName;
-    const newType = agentType === 'service' ? newServiceCtxType : newEmployeeCtxType;
-    const setNewType = agentType === 'service' ? setNewServiceCtxType : setNewEmployeeCtxType;
-    const newValue = agentType === 'service' ? newServiceCtxValue : newEmployeeCtxValue;
-    const setNewValue = agentType === 'service' ? setNewServiceCtxValue : setNewEmployeeCtxValue;
-
+  const renderContextVariablesSection = () => {
     return (
       <View style={styles.formContainer}>
         <View style={styles.preChatHeader}>
           <Text style={styles.label}>Context Variables</Text>
-          {variables.length > 0 && (
+          {employeeContextVars.length > 0 && (
             <View style={[styles.badge, styles.ctxBadge]}>
-              <Text style={styles.badgeText}>{variables.length}</Text>
+              <Text style={styles.badgeText}>{employeeContextVars.length}</Text>
             </View>
           )}
         </View>
@@ -616,18 +568,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           Variables passed to the agent via setAdditionalContext after conversation launch.
         </Text>
 
-        {variables.length === 0 ? (
-          <View>
-            <Text style={styles.emptyFieldsText}>No variables configured</Text>
-            <TouchableOpacity
-              style={styles.ctxDefaultsButton}
-              onPress={() => handleAddDefaultContextVariables(agentType)}>
-              <Text style={styles.ctxDefaultsButtonText}>Add Default Variables</Text>
-            </TouchableOpacity>
-          </View>
+        {employeeContextVars.length === 0 ? (
+          <Text style={styles.emptyFieldsText}>No variables configured</Text>
         ) : (
           <View style={styles.fieldList}>
-            {variables.map((variable, index) => (
+            {employeeContextVars.map((variable, index) => (
               <View key={`${variable.name}-${index}`} style={styles.fieldRow}>
                 <View style={styles.fieldInfo}>
                   <View style={styles.ctxVarHeader}>
@@ -641,7 +586,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
                   </Text>
                 </View>
                 <TouchableOpacity
-                  onPress={() => handleRemoveContextVariable(agentType, index)}
+                  onPress={() => handleRemoveContextVariable(index)}
                   style={styles.deleteButton}>
                   <Text style={styles.deleteButtonText}>X</Text>
                 </TouchableOpacity>
@@ -654,8 +599,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           <View style={styles.ctxAddRow}>
             <TextInput
               style={[styles.input, styles.ctxAddInput]}
-              value={newName}
-              onChangeText={setNewName}
+              value={newEmployeeCtxName}
+              onChangeText={setNewEmployeeCtxName}
               placeholder="Variable name"
               placeholderTextColor="#999"
               autoCapitalize="none"
@@ -663,23 +608,23 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
             />
             <View style={styles.ctxSegmented}>
               <TouchableOpacity
-                style={[styles.ctxSegmentedButton, newType === 'Text' && styles.ctxSegmentedActive]}
-                onPress={() => setNewType('Text')}>
+                style={[styles.ctxSegmentedButton, newEmployeeCtxType === 'Text' && styles.ctxSegmentedActive]}
+                onPress={() => setNewEmployeeCtxType('Text')}>
                 <Text
                   style={[
                     styles.ctxSegmentedText,
-                    newType === 'Text' && styles.ctxSegmentedTextActive,
+                    newEmployeeCtxType === 'Text' && styles.ctxSegmentedTextActive,
                   ]}>
                   Text
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.ctxSegmentedButton, newType === 'List' && styles.ctxSegmentedActive]}
-                onPress={() => setNewType('List')}>
+                style={[styles.ctxSegmentedButton, newEmployeeCtxType === 'List' && styles.ctxSegmentedActive]}
+                onPress={() => setNewEmployeeCtxType('List')}>
                 <Text
                   style={[
                     styles.ctxSegmentedText,
-                    newType === 'List' && styles.ctxSegmentedTextActive,
+                    newEmployeeCtxType === 'List' && styles.ctxSegmentedTextActive,
                   ]}>
                   Array
                 </Text>
@@ -689,26 +634,26 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           <View style={styles.ctxAddRow}>
             <TextInput
               style={[styles.input, styles.ctxAddInput]}
-              value={newValue}
-              onChangeText={setNewValue}
-              placeholder={newType === 'List' ? 'Comma-separated values' : 'Value'}
+              value={newEmployeeCtxValue}
+              onChangeText={setNewEmployeeCtxValue}
+              placeholder={newEmployeeCtxType === 'List' ? 'Comma-separated values' : 'Value'}
               placeholderTextColor="#999"
               autoCapitalize="none"
               autoCorrect={false}
             />
             <TouchableOpacity
-              style={[styles.addFieldButton, !newName.trim() && styles.buttonDisabled]}
-              onPress={() => handleAddContextVariable(agentType)}
-              disabled={!newName.trim()}>
+              style={[styles.addFieldButton, !newEmployeeCtxName.trim() && styles.buttonDisabled]}
+              onPress={() => handleAddContextVariable()}
+              disabled={!newEmployeeCtxName.trim()}>
               <Text style={styles.addFieldButtonText}>Add</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {variables.length > 0 && (
+        {employeeContextVars.length > 0 && (
           <TouchableOpacity
             style={styles.clearFieldsButton}
-            onPress={() => handleClearAllContextVariables(agentType)}>
+            onPress={() => handleClearAllContextVariables()}>
             <Text style={styles.clearFieldsButtonText}>Clear All Variables</Text>
           </TouchableOpacity>
         )}
@@ -781,8 +726,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       </View>
 
       {renderHiddenPreChatFieldsSection()}
-
-      {renderContextVariablesSection('service')}
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity
@@ -879,7 +822,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         </View>
       )}
 
-      {authSupported && renderContextVariablesSection('employee')}
+      {authSupported && renderContextVariablesSection()}
     </ScrollView>
   );
 
@@ -1342,19 +1285,6 @@ const styles = StyleSheet.create({
   ctxSegmentedTextActive: {
     color: '#2e7d32',
     fontWeight: '600',
-  },
-  ctxDefaultsButton: {
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2e7d32',
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  ctxDefaultsButtonText: {
-    color: '#2e7d32',
-    fontSize: 14,
-    fontWeight: '500',
   },
 });
 
