@@ -174,6 +174,7 @@ node installandroid.js employee
 # You'll be asked to configure OAuth credentials interactively
 # (prompts are automatically skipped in CI environments)
 ```
+
 **Getting OAuth Credentials:**
 
 1. Create a Connected App in Salesforce Setup → Enable OAuth settings
