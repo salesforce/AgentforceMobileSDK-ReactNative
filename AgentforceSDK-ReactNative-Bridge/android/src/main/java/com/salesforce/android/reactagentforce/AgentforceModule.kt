@@ -329,7 +329,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Check if configured via new unified path or legacy path
         val isConfiguredUnified = credentialProvider.isConfigured
         val isConfiguredLegacy = viewModel?.isConfigured?.value == true
-        
+
         if (!isConfiguredUnified && !isConfiguredLegacy) {
             promise.reject("NOT_CONFIGURED", "Agent not configured. Call configure() first.")
             return
@@ -354,20 +354,29 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             return
         }
 
-        // Create conversation before launching Activity so setAdditionalContext
-        // can find it immediately after the promise resolves (matches iOS behavior).
-        if (AgentforceClientHolder.currentConversation == null) {
-            if (!createConversation(promise, "LAUNCH_ERROR")) return
+        // Create conversation and launch activity on main thread to avoid
+        // "Method addObserver must be called on the main thread" error
+        scope.launch(Dispatchers.Main) {
+            try {
+                // Create conversation before launching Activity so setAdditionalContext
+                // can find it immediately after the promise resolves (matches iOS behavior).
+                if (AgentforceClientHolder.currentConversation == null) {
+                    if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
+                }
+
+                // Launch conversation UI
+                val intent = Intent(activity, AgentforceConversationActivity::class.java)
+                activity.startActivity(intent)
+
+                Log.d(TAG, "Conversation activity launched")
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                })
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch conversation", e)
+                promise.reject("LAUNCH_ERROR", "Failed to start conversation: ${e.message}", e)
+            }
         }
-
-        // Launch conversation UI
-        val intent = Intent(activity, AgentforceConversationActivity::class.java)
-        activity.startActivity(intent)
-
-        Log.d(TAG, "Conversation activity launched")
-        promise.resolve(Arguments.createMap().apply {
-            putBoolean("success", true)
-        })
     }
 
     /**
@@ -388,21 +397,29 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             return
         }
 
-        // Clear existing conversation
-        AgentforceClientHolder.clearConversation()
-        viewModel?.closeConversation()
+        // Clear existing conversation and start new one on main thread to avoid
+        // "Method addObserver must be called on the main thread" error
+        scope.launch(Dispatchers.Main) {
+            try {
+                AgentforceClientHolder.clearConversation()
+                viewModel?.closeConversation()
 
-        // Create new conversation before launching Activity so setAdditionalContext
-        // can find it immediately after the promise resolves (matches iOS behavior).
-        if (!createConversation(promise, "START_NEW_ERROR")) return
+                // Create new conversation before launching Activity so setAdditionalContext
+                // can find it immediately after the promise resolves (matches iOS behavior).
+                if (!createConversation(promise, "START_NEW_ERROR")) return@launch
 
-        val intent = Intent(activity, AgentforceConversationActivity::class.java)
-        activity.startActivity(intent)
+                val intent = Intent(activity, AgentforceConversationActivity::class.java)
+                activity.startActivity(intent)
 
-        Log.d(TAG, "New conversation started")
-        promise.resolve(Arguments.createMap().apply {
-            putBoolean("success", true)
-        })
+                Log.d(TAG, "New conversation started")
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                })
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start new conversation", e)
+                promise.reject("START_NEW_ERROR", "Failed to start conversation: ${e.message}", e)
+            }
+        }
     }
 
     // endregion
