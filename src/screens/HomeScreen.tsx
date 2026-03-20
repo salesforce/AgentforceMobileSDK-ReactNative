@@ -239,7 +239,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       await AgentforceService.launchConversation();
 
-      const contextVars = getContextVariables('employee');
+      const contextVars = getContextVariables();
       if (contextVars.length > 0) {
         try {
           await AgentforceService.setAdditionalContext({ variables: contextVars });

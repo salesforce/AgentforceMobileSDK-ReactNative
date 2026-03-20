@@ -134,7 +134,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   const [newFieldValue, setNewFieldValue] = useState('');
 
   const [employeeContextVars, setEmployeeContextVars] = useState<AgentforceContextVariable[]>(() =>
-    getContextVariables('employee'),
+    getContextVariables(),
   );
   const [newEmployeeCtxName, setNewEmployeeCtxName] = useState('');
   const [newEmployeeCtxType, setNewEmployeeCtxType] =
@@ -396,7 +396,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
   // Sync context variables to store whenever they change
   useEffect(() => {
-    setContextVariables('employee', employeeContextVars);
+    setContextVariables(employeeContextVars);
   }, [employeeContextVars]);
 
   const handleAddContextVariable = () => {
@@ -643,7 +643,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
             />
             <TouchableOpacity
               style={[styles.addFieldButton, !newEmployeeCtxName.trim() && styles.buttonDisabled]}
-              onPress={() => handleAddContextVariable()}
+              onPress={handleAddContextVariable}
               disabled={!newEmployeeCtxName.trim()}>
               <Text style={styles.addFieldButtonText}>Add</Text>
             </TouchableOpacity>
@@ -653,7 +653,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         {employeeContextVars.length > 0 && (
           <TouchableOpacity
             style={styles.clearFieldsButton}
-            onPress={() => handleClearAllContextVariables()}>
+            onPress={handleClearAllContextVariables}>
             <Text style={styles.clearFieldsButtonText}>Clear All Variables</Text>
           </TouchableOpacity>
         )}
