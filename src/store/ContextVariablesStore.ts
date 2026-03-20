@@ -1,23 +1,15 @@
 import type { AgentforceContextVariable } from 'react-native-agentforce';
 
-type AgentType = 'service' | 'employee';
+let store: AgentforceContextVariable[] = [];
 
-const store: Record<AgentType, AgentforceContextVariable[]> = {
-  service: [],
-  employee: [],
-};
-
-export function getContextVariables(agentType: AgentType): AgentforceContextVariable[] {
-  return [...store[agentType]];
+export function getContextVariables(): AgentforceContextVariable[] {
+  return [...store];
 }
 
-export function setContextVariables(
-  agentType: AgentType,
-  variables: AgentforceContextVariable[],
-): void {
-  store[agentType] = [...variables];
+export function setContextVariables(variables: AgentforceContextVariable[]): void {
+  store = [...variables];
 }
 
-export function clearContextVariables(agentType: AgentType): void {
-  store[agentType] = [];
+export function clearContextVariables(): void {
+  store = [];
 }
