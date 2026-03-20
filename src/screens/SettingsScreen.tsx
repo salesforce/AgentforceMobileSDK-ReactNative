@@ -406,7 +406,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     }
 
     const value = parseContextVariableValue(newEmployeeCtxType, newEmployeeCtxValue);
-    const variable: AgentforceContextVariable = { name: trimmedName, type: newEmployeeCtxType, value };
+    const variable: AgentforceContextVariable = {
+      name: trimmedName,
+      type: newEmployeeCtxType,
+      value,
+    };
 
     setEmployeeContextVars(prev => [...prev, variable]);
     setNewEmployeeCtxName('');
@@ -608,7 +612,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
             />
             <View style={styles.ctxSegmented}>
               <TouchableOpacity
-                style={[styles.ctxSegmentedButton, newEmployeeCtxType === 'Text' && styles.ctxSegmentedActive]}
+                style={[
+                  styles.ctxSegmentedButton,
+                  newEmployeeCtxType === 'Text' && styles.ctxSegmentedActive,
+                ]}
                 onPress={() => setNewEmployeeCtxType('Text')}>
                 <Text
                   style={[
@@ -619,7 +626,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.ctxSegmentedButton, newEmployeeCtxType === 'List' && styles.ctxSegmentedActive]}
+                style={[
+                  styles.ctxSegmentedButton,
+                  newEmployeeCtxType === 'List' && styles.ctxSegmentedActive,
+                ]}
                 onPress={() => setNewEmployeeCtxType('List')}>
                 <Text
                   style={[
