@@ -49,7 +49,7 @@ repositories {
 dependencies {
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
     implementation "com.facebook.react:react-android"
-    api "com.salesforce.android.agentforcesdk:agentforce-sdk:14.146.2"
+    api "com.salesforce.android.agentforcesdk:agentforce-sdk:14.177.0"
     // compileOnly: host app adds this for Employee Agent. Bridge compiles; host provides at runtime.
     compileOnly "com.salesforce.mobilesdk:SalesforceReact:13.1.1"
 
