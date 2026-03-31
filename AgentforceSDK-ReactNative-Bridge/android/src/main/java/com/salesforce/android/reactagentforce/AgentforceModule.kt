@@ -28,6 +28,9 @@ import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
 import com.salesforce.android.reactagentforce.providers.BridgeViewProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
+import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
+import com.salesforce.android.agentforcesdkimpl.network.AgentforceNetworkImpl
+import com.salesforce.androidsdk.app.SalesforceSDKManager
 import kotlinx.coroutines.*
 
 /**
@@ -246,6 +249,11 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
                 val permissions = reactApplicationContext.currentActivity?.let { AgentforceClientPermissions(it) }
 
+                // Employee Agent uses BridgeNetwork with RestClient for authenticated requests
+                val restClient = SalesforceSDKManager.getInstance().clientManager.peekRestClient()
+                val network = restClient?.let { BridgeNetwork(it) } ?: AgentforceNetworkImpl()
+                val dataProvider = AgentforceDataProviderImpl(network)
+
                 val agentforceConfigBuilder = AgentforceConfiguration
                     .builder(credentialProvider)
                     .setServiceApiURL(employeeConfig.instanceUrl)
@@ -255,6 +263,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
+                    .setDataProvider(dataProvider)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.

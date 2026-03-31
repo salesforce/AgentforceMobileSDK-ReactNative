@@ -12,6 +12,7 @@ import React
 import AgentforceSDK
 import AgentforceService
 import SalesforceUser
+import SalesforceNetwork
 
 #if canImport(SalesforceSDKCore)
 import SalesforceSDKCore
@@ -235,13 +236,17 @@ class AgentforceModule: RCTEventEmitter {
             internalFlags: [:]
         )
 
-        // Build full configuration so we can control feature flags explicitly.
-        // Passing nil for optional params uses SDK defaults (network, imageProvider, theme, etc.).
+        // Build full configuration with authenticated network and data provider for Employee Agent.
+        let network = createAuthenticatedNetwork()
+        let dataProvider = createDataProvider(network: network)
+
+
         let fullConfiguration = AgentforceConfiguration(
             user: user,
             forceConfigEndpoint: config.instanceUrl,
+            dataProvider: dataProvider,
             agentforceFeatureFlagSettings: featureFlagSettings,
-            salesforceNetwork: nil,
+            salesforceNetwork: network,
             salesforceNavigation: bridgeNavigation,
             salesforceLogger: bridgeLogger
         )
@@ -253,6 +258,31 @@ class AgentforceModule: RCTEventEmitter {
             mode: .fullConfig(fullConfiguration),
             viewProvider: bridgeViewProvider
         )
+    }
+
+    // MARK: - Network Configuration Helpers
+
+    /// Create authenticated network implementation for Employee Agent.
+    /// Returns BridgeNetwork when Mobile SDK is available, nil otherwise.
+    private func createAuthenticatedNetwork() -> SalesforceNetwork.Network? {
+        #if canImport(SalesforceSDKCore)
+        return BridgeNetwork(restClient: RestClient.shared)
+        #else
+        return nil
+        #endif
+    }
+
+    /// Create data provider for fetching record data from Salesforce UI APIs.
+    /// Returns BridgeDataProvider when network is available, nil otherwise.
+    private func createDataProvider(network: SalesforceNetwork.Network?) -> AgentforceDataProviding? {
+        #if canImport(SalesforceSDKCore)
+        guard let network = network else {
+            return nil
+        }
+        return BridgeDataProvider(network: network, restClient: RestClient.shared)
+        #else
+        return nil
+        #endif
     }
 
     // MARK: - Legacy Configuration Method (Backward Compatibility)
