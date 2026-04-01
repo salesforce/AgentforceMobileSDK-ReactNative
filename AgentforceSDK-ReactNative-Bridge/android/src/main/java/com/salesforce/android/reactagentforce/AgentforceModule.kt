@@ -28,6 +28,9 @@ import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
 import com.salesforce.android.reactagentforce.providers.BridgeViewProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
+import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
+import com.salesforce.android.agentforcesdkimpl.network.AgentforceNetworkImpl
+import com.salesforce.androidsdk.app.SalesforceSDKManager
 import kotlinx.coroutines.*
 
 /**
@@ -154,13 +157,12 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                         serviceApiURL = serviceConfig.serviceApiURL
                     )
                     .build()
-                
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
-                    .enableVoice(false) // Voice off for Service Agent
+                    .enableVoice(false)
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
@@ -246,6 +248,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
                 val permissions = reactApplicationContext.currentActivity?.let { AgentforceClientPermissions(it) }
 
+                // Employee Agent uses BridgeNetwork with RestClient for authenticated requests
+                val restClient = SalesforceSDKManager.getInstance().clientManager.peekRestClient()
+                if (restClient == null) {
+                    Log.w(TAG, "RestClient is null - user may not be logged in. Record rendering may fail.")
+                }
+                val network = restClient?.let { BridgeNetwork(it) } ?: AgentforceNetworkImpl()
+                val dataProvider = AgentforceDataProviderImpl(network)
+
                 val agentforceConfigBuilder = AgentforceConfiguration
                     .builder(credentialProvider)
                     .setServiceApiURL(employeeConfig.instanceUrl)
@@ -255,6 +265,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
+                    .setDataProvider(dataProvider)
                 permissions?.let { agentforceConfigBuilder.setPermission(it) }
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
@@ -496,8 +507,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         } else {
             FeatureFlags(
                 enableMultiAgent = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true),
-                enableMultiModalInput = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false),
-                enablePDFUpload = featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false),
+                enableMultiModalInput = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, true),
+                enablePDFUpload = featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, true),
                 enableVoice = featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false),
                 enableCustomViewProvider = featureFlagsPrefs.getBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, false)
             )
@@ -518,8 +529,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun getFeatureFlags(promise: Promise) {
         promise.resolve(Arguments.createMap().apply {
             putBoolean("enableMultiAgent", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true))
-            putBoolean("enableMultiModalInput", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false))
-            putBoolean("enablePDFUpload", featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
+            putBoolean("enableMultiModalInput", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, true))
+            putBoolean("enablePDFUpload", featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, true))
             putBoolean("enableVoice", featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false))
             putBoolean("enableCustomViewProvider", featureFlagsPrefs.getBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, false))
         })

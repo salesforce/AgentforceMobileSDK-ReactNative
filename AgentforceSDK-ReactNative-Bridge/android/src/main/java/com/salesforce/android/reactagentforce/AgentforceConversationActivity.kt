@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -39,6 +40,7 @@ class AgentforceConversationActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         Log.d(TAG, "onCreate() called")
 
         // Try to get shared ViewModel for legacy Service Agent support
@@ -152,6 +154,7 @@ fun AgentforceConversationScreen(
     }
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
                 title = {
@@ -179,12 +182,15 @@ fun AgentforceConversationScreen(
                 windowInsets = WindowInsets(top = 50.dp, bottom = 0.dp),
                 modifier = Modifier.heightIn(max = 95.dp)
             )
-        }
+        },
+        contentWindowInsets = WindowInsets(0.dp)
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .navigationBarsPadding()
+                .imePadding()
         ) {
             when {
                 conversation != null && client != null -> {
