@@ -13,6 +13,7 @@
         <activity
             android:name="com.salesforce.android.reactagentforce.AgentforceConversationActivity"
             android:theme="@style/Theme.Material3.DayNight"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
     </application>
 </manifest>
