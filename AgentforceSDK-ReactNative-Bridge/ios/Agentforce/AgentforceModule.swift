@@ -240,7 +240,6 @@ class AgentforceModule: RCTEventEmitter {
         let network = createAuthenticatedNetwork()
         let dataProvider = createDataProvider(network: network)
 
-
         let fullConfiguration = AgentforceConfiguration(
             user: user,
             forceConfigEndpoint: config.instanceUrl,

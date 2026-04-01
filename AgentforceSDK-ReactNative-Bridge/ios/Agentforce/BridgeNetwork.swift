@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
+ * Copyright (c) 2026-present, salesforce.com, inc. All rights reserved.
  *
  * Network implementation for Agentforce DataProvider
  * Uses Mobile SDK RestClient for authenticated API calls
@@ -25,7 +25,7 @@ struct BridgeNetwork: SalesforceNetwork.Network {
     }
 
     func data(for request: SalesforceNetwork.NetworkRequest) async throws -> (Data, URLResponse) {
-        let restRequest = createRestRequest(from: request)
+        let restRequest = try createRestRequest(from: request)
 
         return try await withCheckedThrowingContinuation { continuation in
             restClient.send(request: restRequest) { result in
@@ -43,15 +43,18 @@ struct BridgeNetwork: SalesforceNetwork.Network {
         }
     }
 
-    private func createRestRequest(from request: NetworkRequest) -> RestRequest {
+    private func createRestRequest(from request: NetworkRequest) throws -> RestRequest {
         let method = request.baseRequest.restRequestMethod
-        let url = request.baseRequest.url!
+
+        guard let url = request.baseRequest.url else {
+            throw NetworkError.invalidURL
+        }
 
         // Determine path based on URL scheme
-        // file:// URLs are from DataProvider - extract path so RestClient prepends instance URL
+        // placeholder:// URLs are from DataProvider - extract path so RestClient prepends instance URL
         // Other URLs (https://) should be used as-is (full URL for agent session API, etc.)
         let path: String
-        if url.scheme == "file" {
+        if url.scheme == "placeholder" {
             path = url.path
         } else {
             path = url.absoluteString
@@ -104,6 +107,7 @@ private extension URLRequest {
 
 enum NetworkError: Error {
     case noData
+    case invalidURL
 }
 
 #endif // canImport(SalesforceSDKCore)

@@ -250,6 +250,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
                 // Employee Agent uses BridgeNetwork with RestClient for authenticated requests
                 val restClient = SalesforceSDKManager.getInstance().clientManager.peekRestClient()
+                if (restClient == null) {
+                    Log.w(TAG, "RestClient is null - user may not be logged in. Record rendering may fail.")
+                }
                 val network = restClient?.let { BridgeNetwork(it) } ?: AgentforceNetworkImpl()
                 val dataProvider = AgentforceDataProviderImpl(network)
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-present, salesforce.com, inc.
+ * Copyright (c) 2026-present, salesforce.com, inc.
  * All rights reserved.
  *
  * Network implementation for Agentforce DataProvider
@@ -34,8 +34,9 @@ class BridgeNetwork(private val restClient: RestClient) : Network {
                     }
 
                     override fun onError(exception: Exception?) {
-                        // Return 404 on error (SDK will handle gracefully)
-                        continuation.resume(NetworkResponse(request, 404))
+                        // Return unknown status code on error - preserves error type information
+                        // SDK will handle gracefully regardless of status code
+                        continuation.resume(NetworkResponse(request, NetworkResponse.STATUS_CODE_UNKNOWN))
                     }
                 }
             )

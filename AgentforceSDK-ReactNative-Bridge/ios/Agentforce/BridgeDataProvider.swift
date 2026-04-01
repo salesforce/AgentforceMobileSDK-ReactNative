@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
+ * Copyright (c) 2026-present, salesforce.com, inc. All rights reserved.
  *
  * DataProvider implementation for Agentforce SDK
  * Uses Network interface to fetch record data from Salesforce UI APIs
@@ -19,6 +19,8 @@ import SalesforceSDKCore
  */
 struct BridgeDataProvider: AgentforceDataProviding {
 
+    private static let apiVersion = "v62.0"
+
     private let network: SalesforceNetwork.Network
     private let restClient: RestClient
 
@@ -35,7 +37,7 @@ struct BridgeDataProvider: AgentforceDataProviding {
         transactionId: String?
     ) async throws -> AgentforceRecordRepresentation {
         let fieldsParam = fields.isEmpty ? "" : "?fields=" + fields.joined(separator: ",")
-        let path = "/services/data/v62.0/ui-api/records/\(recordId)\(fieldsParam)"
+        let path = "/services/data/\(Self.apiVersion)/ui-api/records/\(recordId)\(fieldsParam)"
         let request = createNetworkRequest(path: path)
         let (data, _) = try await network.data(for: request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
@@ -50,7 +52,7 @@ struct BridgeDataProvider: AgentforceDataProviding {
         transactionId: String?
     ) async throws -> AgentforceRecordRepresentation {
         let modesParam = modes.isEmpty ? "" : "?modes=" + modes.map { $0.rawValue }.joined(separator: ",")
-        let path = "/services/data/v62.0/ui-api/record-ui/\(recordId)\(modesParam)"
+        let path = "/services/data/\(Self.apiVersion)/ui-api/record-ui/\(recordId)\(modesParam)"
 
         let request = createNetworkRequest(path: path)
         let (data, _) = try await network.data(for: request)
@@ -72,7 +74,7 @@ struct BridgeDataProvider: AgentforceDataProviding {
     ) async throws -> [AgentforceUIAPIRecord] {
         let recordIdsParam = recordIds.joined(separator: ",")
         let fieldsParam = fields.isEmpty ? "" : "&fields=" + fields.joined(separator: ",")
-        let path = "/services/data/v62.0/ui-api/records/batch/\(recordIdsParam)\(fieldsParam)"
+        let path = "/services/data/\(Self.apiVersion)/ui-api/records/batch/\(recordIdsParam)\(fieldsParam)"
 
         let request = createNetworkRequest(path: path)
         let (data, _) = try await network.data(for: request)
@@ -93,7 +95,7 @@ struct BridgeDataProvider: AgentforceDataProviding {
     ) async throws -> [AgentforceUIAPIRecord] {
         let recordIdsParam = recordIds.joined(separator: ",")
         let modesParam = modes.map { "?modes=" + $0.map { $0.rawValue }.joined(separator: ",") } ?? ""
-        let path = "/services/data/v62.0/ui-api/record-ui/batch/\(recordIdsParam)\(modesParam)"
+        let path = "/services/data/\(Self.apiVersion)/ui-api/record-ui/batch/\(recordIdsParam)\(modesParam)"
 
         let request = createNetworkRequest(path: path)
         let (data, _) = try await network.data(for: request)
@@ -102,7 +104,7 @@ struct BridgeDataProvider: AgentforceDataProviding {
         if let results = json["results"] as? [[String: Any]] {
             return try results.compactMap { resultItem in
                 if let recordData = resultItem["record"] as? [String: Any] {
-                    return try? parseUIAPIRecord(from: recordData)
+                    return try parseUIAPIRecord(from: recordData)
                 }
                 return nil
             }
@@ -115,7 +117,7 @@ struct BridgeDataProvider: AgentforceDataProviding {
         cachePolicy: AgentforceCachePolicy,
         transactionId: String?
     ) async throws -> AgentforceObjectRepresentation {
-        let path = "/services/data/v62.0/ui-api/object-info/\(objectType)"
+        let path = "/services/data/\(Self.apiVersion)/ui-api/object-info/\(objectType)"
         let request = createNetworkRequest(path: path)
         let (data, _) = try await network.data(for: request)
         let objectInfoResponse = try JSONDecoder().decode(UIAPIObjectInfoRepresentation.self, from: data)
@@ -128,7 +130,7 @@ struct BridgeDataProvider: AgentforceDataProviding {
         transactionId: String?
     ) async throws -> [AgentforceUIAPIObjectInfo] {
         let objectTypesParam = objectTypes.joined(separator: ",")
-        let path = "/services/data/v62.0/ui-api/object-info/batch/\(objectTypesParam)"
+        let path = "/services/data/\(Self.apiVersion)/ui-api/object-info/batch/\(objectTypesParam)"
         let request = createNetworkRequest(path: path)
         let (data, _) = try await network.data(for: request)
         let batchResponse = try JSONDecoder().decode(UIAPIObjectInfoBatchResponse.self, from: data)
@@ -140,7 +142,7 @@ struct BridgeDataProvider: AgentforceDataProviding {
         cachePolicy: AgentforceCachePolicy,
         transactionId: String?
     ) async throws -> [String: Any] {
-        return [:]
+        throw DataProviderError.notImplemented
     }
 
     // MARK: - Parsing Helpers
@@ -183,7 +185,11 @@ struct BridgeDataProvider: AgentforceDataProviding {
     }
 
     private func createNetworkRequest(path: String) -> SalesforceNetwork.NetworkRequest {
-        let url = URL(fileURLWithPath: path)
+        // Use a placeholder URL - BridgeNetwork will use the path directly
+        // We use "placeholder://api" as a valid URL that signals path-only usage
+        guard let url = URL(string: "placeholder://api" + path) else {
+            fatalError("Invalid path for network request: \(path)")
+        }
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "GET"
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")

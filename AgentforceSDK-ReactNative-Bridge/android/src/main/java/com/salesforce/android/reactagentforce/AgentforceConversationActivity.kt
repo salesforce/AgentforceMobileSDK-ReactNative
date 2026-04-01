@@ -189,6 +189,7 @@ fun AgentforceConversationScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .navigationBarsPadding()
                 .imePadding()
         ) {
             when {
