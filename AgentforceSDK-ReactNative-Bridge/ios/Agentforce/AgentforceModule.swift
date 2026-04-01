@@ -604,7 +604,8 @@ class AgentforceModule: RCTEventEmitter {
         enableMultiAgent: "AgentforceFF_enableMultiAgent",
         enableMultiModalInput: "AgentforceFF_enableMultiModalInput",
         enablePDFUpload: "AgentforceFF_enablePDFUpload",
-        enableVoice: "AgentforceFF_enableVoice"
+        enableVoice: "AgentforceFF_enableVoice",
+        enableCustomViewProvider: "AgentforceFF_enableCustomViewProvider"
     )
 
     private struct FeatureFlags {
@@ -612,23 +613,26 @@ class AgentforceModule: RCTEventEmitter {
         let enableMultiModalInput: Bool
         let enablePDFUpload: Bool
         let enableVoice: Bool
+        let enableCustomViewProvider: Bool
     }
 
     private func getFeatureFlagsFromConfigOrUserDefaults(_ configDict: [String: Any]) -> FeatureFlags {
         if let featureFlags = configDict["featureFlags"] as? [String: Any] {
             return FeatureFlags(
                 enableMultiAgent: (featureFlags["enableMultiAgent"] as? NSNumber)?.boolValue ?? true,
-                enableMultiModalInput: (featureFlags["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false,
-                enablePDFUpload: (featureFlags["enablePDFUpload"] as? NSNumber)?.boolValue ?? false,
-                enableVoice: (featureFlags["enableVoice"] as? NSNumber)?.boolValue ?? false
+                enableMultiModalInput: (featureFlags["enableMultiModalInput"] as? NSNumber)?.boolValue ?? true,
+                enablePDFUpload: (featureFlags["enablePDFUpload"] as? NSNumber)?.boolValue ?? true,
+                enableVoice: (featureFlags["enableVoice"] as? NSNumber)?.boolValue ?? false,
+                enableCustomViewProvider: (featureFlags["enableCustomViewProvider"] as? NSNumber)?.boolValue ?? false
             )
         }
         let ud = UserDefaults.standard
         return FeatureFlags(
             enableMultiAgent: ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
-            enableMultiModalInput: ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
-            enablePDFUpload: ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
-            enableVoice: ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+            enableMultiModalInput: ud.object(forKey: Self.featureFlagKeys.enableMultiModalInput) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
+            enablePDFUpload: ud.object(forKey: Self.featureFlagKeys.enablePDFUpload) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
+            enableVoice: ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice),
+            enableCustomViewProvider: ud.object(forKey: Self.featureFlagKeys.enableCustomViewProvider) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableCustomViewProvider)
         )
     }
 
@@ -637,6 +641,7 @@ class AgentforceModule: RCTEventEmitter {
         UserDefaults.standard.set(flags.enableMultiModalInput, forKey: Self.featureFlagKeys.enableMultiModalInput)
         UserDefaults.standard.set(flags.enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
         UserDefaults.standard.set(flags.enableVoice, forKey: Self.featureFlagKeys.enableVoice)
+        UserDefaults.standard.set(flags.enableCustomViewProvider, forKey: Self.featureFlagKeys.enableCustomViewProvider)
     }
 
     @objc
@@ -647,9 +652,10 @@ class AgentforceModule: RCTEventEmitter {
         let ud = UserDefaults.standard
         let flags = [
             "enableMultiAgent": ud.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiAgent),
-            "enableMultiModalInput": ud.object(forKey: Self.featureFlagKeys.enableMultiModalInput) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
-            "enablePDFUpload": ud.object(forKey: Self.featureFlagKeys.enablePDFUpload) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
-            "enableVoice": ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice)
+            "enableMultiModalInput": ud.object(forKey: Self.featureFlagKeys.enableMultiModalInput) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enableMultiModalInput),
+            "enablePDFUpload": ud.object(forKey: Self.featureFlagKeys.enablePDFUpload) == nil ? true : ud.bool(forKey: Self.featureFlagKeys.enablePDFUpload),
+            "enableVoice": ud.object(forKey: Self.featureFlagKeys.enableVoice) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableVoice),
+            "enableCustomViewProvider": ud.object(forKey: Self.featureFlagKeys.enableCustomViewProvider) == nil ? false : ud.bool(forKey: Self.featureFlagKeys.enableCustomViewProvider)
         ]
         resolve(flags)
     }
@@ -668,15 +674,17 @@ class AgentforceModule: RCTEventEmitter {
 
             // Get new flags
             let newMultiAgent = (dict["enableMultiAgent"] as? NSNumber)?.boolValue ?? true
-            let newMultiModal = (dict["enableMultiModalInput"] as? NSNumber)?.boolValue ?? false
-            let newPDF = (dict["enablePDFUpload"] as? NSNumber)?.boolValue ?? false
+            let newMultiModal = (dict["enableMultiModalInput"] as? NSNumber)?.boolValue ?? true
+            let newPDF = (dict["enablePDFUpload"] as? NSNumber)?.boolValue ?? true
             let newVoice = (dict["enableVoice"] as? NSNumber)?.boolValue ?? false
+            let newCustomViewProvider = (dict["enableCustomViewProvider"] as? NSNumber)?.boolValue ?? false
 
             // Save new flags (will take effect on next app restart / new conversation)
             UserDefaults.standard.set(newMultiAgent, forKey: Self.featureFlagKeys.enableMultiAgent)
             UserDefaults.standard.set(newMultiModal, forKey: Self.featureFlagKeys.enableMultiModalInput)
             UserDefaults.standard.set(newPDF, forKey: Self.featureFlagKeys.enablePDFUpload)
             UserDefaults.standard.set(newVoice, forKey: Self.featureFlagKeys.enableVoice)
+            UserDefaults.standard.set(newCustomViewProvider, forKey: Self.featureFlagKeys.enableCustomViewProvider)
 
             print("[AgentforceModule] Feature flags saved (will apply on app restart)")
             resolve(nil)

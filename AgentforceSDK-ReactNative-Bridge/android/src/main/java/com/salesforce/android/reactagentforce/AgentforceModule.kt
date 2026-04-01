@@ -157,13 +157,12 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                         serviceApiURL = serviceConfig.serviceApiURL
                     )
                     .build()
-                
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
-                    .enableVoice(false) // Voice off for Service Agent
+                    .enableVoice(false)
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
@@ -505,8 +504,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         } else {
             FeatureFlags(
                 enableMultiAgent = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true),
-                enableMultiModalInput = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false),
-                enablePDFUpload = featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false),
+                enableMultiModalInput = featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, true),
+                enablePDFUpload = featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, true),
                 enableVoice = featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false),
                 enableCustomViewProvider = featureFlagsPrefs.getBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, false)
             )
@@ -527,8 +526,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun getFeatureFlags(promise: Promise) {
         promise.resolve(Arguments.createMap().apply {
             putBoolean("enableMultiAgent", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true))
-            putBoolean("enableMultiModalInput", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false))
-            putBoolean("enablePDFUpload", featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
+            putBoolean("enableMultiModalInput", featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, true))
+            putBoolean("enablePDFUpload", featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, true))
             putBoolean("enableVoice", featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false))
             putBoolean("enableCustomViewProvider", featureFlagsPrefs.getBoolean(KEY_ENABLE_CUSTOM_VIEW_PROVIDER, false))
         })
