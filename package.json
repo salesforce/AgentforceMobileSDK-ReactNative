@@ -4,7 +4,7 @@
   "private": true,
   "description": "Lightweight Agentforce Service Agent Sample for React Native",
   "scripts": {
-    "start": "react-native start",
+    "start": "node scripts/start-dev-server.js",
     "android": "react-native run-android",
     "ios": "react-native run-ios --scheme ServiceAgent --target ServiceAgent",
     "test": "jest --passWithNoTests",
