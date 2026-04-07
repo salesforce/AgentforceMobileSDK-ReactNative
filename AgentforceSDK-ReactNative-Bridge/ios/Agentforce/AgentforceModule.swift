@@ -188,10 +188,21 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
         }
 
-        // Only cleanup if switching from Service mode
+        // Check if agentId changed
+        var agentIdChanged = false
+        if case .employee(let existingConfig) = currentMode {
+            agentIdChanged = existingConfig.agentId != config.agentId
+        }
+
+        // Only cleanup if switching from Service mode or agentId changed
         if case .service = currentMode {
             print("[AgentforceModule] ⚠️ Switching from Service to Employee mode - cleaning up")
             cleanupClient()
+        } else if agentIdChanged {
+            print("[AgentforceModule] ⚠️ AgentId changed - cleaning up conversation")
+            await closeCurrentConversation()
+        } else {
+            print("[AgentforceModule] ✓ AgentId unchanged - preserving conversation")
         }
 
         // Configure unified credential provider for Employee Agent mode

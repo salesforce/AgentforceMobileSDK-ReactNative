@@ -83,7 +83,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [isServiceAgentConfigured, setIsServiceAgentConfigured] = useState(false);
   const [isEmployeeAgentConfigured, setIsEmployeeAgentConfigured] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-  const [activeMode, setActiveMode] = useState<'none' | 'service' | 'employee'>('none');
+  const [currentMode, setCurrentMode] = useState<'none' | 'service' | 'employee'>('none');
 
   useEffect(() => {
     // Register logger delegate so SDK logs are forwarded to JS
@@ -148,9 +148,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       const configInfo = await AgentforceService.getConfigurationInfo();
       if (configInfo?.configured && configInfo?.mode) {
-        setActiveMode(configInfo.mode as 'service' | 'employee');
+        setCurrentMode(configInfo.mode as 'service' | 'employee');
       } else {
-        setActiveMode('none');
+        setCurrentMode('none');
       }
     } catch (error) {
       console.error('Error checking configuration:', error);
@@ -172,11 +172,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
 
     try {
-      // Only reconfigure if switching from another mode or first launch
-      if (activeMode !== 'service') {
+      // Query native to check current configuration
+      const configInfo = await AgentforceService.getConfigurationInfo();
+
+      // Only reconfigure if not already in service mode
+      if (!configInfo?.configured || configInfo?.mode !== 'service') {
         const config = await AgentforceService.getConfiguration();
         if (config) {
-          // Get current feature flags to preserve user settings
           const featureFlags = await AgentforceService.getFeatureFlags();
 
           await AgentforceService.configure({
@@ -186,7 +188,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             esDeveloperName: config.esDeveloperName,
             featureFlags,
           });
-          setActiveMode('service');
         }
       }
 
@@ -214,28 +215,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
 
     try {
-      // Always read the latest agentID from settings
+      // Read the latest agentID from settings
       const storedAgentId = await AgentforceService.getEmployeeAgentId();
-      const agentId = storedAgentId?.trim() ?? '';
+      const agentId = storedAgentId?.trim() || undefined; // Empty string becomes undefined
       const creds = await getEmployeeAgentCredentials();
-
-      // Get current feature flags to preserve user settings
       const featureFlags = await AgentforceService.getFeatureFlags();
 
-      // Always reconfigure to pick up latest agentID and credentials
+      // Always reconfigure Employee Agent to ensure fresh credentials and agentId
       const config = creds
         ? {
             type: 'employee' as const,
             instanceUrl: creds.instanceUrl,
             organizationId: creds.organizationId,
             userId: creds.userId,
-            agentId: agentId || undefined,
+            agentId: agentId, // undefined triggers multi-agent mode
             accessToken: creds.accessToken,
             featureFlags,
           }
-        : { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId || undefined, featureFlags };
+        : { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId, featureFlags };
       await AgentforceService.configure(config);
-      setActiveMode('employee');
 
       await AgentforceService.launchConversation();
 
@@ -288,7 +286,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 styles.launchButton,
                 styles.serviceAgentButton,
                 !isServiceAgentConfigured && styles.launchButtonDisabled,
-                activeMode === 'service' && styles.activeButton,
+                currentMode === 'service' && styles.activeButton,
               ]}
               onPress={handleLaunchServiceAgent}
               disabled={isChecking}>
@@ -296,7 +294,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 <Text style={styles.launchButtonTitle}>Service Agent</Text>
                 <Text style={styles.launchButtonSubtitle}>
                   {isServiceAgentConfigured
-                    ? activeMode === 'service'
+                    ? currentMode === 'service'
                       ? 'Active - Tap to launch'
                       : 'Configured - Tap to launch'
                     : 'Not configured'}
@@ -312,7 +310,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 styles.launchButton,
                 styles.employeeAgentButton,
                 !isEmployeeAgentConfigured && styles.launchButtonDisabled,
-                activeMode === 'employee' && styles.activeButtonEmployee,
+                currentMode === 'employee' && styles.activeButtonEmployee,
               ]}
               onPress={handleLaunchEmployeeAgent}
               disabled={isChecking}>
@@ -320,7 +318,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 <Text style={styles.launchButtonTitle}>Employee Agent</Text>
                 <Text style={styles.launchButtonSubtitle}>
                   {isEmployeeAgentConfigured
-                    ? activeMode === 'employee'
+                    ? currentMode === 'employee'
                       ? 'Active - Tap to launch'
                       : 'Configured - Tap to launch'
                     : 'Sign in in Settings to configure'}

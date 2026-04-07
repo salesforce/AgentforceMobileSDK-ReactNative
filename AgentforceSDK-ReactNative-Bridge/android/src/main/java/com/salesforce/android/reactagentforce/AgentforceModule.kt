@@ -220,19 +220,28 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             promise.reject("INVALID_CONFIG", "Missing required Employee Agent configuration fields")
             return
         }
-        
+
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
+
+        // Check if agentId changed - only clear if it did
+        val currentEmployeeMode = currentMode as? LocalAgentMode.Employee
+        val agentIdChanged = currentEmployeeMode?.config?.agentId != employeeConfig.agentId
 
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
         credentialProvider.configure(employeeConfig)
         currentMode = LocalAgentMode.Employee(employeeConfig)
-        
+
         // Persist employee agentId (editable in Settings tab)
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
-        
-        // Clear existing client
-        AgentforceClientHolder.clear()
+
+        // Only clear if switching from Service mode or agentId changed
+        if (AgentforceClientHolder.isServiceAgent || agentIdChanged) {
+            Log.d(TAG, "AgentId changed or switching modes - clearing client and conversation")
+            AgentforceClientHolder.clear()
+        } else {
+            Log.d(TAG, "AgentId unchanged - preserving conversation")
+        }
         
         scope.launch {
             try {

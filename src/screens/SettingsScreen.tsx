@@ -212,7 +212,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       return false;
     }
     try {
-      void new URL(serviceApiURL); // Validate URL format
+      new URL(serviceApiURL);
     } catch {
       Alert.alert('Validation Error', 'Please enter a valid URL');
       return false;
@@ -315,6 +315,31 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       Alert.alert('Signed Out', 'You have been signed out.');
     } catch (e) {
       console.error('Logout error:', e);
+    }
+  };
+
+  const handleSaveEmployeeConfig = async () => {
+    if (!employeeLoggedIn) {
+      Alert.alert('Not Signed In', 'Please sign in first to save Employee Agent configuration.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const trimmedAgentId = employeeAgentId.trim();
+
+      // Save the Agent ID (empty string is valid for multi-agent mode)
+      await AgentforceService.setEmployeeAgentId(trimmedAgentId);
+
+      // Close existing conversation - HomeScreen will reconfigure on next launch
+      await AgentforceService.closeConversation();
+
+      Alert.alert('Success', 'Configuration details saved.', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to save configuration');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -812,11 +837,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       )}
 
       {authSupported && (
-        <View style={[styles.formContainer, { marginBottom: 16 }]}>
+        <View style={styles.formContainerWithMargin}>
           <Text style={styles.label}>Agent ID</Text>
           <Text style={styles.hint}>
-            Optional. Leave blank for multi-agent (SDK uses first available agent from org). Changes
-            apply when you next launch Employee Agent.
+            Optional. Leave blank for multi-agent (SDK uses first available agent from org). Click
+            "Save Configuration" below to apply changes.
           </Text>
           <TextInput
             style={styles.input}
@@ -827,12 +852,24 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
             autoCapitalize="none"
             autoCorrect={false}
             editable={!loading}
-            onBlur={() => AgentforceService.setEmployeeAgentId(employeeAgentId.trim())}
           />
         </View>
       )}
 
       {authSupported && renderContextVariablesSection()}
+
+      {authSupported && employeeLoggedIn && (
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.loginButton, loading && styles.buttonDisabled]}
+            onPress={handleSaveEmployeeConfig}
+            disabled={loading}>
+            <Text style={styles.loginButtonText}>
+              {loading ? 'Saving...' : 'Save Configuration'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 
@@ -1034,6 +1071,17 @@ const styles = StyleSheet.create({
     color: '#0070f3',
   },
   formContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  formContainerWithMargin: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 16,
