@@ -188,10 +188,28 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
         }
 
-        // Only cleanup if switching from Service mode
+        // Check if agentId changed or we're switching modes
+        var agentIdChanged = false
+        var switchingModes = false
+        
         if case .service = currentMode {
+            switchingModes = true
+        } else if case .employee(let existingConfig) = currentMode {
+            agentIdChanged = existingConfig.agentId != config.agentId
+        }
+        
+        let needsNewClient = switchingModes || agentIdChanged || agentforceClient == nil
+
+        // Only cleanup if switching from Service mode or agentId changed
+        if switchingModes {
             print("[AgentforceModule] ⚠️ Switching from Service to Employee mode - cleaning up")
             cleanupClient()
+        } else if agentIdChanged {
+            print("[AgentforceModule] ⚠️ AgentId changed - cleaning up conversation")
+            await closeCurrentConversation()
+            cleanupClient()
+        } else if agentforceClient != nil {
+            print("[AgentforceModule] ✓ AgentId unchanged - preserving client and conversation")
         }
 
         // Configure unified credential provider for Employee Agent mode
@@ -250,13 +268,19 @@ class AgentforceModule: RCTEventEmitter {
             salesforceLogger: bridgeLogger
         )
 
-        // Always pass bridgeViewProvider so late registrations take effect.
-        // canHandle() returns false when the map is empty, matching nil behavior.
-        agentforceClient = AgentforceClient(
-            credentialProvider: credentialProvider,
-            mode: .fullConfig(fullConfiguration),
-            viewProvider: bridgeViewProvider
-        )
+        // Only create new client if needed (otherwise reuse existing to preserve conversation)
+        if needsNewClient {
+            print("[AgentforceModule] Creating new AgentforceClient for Employee Agent")
+            // Always pass bridgeViewProvider so late registrations take effect.
+            // canHandle() returns false when the map is empty, matching nil behavior.
+            agentforceClient = AgentforceClient(
+                credentialProvider: credentialProvider,
+                mode: .fullConfig(fullConfiguration),
+                viewProvider: bridgeViewProvider
+            )
+        } else {
+            print("[AgentforceModule] Reusing existing AgentforceClient - credentials will be refreshed automatically")
+        }
     }
 
     // MARK: - Network Configuration Helpers
@@ -856,6 +880,7 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            await closeCurrentConversation()
             await ServiceAgentManager.shared.closeConversation()
             dismissConversation()
             resolve(["success": true])
@@ -1044,12 +1069,8 @@ class AgentforceModule: RCTEventEmitter {
         }
 
         if rootViewController.presentedViewController != nil {
-            rootViewController.dismiss(animated: true) { [weak self] in
-                // Clear the conversation reference after dismissal so next launch creates a new one
-                Task { @MainActor in
-                    await self?.closeCurrentConversation()
-                }
-            }
+            // Dismiss the UI but preserve the conversation so it persists across launches
+            rootViewController.dismiss(animated: true)
         }
     }
 
