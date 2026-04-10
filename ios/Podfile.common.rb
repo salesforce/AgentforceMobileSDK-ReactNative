@@ -79,6 +79,9 @@ def common_post_install(installer)
   # Make ServiceAgent target explicitly depend on Pods-ServiceAgent so Pods build first
   # (fixes 'React/RCTBridgeDelegate.h' file not found when building in parallel).
   add_pods_target_dependency(installer)
+
+  # Patch Boost 1.75 for C++17 compatibility (remove std::unary_function)
+  patch_boost_for_cpp17
 end
 
 def add_pods_target_dependency(installer)
@@ -137,4 +140,57 @@ def add_react_core_header_paths(installer)
     aggregate.user_project.save
     break
   end
+end
+
+def patch_boost_for_cpp17
+  # Patch Boost 1.75 container_hash/hash.hpp to remove std::unary_function (removed in C++17)
+  hash_hpp = File.join(Pod::Config.instance.installation_root, 'Pods/boost/boost/container_hash/hash.hpp')
+
+  unless File.exist?(hash_hpp)
+    Pod::UI.puts "⚠️  Boost hash.hpp not found at #{hash_hpp}, skipping patch".yellow
+    return
+  end
+
+  content = File.read(hash_hpp)
+
+  # Check if already patched
+  if content.include?('C++17+ compatibility: std::unary_function was removed')
+    Pod::UI.puts "⏭️  Boost C++17 patch already applied".green
+    return
+  end
+
+  # Patch: replace the conditional with always using C++17-compatible version
+  original = <<~ORIGINAL
+    #if defined(BOOST_NO_CXX98_FUNCTION_BASE)
+            template <typename T>
+            struct hash_base
+            {
+                typedef T argument_type;
+                typedef std::size_t result_type;
+            };
+    #else
+            template <typename T>
+            struct hash_base : std::unary_function<T, std::size_t> {};
+    #endif
+  ORIGINAL
+
+  patched = <<~PATCHED
+    // C++17+ compatibility: std::unary_function was removed
+            template <typename T>
+            struct hash_base
+            {
+                typedef T argument_type;
+                typedef std::size_t result_type;
+            };
+  PATCHED
+
+  if content.include?('struct hash_base : std::unary_function')
+    content.gsub!(original, patched)
+    File.write(hash_hpp, content)
+    Pod::UI.puts "✅ Applied Boost C++17 compatibility patch (removed std::unary_function)".green
+  else
+    Pod::UI.puts "⚠️  Boost hash.hpp structure has changed, manual patch may be needed".yellow
+  end
+rescue => e
+  Pod::UI.puts "⚠️  Failed to patch Boost: #{e.message}".yellow
 end
