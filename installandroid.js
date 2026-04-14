@@ -160,6 +160,28 @@ if (fs.existsSync(bundleHermesCTaskPath)) {
   }
 }
 
+// ============================================================================
+// Boost Configuration for Android
+// ============================================================================
+
+console.log('🔍 Configuring Boost for Android...');
+
+try {
+  var boostPath = execSync('brew --prefix boost', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+  if (boostPath && fs.existsSync(boostPath)) {
+    process.env.REACT_NATIVE_BOOST_PATH = boostPath;
+    console.log('   ✅ Boost found at ' + boostPath);
+    console.log('   🔧 Set REACT_NATIVE_BOOST_PATH=' + boostPath);
+    console.log('   ℹ️  Gradle will use Homebrew Boost instead of downloading\n');
+  } else {
+    console.error('❌ Boost not found. Install: brew install boost');
+    process.exit(1);
+  }
+} catch (e) {
+  console.error('❌ Boost not found. Install: brew install boost');
+  process.exit(1);
+}
+
 // Step 2.5: Configure OAuth for Employee Agent (async)
 async function configureOAuthStep() {
   if (target === 'employee' || target === 'all') {

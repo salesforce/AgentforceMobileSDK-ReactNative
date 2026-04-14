@@ -49,6 +49,27 @@ def common_pre_install(installer)
 end
 
 def common_post_install(installer)
+  # Create symlink from Pods/boost/boost to Homebrew boost headers
+  # This ensures React Native uses local Homebrew installation instead of downloading
+  boost_pod_path = File.join(installer.sandbox.root, 'boost')
+  boost_headers_symlink = File.join(boost_pod_path, 'boost')
+
+  if File.directory?(boost_pod_path)
+    brew_boost_prefix = `brew --prefix boost 2>/dev/null`.strip
+    if !brew_boost_prefix.empty? && File.directory?(brew_boost_prefix)
+      brew_boost_headers = File.join(brew_boost_prefix, 'include', 'boost')
+
+      # Remove any existing boost directory/symlink
+      FileUtils.rm_rf(boost_headers_symlink) if File.exist?(boost_headers_symlink)
+
+      # Create symlink to Homebrew boost headers
+      File.symlink(brew_boost_headers, boost_headers_symlink)
+      Pod::UI.puts "✅ Linked Pods/boost/boost -> #{brew_boost_headers}".green
+    else
+      Pod::UI.warn "⚠️  Homebrew Boost not found. Run: brew install boost"
+    end
+  end
+
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'

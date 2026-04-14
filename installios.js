@@ -33,6 +33,14 @@ function validateEnvironment() {
     errors.push('CocoaPods not found. Install: sudo gem install cocoapods');
   }
 
+  // Check Boost
+  try {
+    execSync('brew --prefix boost', { stdio: 'pipe' });
+    console.log('   ✅ Boost found');
+  } catch (e) {
+    errors.push('Boost not found. Install: brew install boost');
+  }
+
   // Check Node version
   var nodeVersion = process.versions.node.split('.')[0];
   if (parseInt(nodeVersion) < 18) {

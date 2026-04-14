@@ -94,6 +94,9 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 - **Watchman** (recommended for better performance and fewer filesystem issues). Install and verify:
   - **macOS:** `brew install watchman`.
   - **Windows/Linux:** Optional; see [Watchman](https://facebook.github.io/watchman/docs/install) if needed. Run `watchman -v` to confirm.
+- **Boost** (required for both iOS and Android):
+  - **macOS:** `brew install boost`
+  - This replaces React Native's default behavior of downloading Boost (~100MB+) from external URLs during builds
 - Git
 
 ### Android
@@ -119,6 +122,14 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 - iOS 17.0+
 
 ## 🚀 Quick Start
+
+**Important**: Install Boost before running setup scripts:
+
+```bash
+brew install boost
+```
+
+This allows both iOS and Android to use the local Homebrew Boost installation instead of downloading it during builds (~100MB+). Particularly useful for CI environments with restricted external URL access.
 
 ### Choose Your App
 
@@ -161,6 +172,30 @@ npm run android:service # or android:employee
 ```
 
 📖 **For detailed installation guide, see [docs/separate-agent-app-guide.md](docs/separate-agent-app-guide.md)**
+
+### CI Setup
+
+For CI environments with restricted external URL access:
+
+```yaml
+steps:
+  - name: Install dependencies
+    run: |
+      brew install xcodegen
+      brew install boost
+  
+  - name: Setup iOS
+    run: node installios.js employee
+  
+  - name: Setup Android
+    run: node installandroid.js employee
+```
+
+**Why this works:**
+- Boost is installed once via Homebrew (works on restricted networks)
+- iOS: Patched `boost.podspec` points to Homebrew installation (no download from archives.boost.io)
+- Android: `REACT_NATIVE_BOOST_PATH` tells Gradle to use Homebrew Boost (skips download task)
+- No external downloads to archives.boost.io required during builds
 
 ### OAuth Configuration (Employee Agent)
 
