@@ -166,19 +166,52 @@ if (fs.existsSync(bundleHermesCTaskPath)) {
 
 console.log('🔍 Configuring Boost for Android...');
 
-try {
-  var boostPath = execSync('brew --prefix boost', { stdio: 'pipe', encoding: 'utf-8' }).trim();
-  if (boostPath && fs.existsSync(boostPath)) {
-    process.env.REACT_NATIVE_BOOST_PATH = boostPath;
-    console.log('   ✅ Boost found at ' + boostPath);
-    console.log('   🔧 Set REACT_NATIVE_BOOST_PATH=' + boostPath);
-    console.log('   ℹ️  Gradle will use Homebrew Boost instead of downloading\n');
-  } else {
-    console.error('❌ Boost not found. Install: brew install boost');
-    process.exit(1);
+var os = require('os');
+var platform = os.platform();
+var boostPath = null;
+
+// Try macOS Homebrew first
+if (platform === 'darwin') {
+  try {
+    boostPath = execSync('brew --prefix boost', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+    if (boostPath && fs.existsSync(boostPath)) {
+      process.env.REACT_NATIVE_BOOST_PATH = boostPath;
+      console.log('   ✅ Boost found at ' + boostPath + ' (Homebrew)');
+      console.log('   🔧 Set REACT_NATIVE_BOOST_PATH=' + boostPath);
+      console.log('   ℹ️  Gradle will use Homebrew Boost instead of downloading\n');
+    }
+  } catch (e) {
+    // Homebrew boost not found on macOS
   }
-} catch (e) {
-  console.error('❌ Boost not found. Install: brew install boost');
+}
+
+// Try Linux apt installation (for CI environments)
+if (!boostPath && platform === 'linux') {
+  try {
+    var aptBoostPath = execSync('dpkg -L libboost-dev 2>/dev/null | grep "include/boost$" | head -1',
+      { stdio: 'pipe', encoding: 'utf-8' }).trim();
+    if (aptBoostPath) {
+      // Strip /include/boost to get the prefix
+      boostPath = aptBoostPath.replace('/include/boost', '');
+      process.env.REACT_NATIVE_BOOST_PATH = boostPath;
+      console.log('   ✅ Boost found at ' + boostPath + ' (apt)');
+      console.log('   🔧 Set REACT_NATIVE_BOOST_PATH=' + boostPath);
+      console.log('   ℹ️  Gradle will use system Boost instead of downloading\n');
+    }
+  } catch (e) {
+    // apt boost not found on Linux
+  }
+}
+
+// Validation: error if still not found
+if (!boostPath) {
+  if (platform === 'darwin') {
+    console.error('❌ Boost not found. Install: brew install boost');
+  } else if (platform === 'linux') {
+    console.error('❌ Boost not found. Install: sudo apt-get install libboost-all-dev');
+  } else {
+    console.error('❌ Boost not found. Platform: ' + platform);
+  }
   process.exit(1);
 }
 
