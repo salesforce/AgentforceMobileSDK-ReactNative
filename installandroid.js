@@ -214,16 +214,17 @@ if (!boostPath) {
   process.exit(1);
 }
 
-// Write to gradle.properties to persist for Gradle builds
-var gradlePropertiesPath = path.join(__dirname, 'android', 'gradle.properties');
-var gradlePropertiesContent = '';
+// Write to local.properties to persist for Gradle builds
+// (React Native reads from System.getenv, so we configure Gradle to export it)
+var localPropertiesPath = path.join(__dirname, 'android', 'local.properties');
+var localPropertiesContent = '';
 
-if (fs.existsSync(gradlePropertiesPath)) {
-  gradlePropertiesContent = fs.readFileSync(gradlePropertiesPath, 'utf-8');
+if (fs.existsSync(localPropertiesPath)) {
+  localPropertiesContent = fs.readFileSync(localPropertiesPath, 'utf-8');
 }
 
 // Remove any existing REACT_NATIVE_BOOST_PATH entry
-gradlePropertiesContent = gradlePropertiesContent
+localPropertiesContent = localPropertiesContent
   .split('\n')
   .filter(function (line) {
     return !line.startsWith('REACT_NATIVE_BOOST_PATH=');
@@ -231,13 +232,13 @@ gradlePropertiesContent = gradlePropertiesContent
   .join('\n');
 
 // Add new REACT_NATIVE_BOOST_PATH
-if (!gradlePropertiesContent.endsWith('\n') && gradlePropertiesContent.length > 0) {
-  gradlePropertiesContent += '\n';
+if (!localPropertiesContent.endsWith('\n') && localPropertiesContent.length > 0) {
+  localPropertiesContent += '\n';
 }
-gradlePropertiesContent += 'REACT_NATIVE_BOOST_PATH=' + boostPath + '\n';
+localPropertiesContent += 'REACT_NATIVE_BOOST_PATH=' + boostPath + '\n';
 
-fs.writeFileSync(gradlePropertiesPath, gradlePropertiesContent);
-console.log('   🔧 Wrote REACT_NATIVE_BOOST_PATH=' + boostPath + ' to gradle.properties');
+fs.writeFileSync(localPropertiesPath, localPropertiesContent);
+console.log('   🔧 Wrote REACT_NATIVE_BOOST_PATH=' + boostPath + ' to local.properties');
 console.log('   ℹ️  Gradle will use local Boost instead of downloading\n');
 
 // Step 2.5: Configure OAuth for Employee Agent (async)
