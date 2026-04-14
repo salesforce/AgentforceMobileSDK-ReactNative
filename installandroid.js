@@ -188,8 +188,10 @@ if (platform === 'darwin') {
 // Try Linux apt installation (for CI environments)
 if (!boostPath && platform === 'linux') {
   try {
-    var aptBoostPath = execSync('dpkg -L libboost-dev 2>/dev/null | grep "include/boost$" | head -1',
-      { stdio: 'pipe', encoding: 'utf-8' }).trim();
+    var aptBoostPath = execSync(
+      'dpkg -L libboost-dev 2>/dev/null | grep "include/boost$" | head -1',
+      { stdio: 'pipe', encoding: 'utf-8' },
+    ).trim();
     if (aptBoostPath) {
       // Strip /include/boost to get the prefix
       boostPath = aptBoostPath.replace('/include/boost', '');
