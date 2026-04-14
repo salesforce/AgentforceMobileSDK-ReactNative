@@ -152,7 +152,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libboost-all-dev
-          dpkg -L libboost-dev | grep "include/boost$" | head -1
 
       # Ruby setup for iOS builds (CocoaPods)
       - name: Setup Ruby (iOS only)

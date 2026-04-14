@@ -4,6 +4,7 @@ var packageJson = require('./package.json');
 var execSync = require('child_process').execSync;
 var path = require('path');
 var fs = require('fs');
+var os = require('os');
 var rimraf = require('rimraf');
 var interactiveOAuth = require('./scripts/interactive-oauth');
 var bootconfig = require('./scripts/update-bootconfig');
@@ -166,7 +167,6 @@ if (fs.existsSync(bundleHermesCTaskPath)) {
 
 console.log('🔍 Configuring Boost for Android...');
 
-var os = require('os');
 var platform = os.platform();
 var boostPath = null;
 
@@ -175,10 +175,7 @@ if (platform === 'darwin') {
   try {
     boostPath = execSync('brew --prefix boost', { stdio: 'pipe', encoding: 'utf-8' }).trim();
     if (boostPath && fs.existsSync(boostPath)) {
-      process.env.REACT_NATIVE_BOOST_PATH = boostPath;
       console.log('   ✅ Boost found at ' + boostPath + ' (Homebrew)');
-      console.log('   🔧 Set REACT_NATIVE_BOOST_PATH=' + boostPath);
-      console.log('   ℹ️  Gradle will use Homebrew Boost instead of downloading\n');
     }
   } catch (e) {
     // Homebrew boost not found on macOS
@@ -199,10 +196,7 @@ if (!boostPath && platform === 'linux') {
 
     if (fs.existsSync(boostInclude)) {
       boostPath = testPath;
-      process.env.REACT_NATIVE_BOOST_PATH = boostPath;
       console.log('   ✅ Boost found at ' + boostPath + ' (apt)');
-      console.log('   🔧 Set REACT_NATIVE_BOOST_PATH=' + boostPath);
-      console.log('   ℹ️  Gradle will use system Boost instead of downloading\n');
       break;
     }
   }
@@ -219,6 +213,32 @@ if (!boostPath) {
   }
   process.exit(1);
 }
+
+// Write to gradle.properties to persist for Gradle builds
+var gradlePropertiesPath = path.join(__dirname, 'android', 'gradle.properties');
+var gradlePropertiesContent = '';
+
+if (fs.existsSync(gradlePropertiesPath)) {
+  gradlePropertiesContent = fs.readFileSync(gradlePropertiesPath, 'utf-8');
+}
+
+// Remove any existing REACT_NATIVE_BOOST_PATH entry
+gradlePropertiesContent = gradlePropertiesContent
+  .split('\n')
+  .filter(function (line) {
+    return !line.startsWith('REACT_NATIVE_BOOST_PATH=');
+  })
+  .join('\n');
+
+// Add new REACT_NATIVE_BOOST_PATH
+if (!gradlePropertiesContent.endsWith('\n') && gradlePropertiesContent.length > 0) {
+  gradlePropertiesContent += '\n';
+}
+gradlePropertiesContent += 'REACT_NATIVE_BOOST_PATH=' + boostPath + '\n';
+
+fs.writeFileSync(gradlePropertiesPath, gradlePropertiesContent);
+console.log('   🔧 Wrote REACT_NATIVE_BOOST_PATH=' + boostPath + ' to gradle.properties');
+console.log('   ℹ️  Gradle will use local Boost instead of downloading\n');
 
 // Step 2.5: Configure OAuth for Employee Agent (async)
 async function configureOAuthStep() {
