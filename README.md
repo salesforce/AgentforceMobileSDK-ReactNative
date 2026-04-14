@@ -183,15 +183,16 @@ steps:
     run: |
       brew install xcodegen
       brew install boost
-  
+
   - name: Setup iOS
     run: node installios.js employee
-  
+
   - name: Setup Android
     run: node installandroid.js employee
 ```
 
 **Why this works:**
+
 - Boost is installed once via Homebrew (works on restricted networks)
 - iOS: Patched `boost.podspec` points to Homebrew installation (no download from archives.boost.io)
 - Android: `REACT_NATIVE_BOOST_PATH` tells Gradle to use Homebrew Boost (skips download task)
