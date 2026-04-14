@@ -187,21 +187,24 @@ if (platform === 'darwin') {
 
 // Try Linux apt installation (for CI environments)
 if (!boostPath && platform === 'linux') {
-  try {
-    var aptBoostPath = execSync(
-      'dpkg -L libboost-dev 2>/dev/null | grep "include/boost$" | head -1',
-      { stdio: 'pipe', encoding: 'utf-8' },
-    ).trim();
-    if (aptBoostPath) {
-      // Strip /include/boost to get the prefix
-      boostPath = aptBoostPath.replace('/include/boost', '');
+  // Common locations for apt-installed Boost
+  var commonBoostPaths = [
+    '/usr', // Standard Ubuntu/Debian location
+    '/usr/local', // Alternative location
+  ];
+
+  for (var i = 0; i < commonBoostPaths.length; i++) {
+    var testPath = commonBoostPaths[i];
+    var boostInclude = path.join(testPath, 'include', 'boost');
+
+    if (fs.existsSync(boostInclude)) {
+      boostPath = testPath;
       process.env.REACT_NATIVE_BOOST_PATH = boostPath;
       console.log('   ✅ Boost found at ' + boostPath + ' (apt)');
       console.log('   🔧 Set REACT_NATIVE_BOOST_PATH=' + boostPath);
       console.log('   ℹ️  Gradle will use system Boost instead of downloading\n');
+      break;
     }
-  } catch (e) {
-    // apt boost not found on Linux
   }
 }
 
