@@ -4,6 +4,7 @@ var packageJson = require('./package.json');
 var execSync = require('child_process').execSync;
 var path = require('path');
 var fs = require('fs');
+var os = require('os');
 var rimraf = require('rimraf');
 var interactiveOAuth = require('./scripts/interactive-oauth');
 var bootconfig = require('./scripts/update-bootconfig');
@@ -159,6 +160,86 @@ if (fs.existsSync(bundleHermesCTaskPath)) {
     console.warn('⚠️  Patch target not found (file may have changed): BundleHermesCTask.kt.patch');
   }
 }
+
+// ============================================================================
+// Boost Configuration for Android
+// ============================================================================
+
+console.log('🔍 Configuring Boost for Android...');
+
+var platform = os.platform();
+var boostPath = null;
+
+// Try macOS Homebrew first
+if (platform === 'darwin') {
+  try {
+    boostPath = execSync('brew --prefix boost', { stdio: 'pipe', encoding: 'utf-8' }).trim();
+    if (boostPath && fs.existsSync(boostPath)) {
+      console.log('   ✅ Boost found at ' + boostPath + ' (Homebrew)');
+    }
+  } catch (e) {
+    // Homebrew boost not found on macOS
+  }
+}
+
+// Try Linux apt installation (for CI environments)
+if (!boostPath && platform === 'linux') {
+  // Common locations for apt-installed Boost
+  var commonBoostPaths = [
+    '/usr', // Standard Ubuntu/Debian location
+    '/usr/local', // Alternative location
+  ];
+
+  for (var i = 0; i < commonBoostPaths.length; i++) {
+    var testPath = commonBoostPaths[i];
+    var boostInclude = path.join(testPath, 'include', 'boost');
+
+    if (fs.existsSync(boostInclude)) {
+      boostPath = testPath;
+      console.log('   ✅ Boost found at ' + boostPath + ' (apt)');
+      break;
+    }
+  }
+}
+
+// Validation: error if still not found
+if (!boostPath) {
+  if (platform === 'darwin') {
+    console.error('❌ Boost not found. Install: brew install boost');
+  } else if (platform === 'linux') {
+    console.error('❌ Boost not found. Install: sudo apt-get install libboost-all-dev');
+  } else {
+    console.error('❌ Boost not found. Platform: ' + platform);
+  }
+  process.exit(1);
+}
+
+// Write to local.properties to persist for Gradle builds
+// (React Native reads from System.getenv, so we configure Gradle to export it)
+var localPropertiesPath = path.join(__dirname, 'android', 'local.properties');
+var localPropertiesContent = '';
+
+if (fs.existsSync(localPropertiesPath)) {
+  localPropertiesContent = fs.readFileSync(localPropertiesPath, 'utf-8');
+}
+
+// Remove any existing REACT_NATIVE_BOOST_PATH entry
+localPropertiesContent = localPropertiesContent
+  .split('\n')
+  .filter(function (line) {
+    return !line.startsWith('REACT_NATIVE_BOOST_PATH=');
+  })
+  .join('\n');
+
+// Add new REACT_NATIVE_BOOST_PATH
+if (!localPropertiesContent.endsWith('\n') && localPropertiesContent.length > 0) {
+  localPropertiesContent += '\n';
+}
+localPropertiesContent += 'REACT_NATIVE_BOOST_PATH=' + boostPath + '\n';
+
+fs.writeFileSync(localPropertiesPath, localPropertiesContent);
+console.log('   🔧 Wrote REACT_NATIVE_BOOST_PATH=' + boostPath + ' to local.properties');
+console.log('   ℹ️  Gradle will use local Boost instead of downloading\n');
 
 // Step 2.5: Configure OAuth for Employee Agent (async)
 async function configureOAuthStep() {

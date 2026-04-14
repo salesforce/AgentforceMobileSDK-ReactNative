@@ -146,6 +146,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # Install Boost for Android (via apt on Ubuntu)
+      - name: Install Boost (Android only)
+        if: matrix.platform == 'Android'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev
+
       # Ruby setup for iOS builds (CocoaPods)
       - name: Setup Ruby (iOS only)
         if: matrix.platform == 'iOS'
@@ -167,6 +174,13 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen --version
+
+      # Install Boost for iOS
+      - name: Install Boost (iOS only)
+        if: matrix.platform == 'iOS'
+        run: |
+          brew install boost
+          brew --prefix boost
 
       # Cache Gradle for Android
       - name: Cache Gradle dependencies (Android only)

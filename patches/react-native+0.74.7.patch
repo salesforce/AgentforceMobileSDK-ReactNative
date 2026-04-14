@@ -1,0 +1,49 @@
+diff --git a/node_modules/react-native/third-party-podspecs/boost.podspec b/node_modules/react-native/third-party-podspecs/boost.podspec
+index 8e924af..edd3a44 100644
+--- a/node_modules/react-native/third-party-podspecs/boost.podspec
++++ b/node_modules/react-native/third-party-podspecs/boost.podspec
+@@ -5,13 +5,24 @@
+
+ Pod::Spec.new do |spec|
+   spec.name = 'boost'
+   spec.version = '1.83.0'
+-  spec.license = { :type => 'Boost Software License', :file => "LICENSE_1_0.txt" }
++  spec.license = { :type => 'Boost Software License' }
+   spec.homepage = 'http://www.boost.org'
+-  spec.summary = 'Boost provides free peer-reviewed portable C++ source libraries.'
+-  spec.authors = 'Rene Rivera'
+-  spec.source = { :http => 'https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.bz2',
+-                  :sha256 => '6478edfe2f3305127cffe8caf73ea0176c53769f4bf1585be237eb30798c3b8e' }
++  spec.summary = 'Boost C++ libraries via Homebrew'
++  spec.authors = 'Boost authors'
++
++  # Detect Homebrew boost installation
++  brew_prefix = `brew --prefix boost 2>/dev/null`.strip
++
++  if brew_prefix.empty? || !File.directory?(brew_prefix)
++    raise "\n\n❌ Boost not found via Homebrew!\n\nInstall with: brew install boost\n\n"
++  end
++
++  # Dummy git source to satisfy CocoaPods validation
++  spec.source = {
++    :git => 'https://github.com/boostorg/boost.git',
++    :tag => 'boost-1.83.0'
++  }
+
+   # Pinning to the same version as React.podspec.
+   spec.platforms = min_supported_versions
+@@ -19,5 +30,13 @@ Pod::Spec.new do |spec|
+
+   spec.module_name = 'boost'
+   spec.header_dir = 'boost'
+-  spec.preserve_path = 'boost'
++
++  # Remove any git-cloned content and symlink to Homebrew boost headers
++  # The prepare_command runs after the source is fetched
++  spec.prepare_command = <<-CMD
++    rm -rf boost
++    ln -sf #{brew_prefix}/include/boost boost
++  CMD
++
++  spec.preserve_paths = 'boost'
+ end
