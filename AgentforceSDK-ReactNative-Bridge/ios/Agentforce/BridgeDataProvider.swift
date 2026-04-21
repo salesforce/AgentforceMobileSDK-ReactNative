@@ -36,8 +36,25 @@ struct BridgeDataProvider: AgentforceDataProviding {
         cachePolicy: AgentforceCachePolicy,
         transactionId: String?
     ) async throws -> AgentforceRecordRepresentation {
-        let fieldsParam = fields.isEmpty ? "" : "?fields=" + fields.joined(separator: ",")
+        // When fields is empty, omit the parameter and let the UI API return its defaults.
+        // This avoids hardcoding "Name" which doesn't exist on all objects (e.g., Task uses Subject).
+        let fieldsParam: String
+        if !fields.isEmpty {
+            var fieldsToRequest = fields
+            if !fieldsToRequest.contains("Id") {
+                fieldsToRequest.insert("Id", at: 0)
+            }
+            // UI API requires qualified field names (ObjectType.FieldName)
+            let qualifiedFields = fieldsToRequest.map { field in
+                field.contains(".") ? field : "\(objectType).\(field)"
+            }
+            fieldsParam = "?fields=" + qualifiedFields.joined(separator: ",")
+        } else {
+            fieldsParam = ""
+        }
+
         let path = "/services/data/\(Self.apiVersion)/ui-api/records/\(recordId)\(fieldsParam)"
+
         let request = createNetworkRequest(path: path)
         let (data, _) = try await network.data(for: request)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
@@ -51,18 +68,26 @@ struct BridgeDataProvider: AgentforceDataProviding {
         cachePolicy: AgentforceCachePolicy,
         transactionId: String?
     ) async throws -> AgentforceRecordRepresentation {
-        let modesParam = modes.isEmpty ? "" : "?modes=" + modes.map { $0.rawValue }.joined(separator: ",")
-        let path = "/services/data/\(Self.apiVersion)/ui-api/record-ui/\(recordId)\(modesParam)"
+        // Note: `modes` is not used. The records endpoint (used here instead of record-ui)
+        // does not support access modes.
+
+        // Uses the records endpoint with layoutTypes when available.
+        // When layoutType is empty, omit it and let the UI API return defaults
+        // rather than hardcoding field names that may not exist on all objects.
+        let path: String
+        if !layoutType.isEmpty {
+            let encodedLayoutType = layoutType.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? layoutType
+            path = "/services/data/\(Self.apiVersion)/ui-api/records/\(recordId)?layoutTypes=\(encodedLayoutType)"
+        } else {
+            path = "/services/data/\(Self.apiVersion)/ui-api/records/\(recordId)"
+        }
 
         let request = createNetworkRequest(path: path)
         let (data, _) = try await network.data(for: request)
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-        // record-ui returns { "record": {...}, "layout": {...}, ... }
-        if let recordData = json["record"] as? [String: Any] {
-            return try parseRecordRepresentation(from: recordData)
-        }
-        throw DataProviderError.invalidResponse
+        // Both records and record-ui endpoints return the record directly in the response
+        return try parseRecordRepresentation(from: json)
     }
 
     func records(
@@ -73,7 +98,18 @@ struct BridgeDataProvider: AgentforceDataProviding {
         transactionId: String?
     ) async throws -> [AgentforceUIAPIRecord] {
         let recordIdsParam = recordIds.joined(separator: ",")
-        let fieldsParam = fields.isEmpty ? "" : "&fields=" + fields.joined(separator: ",")
+
+        // UI API requires qualified field names (ObjectType.FieldName) when using fields parameter
+        let fieldsParam: String
+        if !fields.isEmpty {
+            let qualifiedFields = fields.map { field in
+                field.contains(".") ? field : "\(objectType).\(field)"
+            }
+            fieldsParam = "?fields=" + qualifiedFields.joined(separator: ",")
+        } else {
+            fieldsParam = ""
+        }
+
         let path = "/services/data/\(Self.apiVersion)/ui-api/records/batch/\(recordIdsParam)\(fieldsParam)"
 
         let request = createNetworkRequest(path: path)
@@ -81,7 +117,13 @@ struct BridgeDataProvider: AgentforceDataProviding {
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
         if let results = json["results"] as? [[String: Any]] {
-            return try results.map { try parseUIAPIRecord(from: $0) }
+            return try results.compactMap { resultItem in
+                if let statusCode = resultItem["statusCode"] as? Int, statusCode == 200,
+                   let recordData = resultItem["result"] as? [String: Any] {
+                    return try parseUIAPIRecord(from: recordData)
+                }
+                return nil
+            }
         }
         return []
     }
@@ -93,9 +135,21 @@ struct BridgeDataProvider: AgentforceDataProviding {
         cachePolicy: AgentforceCachePolicy,
         transactionId: String?
     ) async throws -> [AgentforceUIAPIRecord] {
+        // Note: `modes` is not used. records/batch does not support access modes.
+
+        // UI API does not have a record-ui/batch endpoint, only records/batch
         let recordIdsParam = recordIds.joined(separator: ",")
-        let modesParam = modes.map { "?modes=" + $0.map { $0.rawValue }.joined(separator: ",") } ?? ""
-        let path = "/services/data/\(Self.apiVersion)/ui-api/record-ui/batch/\(recordIdsParam)\(modesParam)"
+
+        // If layoutType is provided and not empty, use it; otherwise let the API return defaults
+        let queryParam: String
+        if !layoutType.isEmpty {
+            let encodedLayoutType = layoutType.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? layoutType
+            queryParam = "?layoutTypes=\(encodedLayoutType)"
+        } else {
+            queryParam = ""
+        }
+
+        let path = "/services/data/\(Self.apiVersion)/ui-api/records/batch/\(recordIdsParam)\(queryParam)"
 
         let request = createNetworkRequest(path: path)
         let (data, _) = try await network.data(for: request)
@@ -103,7 +157,9 @@ struct BridgeDataProvider: AgentforceDataProviding {
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
         if let results = json["results"] as? [[String: Any]] {
             return try results.compactMap { resultItem in
-                if let recordData = resultItem["record"] as? [String: Any] {
+                // records/batch returns the record directly in each result, not nested under "record"
+                if let statusCode = resultItem["statusCode"] as? Int, statusCode == 200,
+                   let recordData = resultItem["result"] as? [String: Any] {
                     return try parseUIAPIRecord(from: recordData)
                 }
                 return nil

@@ -54,13 +54,24 @@ struct BridgeNetwork: SalesforceNetwork.Network {
         // placeholder:// URLs are from DataProvider - extract path so RestClient prepends instance URL
         // Other URLs (https://) should be used as-is (full URL for agent session API, etc.)
         let path: String
+        var queryParams: [String: String] = [:]
+
         if url.scheme == "placeholder" {
             path = url.path
+            // Extract query parameters from the URL
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let queryItems = components.queryItems {
+                for item in queryItems {
+                    if let value = item.value {
+                        queryParams[item.name] = value
+                    }
+                }
+            }
         } else {
             path = url.absoluteString
         }
 
-        let restRequest = RestRequest(method: method, path: path, queryParams: [:])
+        let restRequest = RestRequest(method: method, path: path, queryParams: queryParams)
 
         restRequest.requiresAuthentication = request.requiresAuthentication ?? true
 

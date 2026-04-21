@@ -62,14 +62,26 @@ class BridgeNetwork(private val restClient: RestClient) : Network {
             NetworkRequest.Method.HEAD -> RestRequest.RestMethod.HEAD
         }
 
-        // Create RestRequest - use body constructor if body exists, else query params constructor
+        // Append query params to the path as a query string.
+        // RestRequest(RestMethod, String, Map) treats the Map as additionalHttpHeaders,
+        // NOT query parameters, so we must encode them into the URL path ourselves.
+        val fullPath = if (queryParams.isNotEmpty()) {
+            val separator = if (path.contains("?")) "&" else "?"
+            val queryString = queryParams.entries.joinToString("&") { (k, v) ->
+                "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v.toString(), "UTF-8")}"
+            }
+            "$path$separator$queryString"
+        } else {
+            path
+        }
+
+        // Create RestRequest - use body constructor if body exists, else path-only constructor
         val restRequest = if (body != null && body!!.isNotEmpty()) {
             val mediaType = contentType?.toMediaType()
             val requestBody = body!!.toRequestBody(mediaType)
-            RestRequest(restMethod, path, requestBody)
+            RestRequest(restMethod, fullPath, requestBody)
         } else {
-            val queryMap = queryParams.mapValues { it.value.toString() }.toMutableMap()
-            RestRequest(restMethod, path, queryMap)
+            RestRequest(restMethod, fullPath)
         }
 
         // Add custom headers
