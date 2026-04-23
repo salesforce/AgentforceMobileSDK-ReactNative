@@ -38,6 +38,11 @@ class AgentforceConversationActivity : ComponentActivity() {
 
     private var viewModel: ServiceAgentViewModel? = null
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        AgentforceClientPermissions.handlePermissionResult(requestCode, permissions, grantResults)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

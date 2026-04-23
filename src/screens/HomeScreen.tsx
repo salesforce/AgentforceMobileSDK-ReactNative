@@ -172,10 +172,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
 
     try {
-      // Query native to check current configuration
+      // Query native to check current configuration.
+      // Only skip configure() if the SDK client is actually initialized.
       const configInfo = await AgentforceService.getConfigurationInfo();
 
-      // Only reconfigure if not already in service mode
       if (!configInfo?.configured || configInfo?.mode !== 'service') {
         const config = await AgentforceService.getConfiguration();
         if (config) {
