@@ -27,18 +27,32 @@
 package com.salesforce.android.reactagentforce
 
 import android.app.Activity
+import android.app.Application
 import android.content.pm.PackageManager
+import android.os.Bundle
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.salesforce.android.mobile.interfaces.permission.Permissions
 import kotlinx.coroutines.CompletableDeferred
-import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-class AgentforceClientPermissions(activity: Activity) : Permissions {
-    private val activityRef = WeakReference(activity)
+/**
+ * Permission provider that resolves the current activity dynamically via
+ * [Application.ActivityLifecycleCallbacks]. Uses [Application] context for
+ * permission checks (process-wide) and the current foreground activity for
+ * permission requests and rationale checks.
+ */
+class AgentforceClientPermissions(private val application: Application) : Permissions,
+    Application.ActivityLifecycleCallbacks {
+
+    @Volatile
+    private var currentActivity: Activity? = null
     var requestCode: AtomicInteger = AtomicInteger(0)
+
+    init {
+        application.registerActivityLifecycleCallbacks(this)
+    }
 
     companion object {
         private val pendingRequests = ConcurrentHashMap<Int, CompletableDeferred<Boolean>>()
@@ -58,12 +72,14 @@ class AgentforceClientPermissions(activity: Activity) : Permissions {
     }
 
     override fun hasPermission(permission: String): Boolean {
-        val activity = activityRef.get() ?: return false
-        return ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
+        // Use application context — permission state is process-wide, not per-activity.
+        // This avoids false negatives when currentActivity is null (e.g. before the
+        // first onActivityResumed callback fires on app launch).
+        return ContextCompat.checkSelfPermission(application, permission) == PackageManager.PERMISSION_GRANTED
     }
 
     override suspend fun requestPermissions(permissions: Array<String>, reason: String?): Boolean {
-        val activity = activityRef.get() ?: return false
+        val activity = currentActivity ?: return false
 
         // Check if all permissions are already granted
         val allGranted = permissions.all { hasPermission(it) }
@@ -86,7 +102,25 @@ class AgentforceClientPermissions(activity: Activity) : Permissions {
     }
 
     override fun shouldShowRequestPermissionRationale(permission: String): Boolean {
-        val activity = activityRef.get() ?: return false
+        val activity = currentActivity ?: return false
         return ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
     }
+
+    // region ActivityLifecycleCallbacks
+
+    override fun onActivityResumed(activity: Activity) {
+        currentActivity = activity
+    }
+
+    override fun onActivityPaused(activity: Activity) {
+        if (currentActivity === activity) currentActivity = null
+    }
+
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+    override fun onActivityStarted(activity: Activity) {}
+    override fun onActivityStopped(activity: Activity) {}
+    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+    override fun onActivityDestroyed(activity: Activity) {}
+
+    // endregion
 }

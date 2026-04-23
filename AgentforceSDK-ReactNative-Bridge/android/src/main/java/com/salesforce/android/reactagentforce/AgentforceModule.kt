@@ -166,18 +166,19 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
-                val permissions = reactApplicationContext.currentActivity?.let { AgentforceClientPermissions(it) }
+                val application = reactApplicationContext.applicationContext as Application
+                val permissions = AgentforceClientPermissions(application)
 
                 val agentforceConfigBuilder = AgentforceConfiguration
                     .builder(credentialProvider)
                     .setServiceApiURL(serviceConfig.serviceApiURL)
                     .setSalesforceDomain(serviceConfig.serviceApiURL)
-                    .setApplication(reactApplicationContext.applicationContext as Application)
+                    .setApplication(application)
                     .setFeatureFlagSettings(featureFlagSettings)
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
-                permissions?.let { agentforceConfigBuilder.setPermission(it) }
+                agentforceConfigBuilder.setPermission(permissions)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
@@ -255,7 +256,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
-                val permissions = reactApplicationContext.currentActivity?.let { AgentforceClientPermissions(it) }
+                val application = reactApplicationContext.applicationContext as Application
+                val permissions = AgentforceClientPermissions(application)
 
                 // Employee Agent uses BridgeNetwork with RestClient for authenticated requests
                 val restClient = SalesforceSDKManager.getInstance().clientManager.peekRestClient()
@@ -269,13 +271,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .builder(credentialProvider)
                     .setServiceApiURL(employeeConfig.instanceUrl)
                     .setSalesforceDomain(employeeConfig.instanceUrl)
-                    .setApplication(reactApplicationContext.applicationContext as Application)
+                    .setApplication(application)
                     .setFeatureFlagSettings(featureFlagSettings)
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                     .setDataProvider(dataProvider)
-                permissions?.let { agentforceConfigBuilder.setPermission(it) }
+                agentforceConfigBuilder.setPermission(permissions)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
@@ -559,13 +561,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getConfigurationInfo(promise: Promise) {
-        if (credentialProvider.isConfigured) {
+        if (credentialProvider.isConfigured && AgentforceClientHolder.isConfigured) {
             promise.resolve(Arguments.createMap().apply {
                 putBoolean("configured", true)
                 putString("mode", if (credentialProvider.isServiceAgent) "service" else "employee")
                 putString("description", credentialProvider.currentConfiguration)
             })
-        } else if (viewModel?.isConfigured?.value == true) {
+        } else if (viewModel?.isConfigured?.value == true && AgentforceClientHolder.isConfigured) {
             promise.resolve(Arguments.createMap().apply {
                 putBoolean("configured", true)
                 putString("mode", "service")
