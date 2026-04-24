@@ -39,8 +39,9 @@ import com.facebook.soloader.SoLoader;
 import java.util.List;
 
 /**
- * Simplified Application class for Agentforce Service Agent sample
- * No Salesforce Mobile SDK required - lightweight implementation
+ * Application class for Agentforce sample.
+ * Conditionally initializes Mobile SDK for Employee Agent flavor via flavor-specific source sets.
+ * See android/app/src/[employeeAgent|serviceAgent]/java/.../SdkInitializer.java
  */
 public class MainApplication extends Application implements ReactApplication {
 
@@ -82,6 +83,10 @@ public class MainApplication extends Application implements ReactApplication {
 	@Override
 	public void onCreate() {
 		super.onCreate();
+
+		// Initialize Mobile SDK if needed (flavor-specific implementation via source sets)
+		SdkInitializer.initialize(this, MainActivity.class);
+
 		SoLoader.init(this, /* native exopackage */ false);
 		if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
 			// If you opted-in for the New Architecture, we load the native entry point for this app.

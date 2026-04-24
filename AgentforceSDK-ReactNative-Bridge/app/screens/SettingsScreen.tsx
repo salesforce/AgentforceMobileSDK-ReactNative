@@ -10,27 +10,23 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../App';
 import {
   AgentforceService,
   isEmployeeAgentAuthSupported,
   hasEmployeeAgentSession,
   loginForEmployeeAgent,
   logoutEmployeeAgent,
-  getEmployeeAgentCredentials,
 } from '../../src';
 // Employee Agent tab uses Mobile SDK login only; file-based config is a dev backdoor (no UI here).
 
-interface SettingsScreenProps {
-  navigation: any;
-  route?: { params?: { tab?: 'service' | 'employee' } };
-}
+type SettingsScreenProps = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 type TabType = 'service' | 'employee';
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) => {
-  const [activeTab, setActiveTab] = useState<TabType>(
-    route?.params?.tab || 'service'
-  );
+  const [activeTab, setActiveTab] = useState<TabType>(route?.params?.tab || 'service');
 
   // Service Agent state
   const [serviceApiURL, setServiceApiURL] = useState('');
@@ -117,7 +113,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       return false;
     }
     try {
-      new URL(serviceApiURL);
+      void new URL(serviceApiURL); // Validate URL format
     } catch {
       Alert.alert('Validation Error', 'Please enter a valid URL');
       return false;
@@ -145,7 +141,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     } catch (error) {
       Alert.alert(
         'Configuration Failed',
-        'Failed to configure Service Agent. Please check your settings.'
+        'Failed to configure Service Agent. Please check your settings.',
       );
       console.error('Configuration error:', error);
     } finally {
@@ -170,28 +166,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
   // Employee Agent handlers
   const handleLoginForEmployeeAgent = async () => {
-    if (!authSupported) return;
+    if (!authSupported) {
+      return;
+    }
     setLoading(true);
     try {
       const creds = await loginForEmployeeAgent();
       const agentIdToUse = employeeAgentId.trim();
       await AgentforceService.setEmployeeAgentId(agentIdToUse);
-      AgentforceService.setTokenDelegate({
-        getAccessToken: async () => {
-          const c = await getEmployeeAgentCredentials();
-          if (!c?.accessToken) throw new Error('Not logged in');
-          return c.accessToken;
-        },
-        refreshToken: async () => {
-          const c = await getEmployeeAgentCredentials();
-          if (!c?.accessToken) throw new Error('Not logged in');
-          return c.accessToken;
-        },
-        onAuthenticationFailure: () => {
-          setEmployeeLoggedIn(false);
-          Alert.alert('Session Expired', 'Please sign in again.');
-        },
-      });
       await AgentforceService.configure({
         type: 'employee',
         instanceUrl: creds.instanceUrl,
@@ -201,17 +183,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         accessToken: creds.accessToken,
       });
       setEmployeeLoggedIn(true);
-      Alert.alert('Success', 'You are signed in. You can launch Employee Agent from the Home screen.', [
-        { text: 'OK' },
-      ]);
+      Alert.alert(
+        'Success',
+        'You are signed in. You can launch Employee Agent from the Home screen.',
+        [{ text: 'OK' }],
+      );
     } catch (error: any) {
       if (error?.message?.includes('cancel') || error?.code === 'USER_CANCEL') {
         return;
       }
-      Alert.alert(
-        'Login Failed',
-        error?.message || 'Could not complete sign-in.'
-      );
+      Alert.alert('Login Failed', error?.message || 'Could not complete sign-in.');
       console.error('Login error:', error);
     } finally {
       setLoading(false);
@@ -221,7 +202,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   const handleLogoutEmployeeAgent = async () => {
     try {
       await logoutEmployeeAgent();
-      AgentforceService.clearTokenDelegate();
       setEmployeeLoggedIn(false);
       Alert.alert('Signed Out', 'You have been signed out.');
     } catch (e) {
@@ -233,27 +213,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     <View style={styles.tabContainer}>
       <TouchableOpacity
         style={[styles.tab, activeTab === 'service' && styles.activeTab]}
-        onPress={() => setActiveTab('service')}
-      >
-        <Text
-          style={[
-            styles.tabText,
-            activeTab === 'service' && styles.activeTabText,
-          ]}
-        >
+        onPress={() => setActiveTab('service')}>
+        <Text style={[styles.tabText, activeTab === 'service' && styles.activeTabText]}>
           💬 Service Agent
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.tab, activeTab === 'employee' && styles.activeTabEmployee]}
-        onPress={() => setActiveTab('employee')}
-      >
-        <Text
-          style={[
-            styles.tabText,
-            activeTab === 'employee' && styles.activeTabTextEmployee,
-          ]}
-        >
+        onPress={() => setActiveTab('employee')}>
+        <Text style={[styles.tabText, activeTab === 'employee' && styles.activeTabTextEmployee]}>
           👤 Employee Agent
         </Text>
       </TouchableOpacity>
@@ -264,8 +232,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     <ScrollView
       style={styles.tabContent}
       contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
+      keyboardShouldPersistTaps="handled">
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Service Agent Configuration</Text>
@@ -284,9 +251,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       <View style={styles.formContainer}>
         <View style={styles.fieldContainer}>
           <Text style={styles.label}>Service API URL</Text>
-          <Text style={styles.hint}>
-            Your Salesforce instance URL
-          </Text>
+          <Text style={styles.hint}>Your Salesforce instance URL</Text>
           <TextInput
             style={styles.input}
             value={serviceApiURL}
@@ -336,8 +301,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.buttonDisabled]}
           onPress={handleSaveServiceConfig}
-          disabled={loading}
-        >
+          disabled={loading}>
           <Text style={styles.saveButtonText}>
             {loading ? 'Configuring...' : 'Save Configuration'}
           </Text>
@@ -346,8 +310,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         <TouchableOpacity
           style={[styles.clearButton, loading && styles.buttonDisabled]}
           onPress={handleClearServiceConfig}
-          disabled={loading}
-        >
+          disabled={loading}>
           <Text style={styles.clearButtonText}>Clear All</Text>
         </TouchableOpacity>
       </View>
@@ -358,13 +321,13 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     <ScrollView
       style={styles.tabContent}
       contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
+      keyboardShouldPersistTaps="handled">
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Employee Agent Configuration</Text>
         <Text style={styles.description}>
-          Sign in with Mobile SDK to use Employee Agent. Set Agent ID below, or leave blank for multi-agent.
+          Sign in with Mobile SDK to use Employee Agent. Set Agent ID below, or leave blank for
+          multi-agent.
         </Text>
       </View>
 
@@ -373,7 +336,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         <View style={styles.authNotAvailableCard}>
           <Text style={styles.authNotAvailableTitle}>Auth flow required</Text>
           <Text style={styles.authNotAvailableText}>
-            To use Employee Agent, this app must have an auth source (e.g. Salesforce Mobile SDK) configured. Add and configure an auth flow in this build to enable sign-in and launch.
+            To use Employee Agent, this app must have an auth source (e.g. Salesforce Mobile SDK)
+            configured. Add and configure an auth flow in this build to enable sign-in and launch.
           </Text>
         </View>
       )}
@@ -390,8 +354,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
               <TouchableOpacity
                 style={[styles.logoutButton, loading && styles.buttonDisabled]}
                 onPress={handleLogoutEmployeeAgent}
-                disabled={loading}
-              >
+                disabled={loading}>
                 <Text style={styles.logoutButtonText}>Log out</Text>
               </TouchableOpacity>
             </>
@@ -404,11 +367,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
               <TouchableOpacity
                 style={[styles.loginButton, loading && styles.buttonDisabled]}
                 onPress={handleLoginForEmployeeAgent}
-                disabled={loading}
-              >
-                <Text style={styles.loginButtonText}>
-                  {loading ? 'Signing in...' : 'Sign in'}
-                </Text>
+                disabled={loading}>
+                <Text style={styles.loginButtonText}>{loading ? 'Signing in...' : 'Sign in'}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -441,8 +401,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {renderTabs()}
       {activeTab === 'service' ? renderServiceAgentTab() : renderEmployeeAgentTab()}
     </KeyboardAvoidingView>

@@ -51,6 +51,15 @@ RCT_EXTERN_METHOD(getConfigurationInfo:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(isInitialized:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Feature Flags
+
+RCT_EXTERN_METHOD(getFeatureFlags:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(setFeatureFlags:(NSDictionary *)flags
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 // MARK: - Conversation Methods
 
 RCT_EXTERN_METHOD(launchConversation:(RCTPromiseResolveBlock)resolve
@@ -62,6 +71,21 @@ RCT_EXTERN_METHOD(closeConversation:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(startNewConversation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Hidden PreChat Fields
+
+RCT_EXTERN_METHOD(registerHiddenPreChatFields:(NSDictionary *)fields
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(getHiddenPreChatFields:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// MARK: - Additional Context
+
+RCT_EXTERN_METHOD(setAdditionalContext:(NSDictionary *)contextDict
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 // MARK: - Settings
 
 RCT_EXTERN_METHOD(resetSettings:(RCTPromiseResolveBlock)resolve
@@ -71,6 +95,27 @@ RCT_EXTERN_METHOD(resetSettings:(RCTPromiseResolveBlock)resolve
 
 RCT_EXTERN_METHOD(provideRefreshedToken:(NSString *)token
                   resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// MARK: - Logging
+
+RCT_EXTERN_METHOD(enableLogForwarding:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// MARK: - Navigation
+
+RCT_EXTERN_METHOD(enableNavigationForwarding:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// MARK: - View Provider
+
+RCT_EXTERN_METHOD(registerViewProvider:(NSDictionary *)config
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(clearViewProvider:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 @end

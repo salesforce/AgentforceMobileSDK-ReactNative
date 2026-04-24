@@ -33,8 +33,14 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Permission is required to access your camera to take photos.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Permission is required to access your microphone.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Permission is required to save photos to your library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Permission is required to access your photo library.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Permission is required to access your microphone for speech processing.</string>
 	<key>SFDCOAuthLoginHost</key>

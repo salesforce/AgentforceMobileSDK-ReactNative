@@ -1,0 +1,23 @@
+# Service Agent only. Dependencies are a subset of Employee Agent.
+# Used by: node installios.js service
+
+require_relative 'Podfile.common'
+
+platform :ios, '17.0'
+prepare_react_native_project!
+use_modular_headers!
+use_frameworks!
+
+target 'ServiceAgent' do
+  project 'ReactAgentforce.xcodeproj'
+  shared_pods
+  pod 'ReactNativeAgentforce/Core', :path => '../AgentforceSDK-ReactNative-Bridge/ios'
+end
+
+pre_install do |installer|
+  common_pre_install(installer)
+end
+
+post_install do |installer|
+  common_post_install(installer)
+end

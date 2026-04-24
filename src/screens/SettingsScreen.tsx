@@ -1,6 +1,6 @@
 /*
  Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
- 
+
  Redistribution and use of this software in source and binary forms, with or without modification,
  are permitted provided that the following conditions are met:
  * Redistributions of source code must retain the above copyright notice, this list of conditions
@@ -11,7 +11,7 @@
  * Neither the name of salesforce.com, inc. nor the names of its contributors may be used to
  endorse or promote products derived from this software without specific prior written
  permission of salesforce.com, inc.
- 
+
  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
  IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
  FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -33,34 +33,163 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Switch,
+  ActivityIndicator,
 } from 'react-native';
-import { AgentforceService } from 'react-native-agentforce';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../App';
+import {
+  AgentforceService,
+  isEmployeeAgentAuthSupported,
+  hasEmployeeAgentSession,
+  loginForEmployeeAgent,
+  logoutEmployeeAgent,
+} from 'react-native-agentforce';
+import type {
+  FeatureFlags,
+  HiddenPreChatFields,
+  AgentforceContextVariable,
+  AgentforceContextVariableType,
+} from 'react-native-agentforce';
+import { UI_FEATURES } from '../config/AppConfig';
+import { getContextVariables, setContextVariables } from '../store/ContextVariablesStore';
 
-interface SettingsScreenProps {
-  navigation: any;
+type TabType = 'service' | 'employee' | 'features';
+
+const FLAG_KEYS: (keyof FeatureFlags)[] = [
+  'enableMultiAgent',
+  'enableMultiModalInput',
+  'enablePDFUpload',
+  'enableVoice',
+  'enableCustomViewProvider',
+];
+
+const FLAG_LABELS: Record<keyof FeatureFlags, string> = {
+  enableMultiAgent: 'Multi-agent',
+  enableMultiModalInput: 'Multi-modal input',
+  enablePDFUpload: 'PDF upload',
+  enableVoice: 'Voice',
+  enableCustomViewProvider: 'Custom View Provider',
+};
+
+const FLAG_HINTS: Record<keyof FeatureFlags, string> = {
+  enableMultiAgent: 'Allow switching between multiple agents',
+  enableMultiModalInput: 'Enable image/file input in addition to text',
+  enablePDFUpload: 'Allow PDF file uploads',
+  enableVoice: 'Enable immersive voice',
+  enableCustomViewProvider: 'Override SDK output views with React Native components',
+};
+
+function parseContextVariableValue(
+  type: AgentforceContextVariableType,
+  raw: string,
+): string | string[] | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return null;
+  }
+  if (type === 'List') {
+    return trimmed.split(',').map(s => s.trim());
+  }
+  return trimmed;
 }
 
-const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
+function formatContextVariableValue(value: AgentforceContextVariable['value']): string {
+  if (value == null) {
+    return '';
+  }
+  if (Array.isArray(value)) {
+    return `[${value.length} items]`;
+  }
+  return String(value);
+}
+
+type SettingsScreenProps = NativeStackScreenProps<RootStackParamList, 'Settings'>;
+
+const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) => {
+  const [activeTab, setActiveTab] = useState<TabType>(
+    route?.params?.tab ??
+      (UI_FEATURES.SHOW_SERVICE_AGENT
+        ? 'service'
+        : UI_FEATURES.SHOW_EMPLOYEE_AGENT
+        ? 'employee'
+        : 'features'),
+  );
+
   const [serviceApiURL, setServiceApiURL] = useState('');
   const [organizationId, setOrganizationId] = useState('');
   const [esDeveloperName, setEsDeveloperName] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingConfig, setLoadingConfig] = useState(true);
 
-  // Load saved configuration on mount
+  const [employeeAgentId, setEmployeeAgentId] = useState('');
+  const [authSupported, setAuthSupported] = useState(false);
+  const [employeeLoggedIn, setEmployeeLoggedIn] = useState(false);
+
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(null);
+  const [savingFlags, setSavingFlags] = useState(false);
+
+  const [hiddenPreChatFields, setHiddenPreChatFields] = useState<HiddenPreChatFields>({});
+  const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldValue, setNewFieldValue] = useState('');
+
+  const [employeeContextVars, setEmployeeContextVars] = useState<AgentforceContextVariable[]>(() =>
+    getContextVariables(),
+  );
+  const [newEmployeeCtxName, setNewEmployeeCtxName] = useState('');
+  const [newEmployeeCtxType, setNewEmployeeCtxType] =
+    useState<AgentforceContextVariableType>('Text');
+  const [newEmployeeCtxValue, setNewEmployeeCtxValue] = useState('');
+
   useEffect(() => {
     loadSavedConfiguration();
+    loadStoredEmployeeAgentId();
+    checkAuthStatus();
+    loadFeatureFlags();
+    loadHiddenPreChatFields();
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (activeTab === 'employee') {
+        checkAuthStatus();
+      }
+    });
+    return unsubscribe;
+  }, [navigation, activeTab]);
+
+  useEffect(() => {
+    if (route?.params?.tab) {
+      setActiveTab(route.params.tab);
+    }
+  }, [route?.params?.tab]);
+
+  const checkAuthStatus = async () => {
+    const supported = await isEmployeeAgentAuthSupported();
+    setAuthSupported(supported);
+    if (supported) {
+      const loggedIn = await hasEmployeeAgentSession();
+      setEmployeeLoggedIn(loggedIn);
+    }
+  };
+
+  const loadStoredEmployeeAgentId = async () => {
+    try {
+      const stored = await AgentforceService.getEmployeeAgentId();
+      setEmployeeAgentId(stored ?? '');
+    } catch {
+      setEmployeeAgentId('');
+    }
+  };
 
   const loadSavedConfiguration = async () => {
     try {
       setLoadingConfig(true);
       const savedConfig = await AgentforceService.getConfiguration();
       if (savedConfig) {
-        setServiceApiURL(savedConfig.serviceApiURL);
-        setOrganizationId(savedConfig.organizationId);
-        setEsDeveloperName(savedConfig.esDeveloperName);
-        console.log('Loaded saved configuration');
+        setServiceApiURL(savedConfig.serviceApiURL ?? '');
+        setOrganizationId(savedConfig.organizationId ?? '');
+        setEsDeveloperName(savedConfig.esDeveloperName ?? '');
       }
     } catch (error) {
       console.error('Failed to load saved configuration:', error);
@@ -69,61 +198,54 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
     }
   };
 
-  const validateInputs = (): boolean => {
+  const validateServiceInputs = (): boolean => {
     if (!serviceApiURL.trim()) {
       Alert.alert('Validation Error', 'Service API URL is required');
       return false;
     }
-
     if (!organizationId.trim()) {
       Alert.alert('Validation Error', 'Organization ID is required');
       return false;
     }
-
     if (!esDeveloperName.trim()) {
       Alert.alert('Validation Error', 'ES Developer Name is required');
       return false;
     }
-
-    // Basic URL validation
     try {
       new URL(serviceApiURL);
-    } catch (error) {
+    } catch {
       Alert.alert('Validation Error', 'Please enter a valid URL');
       return false;
     }
-
     return true;
   };
 
-  const handleSave = async () => {
-    if (!validateInputs()) {
+  const handleSaveServiceConfig = async () => {
+    if (!validateServiceInputs()) {
       return;
     }
-
     setLoading(true);
     try {
+      // Register hidden prechat fields before configuring
+      await AgentforceService.registerHiddenPreChatFields(hiddenPreChatFields);
+
+      // Get current feature flags to preserve user settings
+      const currentFlags = await AgentforceService.getFeatureFlags();
+
       await AgentforceService.configure({
         type: 'service',
         serviceApiURL: serviceApiURL.trim(),
         organizationId: organizationId.trim(),
         esDeveloperName: esDeveloperName.trim(),
+        featureFlags: currentFlags,
       });
-
-      Alert.alert(
-        'Success',
-        'Agentforce Service Agent configured successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
+      Alert.alert('Success', 'Service Agent configured successfully!', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
     } catch (error) {
       Alert.alert(
         'Configuration Failed',
-        'Failed to configure Agentforce. Please check your settings and try again.'
+        'Failed to configure Service Agent. Please check your settings.',
       );
       console.error('Configuration error:', error);
     } finally {
@@ -131,139 +253,677 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
     }
   };
 
-  const handleClear = () => {
-    Alert.alert(
-      'Clear Settings',
-      'Are you sure you want to clear all fields?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: () => {
-            setServiceApiURL('');
-            setOrganizationId('');
-            setEsDeveloperName('');
-          },
+  const handleClearServiceConfig = () => {
+    Alert.alert('Clear Settings', 'Are you sure you want to clear all fields?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () => {
+          setServiceApiURL('');
+          setOrganizationId('');
+          setEsDeveloperName('');
+          setHiddenPreChatFields({});
         },
-      ]
+      },
+    ]);
+  };
+
+  const handleLoginForEmployeeAgent = async () => {
+    if (!authSupported) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const creds = await loginForEmployeeAgent();
+      const agentIdToUse = employeeAgentId.trim();
+      await AgentforceService.setEmployeeAgentId(agentIdToUse);
+
+      // Get current feature flags to preserve user settings
+      const currentFlags = await AgentforceService.getFeatureFlags();
+
+      await AgentforceService.configure({
+        type: 'employee',
+        instanceUrl: creds.instanceUrl,
+        organizationId: creds.organizationId,
+        userId: creds.userId,
+        agentId: agentIdToUse || undefined,
+        accessToken: creds.accessToken,
+        featureFlags: currentFlags,
+      });
+      setEmployeeLoggedIn(true);
+      Alert.alert(
+        'Success',
+        'You are signed in. You can launch Employee Agent from the Home screen.',
+        [{ text: 'OK' }],
+      );
+    } catch (error: any) {
+      if (error?.message?.includes('cancel') || error?.code === 'USER_CANCEL') {
+        return;
+      }
+      Alert.alert('Login Failed', error?.message || 'Could not complete sign-in.');
+      console.error('Login error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogoutEmployeeAgent = async () => {
+    try {
+      await logoutEmployeeAgent();
+      setEmployeeLoggedIn(false);
+      Alert.alert('Signed Out', 'You have been signed out.');
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
+  };
+
+  const handleSaveEmployeeConfig = async () => {
+    if (!employeeLoggedIn) {
+      Alert.alert('Not Signed In', 'Please sign in first to save Employee Agent configuration.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const trimmedAgentId = employeeAgentId.trim();
+
+      // Save the Agent ID (empty string is valid for multi-agent mode)
+      await AgentforceService.setEmployeeAgentId(trimmedAgentId);
+
+      // Close existing conversation - HomeScreen will reconfigure on next launch
+      await AgentforceService.closeConversation();
+
+      Alert.alert('Success', 'Configuration details saved.', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to save configuration');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadFeatureFlags = async () => {
+    try {
+      const stored = await AgentforceService.getFeatureFlags();
+      setFeatureFlags(stored);
+    } catch (e) {
+      console.error('Failed to load feature flags:', e);
+      setFeatureFlags({
+        enableMultiAgent: true,
+        enableMultiModalInput: false,
+        enablePDFUpload: false,
+        enableVoice: false,
+        enableCustomViewProvider: false,
+      });
+    }
+  };
+
+  const loadHiddenPreChatFields = async () => {
+    try {
+      const fields = await AgentforceService.getHiddenPreChatFields();
+      setHiddenPreChatFields(fields);
+    } catch {
+      setHiddenPreChatFields({});
+    }
+  };
+
+  const handleAddPreChatField = () => {
+    const name = newFieldName.trim();
+    const fieldValue = newFieldValue.trim();
+    if (!name || !fieldValue) {
+      return;
+    }
+    setHiddenPreChatFields(prev => ({ ...prev, [name]: fieldValue }));
+    setNewFieldName('');
+    setNewFieldValue('');
+  };
+
+  const handleRemovePreChatField = (name: string) => {
+    setHiddenPreChatFields(prev => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  };
+
+  const handleClearAllPreChatFields = () => {
+    Alert.alert('Clear Hidden Fields', 'Remove all hidden prechat fields?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () => setHiddenPreChatFields({}),
+      },
+    ]);
+  };
+
+  const handleQuickAddField = (name: string) => {
+    setNewFieldName(name);
+  };
+
+  const handleToggleFeatureFlag = async (key: keyof FeatureFlags, value: boolean) => {
+    if (featureFlags == null) {
+      return;
+    }
+    const next = { ...featureFlags, [key]: value };
+    setFeatureFlags(next);
+    setSavingFlags(true);
+    try {
+      await AgentforceService.setFeatureFlags(next);
+    } catch (e) {
+      console.error('Failed to save feature flags:', e);
+      setFeatureFlags(featureFlags);
+    } finally {
+      setSavingFlags(false);
+    }
+  };
+
+  // Sync context variables to store whenever they change
+  useEffect(() => {
+    setContextVariables(employeeContextVars);
+  }, [employeeContextVars]);
+
+  const handleAddContextVariable = () => {
+    const trimmedName = newEmployeeCtxName.trim();
+    if (!trimmedName) {
+      return;
+    }
+
+    const value = parseContextVariableValue(newEmployeeCtxType, newEmployeeCtxValue);
+    const variable: AgentforceContextVariable = {
+      name: trimmedName,
+      type: newEmployeeCtxType,
+      value,
+    };
+
+    setEmployeeContextVars(prev => [...prev, variable]);
+    setNewEmployeeCtxName('');
+    setNewEmployeeCtxType('Text');
+    setNewEmployeeCtxValue('');
+  };
+
+  const handleRemoveContextVariable = (index: number) => {
+    setEmployeeContextVars(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleClearAllContextVariables = () => {
+    Alert.alert('Clear Context Variables', 'Remove all context variables?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () => {
+          setEmployeeContextVars([]);
+        },
+      },
+    ]);
+  };
+
+  const renderTabs = () => (
+    <View style={styles.tabContainer}>
+      {UI_FEATURES.SHOW_SERVICE_AGENT && (
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'service' && styles.activeTab]}
+          onPress={() => setActiveTab('service')}>
+          <Text style={[styles.tabText, activeTab === 'service' && styles.activeTabText]}>
+            Service
+          </Text>
+        </TouchableOpacity>
+      )}
+      {UI_FEATURES.SHOW_EMPLOYEE_AGENT && (
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'employee' && styles.activeTabEmployee]}
+          onPress={() => setActiveTab('employee')}>
+          <Text style={[styles.tabText, activeTab === 'employee' && styles.activeTabTextEmployee]}>
+            Employee
+          </Text>
+        </TouchableOpacity>
+      )}
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'features' && styles.activeTabFeatures]}
+        onPress={() => setActiveTab('features')}>
+        <Text style={[styles.tabText, activeTab === 'features' && styles.activeTabTextFeatures]}>
+          Flags
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const QUICK_ADD_FIELDS = ['ContactId', 'AccountId', 'Subject', 'Email'];
+
+  const renderHiddenPreChatFieldsSection = () => {
+    const fieldEntries = Object.entries(hiddenPreChatFields);
+    const fieldCount = fieldEntries.length;
+
+    return (
+      <View style={styles.formContainer}>
+        <View style={styles.preChatHeader}>
+          <Text style={styles.label}>Hidden PreChat Fields</Text>
+          {fieldCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{fieldCount}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.hint}>
+          Key-value pairs sent as hidden prechat fields during Service Agent session start.
+        </Text>
+
+        {fieldCount === 0 ? (
+          <Text style={styles.emptyFieldsText}>No fields configured</Text>
+        ) : (
+          <View style={styles.fieldList}>
+            {fieldEntries.map(([name, value]) => (
+              <View key={name} style={styles.fieldRow}>
+                <View style={styles.fieldInfo}>
+                  <Text style={styles.fieldName}>{name}</Text>
+                  <Text style={styles.fieldValue} numberOfLines={1}>
+                    {value}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleRemovePreChatField(name)}
+                  style={styles.deleteButton}>
+                  <Text style={styles.deleteButtonText}>X</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.addFieldRow}>
+          <TextInput
+            style={[styles.input, styles.addFieldInput]}
+            value={newFieldName}
+            onChangeText={setNewFieldName}
+            placeholder="Field name"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextInput
+            style={[styles.input, styles.addFieldInput]}
+            value={newFieldValue}
+            onChangeText={setNewFieldValue}
+            placeholder="Value"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TouchableOpacity
+            style={[
+              styles.addFieldButton,
+              (!newFieldName.trim() || !newFieldValue.trim()) && styles.buttonDisabled,
+            ]}
+            onPress={handleAddPreChatField}
+            disabled={!newFieldName.trim() || !newFieldValue.trim()}>
+            <Text style={styles.addFieldButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.quickAddRow}>
+          {QUICK_ADD_FIELDS.map(name => (
+            <TouchableOpacity
+              key={name}
+              style={styles.quickAddChip}
+              onPress={() => handleQuickAddField(name)}>
+              <Text style={styles.quickAddChipText}>{name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {fieldCount > 0 && (
+          <TouchableOpacity style={styles.clearFieldsButton} onPress={handleClearAllPreChatFields}>
+            <Text style={styles.clearFieldsButtonText}>Clear All Fields</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  const renderContextVariablesSection = () => {
+    return (
+      <View style={styles.formContainer}>
+        <View style={styles.preChatHeader}>
+          <Text style={styles.label}>Context Variables</Text>
+          {employeeContextVars.length > 0 && (
+            <View style={[styles.badge, styles.ctxBadge]}>
+              <Text style={styles.badgeText}>{employeeContextVars.length}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.hint}>
+          Variables passed to the agent via setAdditionalContext after conversation launch.
+        </Text>
+
+        {employeeContextVars.length === 0 ? (
+          <Text style={styles.emptyFieldsText}>No variables configured</Text>
+        ) : (
+          <View style={styles.fieldList}>
+            {employeeContextVars.map((variable, index) => (
+              <View key={`${variable.name}-${index}`} style={styles.fieldRow}>
+                <View style={styles.fieldInfo}>
+                  <View style={styles.ctxVarHeader}>
+                    <Text style={styles.fieldName}>{variable.name}</Text>
+                    <View style={styles.ctxTypeTag}>
+                      <Text style={styles.ctxTypeTagText}>{variable.type}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.fieldValue} numberOfLines={1}>
+                    {formatContextVariableValue(variable.value)}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleRemoveContextVariable(index)}
+                  style={styles.deleteButton}>
+                  <Text style={styles.deleteButtonText}>X</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.ctxAddSection}>
+          <View style={styles.ctxAddRow}>
+            <TextInput
+              style={[styles.input, styles.ctxAddInput]}
+              value={newEmployeeCtxName}
+              onChangeText={setNewEmployeeCtxName}
+              placeholder="Variable name"
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.ctxSegmented}>
+              <TouchableOpacity
+                style={[
+                  styles.ctxSegmentedButton,
+                  newEmployeeCtxType === 'Text' && styles.ctxSegmentedActive,
+                ]}
+                onPress={() => setNewEmployeeCtxType('Text')}>
+                <Text
+                  style={[
+                    styles.ctxSegmentedText,
+                    newEmployeeCtxType === 'Text' && styles.ctxSegmentedTextActive,
+                  ]}>
+                  Text
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.ctxSegmentedButton,
+                  newEmployeeCtxType === 'List' && styles.ctxSegmentedActive,
+                ]}
+                onPress={() => setNewEmployeeCtxType('List')}>
+                <Text
+                  style={[
+                    styles.ctxSegmentedText,
+                    newEmployeeCtxType === 'List' && styles.ctxSegmentedTextActive,
+                  ]}>
+                  Array
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.ctxAddRow}>
+            <TextInput
+              style={[styles.input, styles.ctxAddInput]}
+              value={newEmployeeCtxValue}
+              onChangeText={setNewEmployeeCtxValue}
+              placeholder={newEmployeeCtxType === 'List' ? 'Comma-separated values' : 'Value'}
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              style={[styles.addFieldButton, !newEmployeeCtxName.trim() && styles.buttonDisabled]}
+              onPress={handleAddContextVariable}
+              disabled={!newEmployeeCtxName.trim()}>
+              <Text style={styles.addFieldButtonText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {employeeContextVars.length > 0 && (
+          <TouchableOpacity
+            style={styles.clearFieldsButton}
+            onPress={handleClearAllContextVariables}>
+            <Text style={styles.clearFieldsButtonText}>Clear All Variables</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  const renderServiceAgentTab = () => (
+    <ScrollView
+      style={styles.tabContent}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled">
+      <View style={styles.header}>
+        <Text style={styles.title}>Service Agent Configuration</Text>
+        <Text style={styles.description}>
+          Configure your Salesforce Service Agent with the required credentials.
+        </Text>
+      </View>
+
+      {loadingConfig && (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading saved configuration...</Text>
+        </View>
+      )}
+
+      <View style={styles.formContainer}>
+        <View style={styles.fieldContainer}>
+          <Text style={styles.label}>Service API URL</Text>
+          <Text style={styles.hint}>Your Salesforce instance URL</Text>
+          <TextInput
+            style={styles.input}
+            value={serviceApiURL}
+            onChangeText={setServiceApiURL}
+            placeholder="https://your-domain.my.salesforce.com"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            editable={!loading}
+          />
+        </View>
+        <View style={styles.fieldContainer}>
+          <Text style={styles.label}>Organization ID</Text>
+          <Text style={styles.hint}>Your 15 or 18 character Salesforce Org ID</Text>
+          <TextInput
+            style={styles.input}
+            value={organizationId}
+            onChangeText={setOrganizationId}
+            placeholder="00D000000000000"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+        </View>
+        <View style={styles.fieldContainer}>
+          <Text style={styles.label}>ES Developer Name</Text>
+          <Text style={styles.hint}>The API name of your Einstein Service Agent</Text>
+          <TextInput
+            style={styles.input}
+            value={esDeveloperName}
+            onChangeText={setEsDeveloperName}
+            placeholder="Your_Service_Agent_Name"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+        </View>
+      </View>
+
+      {renderHiddenPreChatFieldsSection()}
+
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={[styles.saveButton, loading && styles.buttonDisabled]}
+          onPress={handleSaveServiceConfig}
+          disabled={loading}>
+          <Text style={styles.saveButtonText}>
+            {loading ? 'Configuring...' : 'Save Configuration'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.clearButton, loading && styles.buttonDisabled]}
+          onPress={handleClearServiceConfig}
+          disabled={loading}>
+          <Text style={styles.clearButtonText}>Clear All</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  const renderEmployeeAgentTab = () => (
+    <ScrollView
+      style={styles.tabContent}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled">
+      <View style={styles.header}>
+        <Text style={styles.title}>Employee Agent Configuration</Text>
+        <Text style={styles.description}>
+          Sign in with Mobile SDK to use Employee Agent. Set Agent ID below, or leave blank for
+          multi-agent.
+        </Text>
+      </View>
+
+      {!authSupported && (
+        <View style={styles.authNotAvailableCard}>
+          <Text style={styles.authNotAvailableTitle}>Auth flow required</Text>
+          <Text style={styles.authNotAvailableText}>
+            To use Employee Agent, this app must have an auth source (e.g. Salesforce Mobile SDK)
+            configured. Add and configure an auth flow in this build to enable sign-in and launch.
+          </Text>
+        </View>
+      )}
+
+      {authSupported && (
+        <View style={styles.loginCard}>
+          {employeeLoggedIn ? (
+            <>
+              <Text style={styles.loginCardTitle}>✓ Signed in</Text>
+              <Text style={styles.loginCardDescription}>
+                You can launch Employee Agent from the Home screen.
+              </Text>
+              <TouchableOpacity
+                style={[styles.logoutButton, loading && styles.buttonDisabled]}
+                onPress={handleLogoutEmployeeAgent}
+                disabled={loading}>
+                <Text style={styles.logoutButtonText}>Log out</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.loginCardTitle}>Login to access the employee agent</Text>
+              <Text style={styles.loginCardDescription}>
+                Sign in with your Salesforce account to use Employee Agent.
+              </Text>
+              <TouchableOpacity
+                style={[styles.loginButton, loading && styles.buttonDisabled]}
+                onPress={handleLoginForEmployeeAgent}
+                disabled={loading}>
+                <Text style={styles.loginButtonText}>{loading ? 'Signing in...' : 'Sign in'}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
+      {authSupported && (
+        <View style={styles.formContainerWithMargin}>
+          <Text style={styles.label}>Agent ID</Text>
+          <Text style={styles.hint}>
+            Optional. Leave blank for multi-agent (SDK uses first available agent from org). Click
+            "Save Configuration" below to apply changes.
+          </Text>
+          <TextInput
+            style={styles.input}
+            value={employeeAgentId}
+            onChangeText={setEmployeeAgentId}
+            placeholder="0Xxxx0000000000"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+        </View>
+      )}
+
+      {authSupported && renderContextVariablesSection()}
+
+      {authSupported && employeeLoggedIn && (
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.loginButton, loading && styles.buttonDisabled]}
+            onPress={handleSaveEmployeeConfig}
+            disabled={loading}>
+            <Text style={styles.loginButtonText}>
+              {loading ? 'Saving...' : 'Save Configuration'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </ScrollView>
+  );
+
+  const renderFeatureFlagsTab = () => {
+    if (featureFlags == null) {
+      return (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#28a745" />
+          <Text style={styles.loadingText}>Loading feature flags...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.tabContent} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Feature Flags</Text>
+          <Text style={styles.description}>
+            Toggle SDK features. Changes are saved immediately and apply to new conversations.
+          </Text>
+          {savingFlags && <Text style={styles.savingText}>Saving…</Text>}
+        </View>
+
+        <View style={styles.formContainer}>
+          {FLAG_KEYS.map((key, index) => (
+            <View
+              key={key}
+              style={[styles.flagRow, index < FLAG_KEYS.length - 1 && styles.flagRowBorder]}>
+              <View style={styles.flagLabelBlock}>
+                <Text style={styles.label}>{FLAG_LABELS[key]}</Text>
+                <Text style={styles.hint}>{FLAG_HINTS[key]}</Text>
+              </View>
+              <Switch
+                value={featureFlags[key]}
+                onValueChange={value => handleToggleFeatureFlag(key, value)}
+                trackColor={{ false: '#ced4da', true: '#28a745' }}
+                thumbColor="#ffffff"
+                disabled={savingFlags}
+              />
+            </View>
+          ))}
+        </View>
+      </ScrollView>
     );
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Service Agent Configuration</Text>
-          <Text style={styles.description}>
-            Configure your Salesforce Service Agent with the required
-            credentials. All three fields are required.
-          </Text>
-        </View>
-
-        {/* Loading Indicator */}
-        {loadingConfig && (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading saved configuration...</Text>
-          </View>
-        )}
-
-        {/* Form Fields */}
-        <View style={styles.formContainer}>
-          {/* Service API URL */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Service API URL</Text>
-            <Text style={styles.hint}>
-              Your Salesforce Service API URL (e.g., https://your-domain.my.salesforce-scrt.com)
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={serviceApiURL}
-              onChangeText={setServiceApiURL}
-              placeholder="https://your-domain.my.salesforce-scrt.com"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              editable={!loading}
-            />
-          </View>
-
-          {/* Organization ID */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Organization ID</Text>
-            <Text style={styles.hint}>
-              Your 15 or 18 character Enhanced Chat Org ID
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={organizationId}
-              onChangeText={setOrganizationId}
-              placeholder="00D000000000000"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
-
-          {/* ES Developer Name */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>ES Developer Name</Text>
-            <Text style={styles.hint}>
-              The API name of your Einstein Service Agent
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={esDeveloperName}
-              onChangeText={setEsDeveloperName}
-              placeholder="Your_Service_Agent_Name"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-          </View>
-        </View>
-
-        {/* Info Box */}
-        <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>ℹ️</Text>
-          <Text style={styles.infoText}>
-            You can find these values in your Salesforce Setup under Enhanced
-            In-App Agent configuration. Link available in the ReadMe.
-          </Text>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.saveButton, loading && styles.buttonDisabled]}
-            onPress={handleSave}
-            disabled={loading}
-          >
-            <Text style={styles.saveButtonText}>
-              {loading ? 'Configuring...' : 'Save Configuration'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.clearButton, loading && styles.buttonDisabled]}
-            onPress={handleClear}
-            disabled={loading}
-          >
-            <Text style={styles.clearButtonText}>Clear All</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {renderTabs()}
+      {UI_FEATURES.SHOW_SERVICE_AGENT && activeTab === 'service' && renderServiceAgentTab()}
+      {UI_FEATURES.SHOW_EMPLOYEE_AGENT && activeTab === 'employee' && renderEmployeeAgentTab()}
+      {activeTab === 'features' && renderFeatureFlagsTab()}
     </KeyboardAvoidingView>
   );
 };
@@ -273,7 +933,49 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  scrollView: {
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#7B1FA2',
+    backgroundColor: '#f3e5f5',
+  },
+  activeTabEmployee: {
+    borderBottomColor: '#0176D3',
+    backgroundColor: '#e7f3ff',
+  },
+  activeTabFeatures: {
+    borderBottomColor: '#28a745',
+    backgroundColor: '#e8f5e9',
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#6c757d',
+  },
+  activeTabText: {
+    color: '#7B1FA2',
+    fontWeight: '600',
+  },
+  activeTabTextEmployee: {
+    color: '#0176D3',
+    fontWeight: '600',
+  },
+  activeTabTextFeatures: {
+    color: '#28a745',
+    fontWeight: '600',
+  },
+  tabContent: {
     flex: 1,
   },
   scrollContent: {
@@ -281,10 +983,10 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#212529',
     marginBottom: 8,
@@ -294,19 +996,92 @@ const styles = StyleSheet.create({
     color: '#6c757d',
     lineHeight: 20,
   },
-  loadingContainer: {
+  authNotAvailableCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
     padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  authNotAvailableTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#495057',
+    marginBottom: 6,
+  },
+  authNotAvailableText: {
+    fontSize: 14,
+    color: '#6c757d',
+    lineHeight: 20,
+  },
+  loginCard: {
+    backgroundColor: '#e7f3ff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#0176D3',
+  },
+  loginCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#212529',
+    marginBottom: 6,
+  },
+  loginCardDescription: {
+    fontSize: 14,
+    color: '#495057',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  loginButton: {
+    backgroundColor: '#0176D3',
+    padding: 14,
+    borderRadius: 8,
     alignItems: 'center',
+  },
+  loginButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  logoutButton: {
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#6c757d',
+  },
+  logoutButtonText: {
+    color: '#6c757d',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    padding: 12,
     backgroundColor: '#e7f3ff',
     borderRadius: 8,
     marginBottom: 16,
+    alignItems: 'center',
   },
   loadingText: {
     fontSize: 14,
     color: '#0070f3',
-    fontWeight: '500',
   },
   formContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  formContainerWithMargin: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 16,
@@ -330,7 +1105,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6c757d',
     marginBottom: 8,
-    lineHeight: 16,
   },
   input: {
     borderWidth: 1,
@@ -341,36 +1115,15 @@ const styles = StyleSheet.create({
     color: '#212529',
     backgroundColor: '#ffffff',
   },
-  infoBox: {
-    flexDirection: 'row',
-    backgroundColor: '#e7f3ff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 24,
-  },
-  infoIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0070f3',
-    lineHeight: 18,
-  },
   buttonContainer: {
     gap: 12,
+    marginBottom: 20,
   },
   saveButton: {
-    backgroundColor: '#0176D3',
+    backgroundColor: '#7B1FA2',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
   },
   saveButtonText: {
     color: '#ffffff',
@@ -393,7 +1146,204 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.5,
   },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
+  savingText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#28a745',
+  },
+  preChatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  badge: {
+    backgroundColor: '#7B1FA2',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  emptyFieldsText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  fieldList: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f4',
+  },
+  fieldInfo: {
+    flex: 1,
+  },
+  fieldName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#212529',
+  },
+  fieldValue: {
+    fontSize: 13,
+    color: '#6c757d',
+    marginTop: 2,
+  },
+  deleteButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f8d7da',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  deleteButtonText: {
+    color: '#dc3545',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  addFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  addFieldInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  addFieldButton: {
+    backgroundColor: '#7B1FA2',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  addFieldButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  quickAddRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  quickAddChip: {
+    backgroundColor: '#f3e5f5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#CE93D8',
+  },
+  quickAddChipText: {
+    fontSize: 12,
+    color: '#7B1FA2',
+    fontWeight: '500',
+  },
+  clearFieldsButton: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#dc3545',
+    borderRadius: 8,
+  },
+  clearFieldsButtonText: {
+    color: '#dc3545',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  flagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
+  flagRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f4',
+  },
+  flagLabelBlock: {
+    flex: 1,
+    marginRight: 16,
+  },
+  ctxBadge: {
+    backgroundColor: '#2e7d32',
+  },
+  ctxVarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ctxTypeTag: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  ctxTypeTagText: {
+    fontSize: 11,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  ctxAddSection: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  ctxAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ctxAddInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  ctxSegmented: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#ced4da',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  ctxSegmentedButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
+  },
+  ctxSegmentedActive: {
+    backgroundColor: '#e8f5e9',
+  },
+  ctxSegmentedText: {
+    fontSize: 13,
+    color: '#6c757d',
+    fontWeight: '500',
+  },
+  ctxSegmentedTextActive: {
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
 });
 
 export default SettingsScreen;
-

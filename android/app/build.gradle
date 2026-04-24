@@ -83,6 +83,25 @@ android {
         versionName "1.0"
     }
 
+    // Product flavors for separate Service Agent and Employee Agent apps
+    flavorDimensions "agentType"
+
+    productFlavors {
+        serviceAgent {
+            dimension "agentType"
+            applicationIdSuffix ".service"
+            versionNameSuffix "-service"
+            buildConfigField "String", "AGENT_TYPE", '"SERVICE"'
+        }
+
+        employeeAgent {
+            dimension "agentType"
+            applicationIdSuffix ".employee"
+            versionNameSuffix "-employee"
+            buildConfigField "String", "AGENT_TYPE", '"EMPLOYEE"'
+        }
+    }
+
     buildFeatures {
         buildConfig = true
         compose = true
@@ -121,6 +140,12 @@ dependencies {
     // Agentforce bridge (submodule) – includes native module and Agentforce SDK dependency
     implementation project(':react-native-agentforce')
 
+    // Salesforce Mobile SDK 13.1.1 (Employee Agent auth only)
+    // Service Agent: Omits Mobile SDK → smaller APK
+    // Employee Agent: Includes Mobile SDK → OAuth authentication support
+    // Bridge's runtime detection (AgentforcePackage.kt) adapts automatically
+    employeeAgentImplementation("com.salesforce.mobilesdk:SalesforceReact:13.1.1")
+
     // Jetpack Compose (needed for ComposeView to display chat interface)
     def composeBom = platform('androidx.compose:compose-bom:2024.02.00')
     implementation composeBom
@@ -147,6 +172,49 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+}
+
+// ============================================================================
+// Auto-generate AppConfig based on build variant
+// ============================================================================
+
+// Hook the generation task to run before preBuild for all variants
+android.applicationVariants.all { variant ->
+    def variantName = variant.name.capitalize()
+    def flavorName = variant.flavorName
+
+    // Determine APP_MODE based on flavor
+    def appMode = 'all' // default
+    if (flavorName == 'serviceAgent') {
+        appMode = 'service'
+    } else if (flavorName == 'employeeAgent') {
+        appMode = 'employee'
+    }
+
+    // Create a variant-specific task
+    def taskName = "generateAppConfigFor${variantName}"
+
+    if (!tasks.findByName(taskName)) {
+        tasks.create(taskName) {
+            description = "Auto-generates AppConfig.generated.ts for ${variantName}"
+
+            doLast {
+                println "🎯 Auto-detected variant: ${variant.name} (flavor: ${flavorName}) → APP_MODE=${appMode}"
+
+                // Run the Node.js script to generate the config
+                def projectRoot = project.rootDir.parent
+                exec {
+                    workingDir projectRoot
+                    commandLine 'node', 'scripts/generate-app-config.js', appMode
+                }
+            }
+        }
+    }
+
+    def preBuildTask = tasks.findByName("pre${variantName}Build")
+    if (preBuildTask) {
+        preBuildTask.dependsOn taskName
     }
 }
 

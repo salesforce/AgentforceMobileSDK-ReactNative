@@ -9,6 +9,7 @@ export {
   ServiceAgentConfig,
   EmployeeAgentConfig,
   AgentConfig,
+  FeatureFlags,
   LegacyServiceAgentConfig,
   ConfigurationResult,
   ConfigurationInfo,
@@ -17,9 +18,21 @@ export {
   isLegacyConfig,
 } from './AgentConfig';
 
-// Token delegate types
+// Logger delegate types
+export { LoggerDelegate, LogLevel } from './LoggerDelegate';
+
+// Navigation delegate types
+export { NavigationDelegate, NavigationRequest } from './NavigationDelegate';
+
+// Additional context types
 export {
-  TokenDelegate,
-  TokenRefreshEvent,
-  AuthenticationFailureEvent,
-} from './TokenDelegate';
+  AgentforceAdditionalContext,
+  AgentforceContextVariable,
+  AgentforceContextVariableType,
+} from './AgentforceContext';
+
+// View provider delegate types
+export { ViewProviderDelegate, ViewProviderComponentData } from './ViewProviderDelegate';
+
+// Hidden prechat field types
+export type { HiddenPreChatFields } from './HiddenPreChatFields';

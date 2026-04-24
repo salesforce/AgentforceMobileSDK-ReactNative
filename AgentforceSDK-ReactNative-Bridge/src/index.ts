@@ -17,7 +17,25 @@ export {
 } from './services/EmployeeAgentAuth';
 export type { AuthCredentials } from './services/EmployeeAgentAuth';
 
-export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, LegacyServiceAgentConfig, ConfigurationResult, ConfigurationInfo, TokenDelegate, TokenRefreshEvent, AuthenticationFailureEvent } from './types';
+export type {
+  ServiceAgentConfig,
+  EmployeeAgentConfig,
+  AgentConfig,
+  FeatureFlags,
+  LegacyServiceAgentConfig,
+  ConfigurationResult,
+  ConfigurationInfo,
+  LoggerDelegate,
+  LogLevel,
+  NavigationDelegate,
+  NavigationRequest,
+  AgentforceAdditionalContext,
+  AgentforceContextVariable,
+  AgentforceContextVariableType,
+  ViewProviderDelegate,
+  ViewProviderComponentData,
+  HiddenPreChatFields,
+} from './types';
 export { isServiceAgentConfig, isEmployeeAgentConfig, isLegacyConfig } from './types';
 
 export {

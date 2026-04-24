@@ -5,12 +5,7 @@
  * Supports both Service Agent (anonymous/guest) and Employee Agent (authenticated) modes.
  */
 
-import {
-  NativeModules,
-  NativeEventEmitter,
-  Platform,
-  EmitterSubscription,
-} from 'react-native';
+import { NativeModules, NativeEventEmitter, Platform, EmitterSubscription } from 'react-native';
 
 import {
   AgentConfig,
@@ -19,26 +14,55 @@ import {
   LegacyServiceAgentConfig,
   ConfigurationResult,
   ConfigurationInfo,
-  isServiceAgentConfig,
-  isEmployeeAgentConfig,
+  FeatureFlags,
   isLegacyConfig,
 } from '../types/AgentConfig';
 
-import { TokenDelegate } from '../types/TokenDelegate';
+import { LoggerDelegate, LogLevel } from '../types/LoggerDelegate';
+import { NavigationDelegate, NavigationRequest } from '../types/NavigationDelegate';
+import type {
+  AgentforceAdditionalContext,
+  AgentforceContextVariable,
+  AgentforceContextVariableType,
+} from '../types/AgentforceContext';
+import { ViewProviderDelegate } from '../types/ViewProviderDelegate';
+import type { HiddenPreChatFields } from '../types/HiddenPreChatFields';
 
 const { AgentforceModule } = NativeModules;
 
 // Re-export types for convenience
-export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig };
-export type { TokenDelegate };
+export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags };
+export type { LoggerDelegate, LogLevel };
+export type { NavigationDelegate, NavigationRequest };
+export type { AgentforceAdditionalContext, AgentforceContextVariable };
+export type { ViewProviderDelegate };
+export type { HiddenPreChatFields };
 
 /**
  * Native module event names
  */
 const EVENTS = {
-  TOKEN_REFRESH_NEEDED: 'onTokenRefreshNeeded',
-  AUTHENTICATION_FAILURE: 'onAuthenticationFailure',
+  LOG_MESSAGE: 'onLogMessage',
+  NAVIGATION_REQUEST: 'onNavigationRequest',
 } as const;
+
+/**
+ * Valid context variable types for runtime validation
+ */
+const VALID_CONTEXT_TYPES: Set<AgentforceContextVariableType> =
+  new Set<AgentforceContextVariableType>([
+    'Text',
+    'Number',
+    'Boolean',
+    'Date',
+    'DateTime',
+    'Json',
+    'List',
+    'Money',
+    'Object',
+    'Ref',
+    'Variable',
+  ]);
 
 /**
  * Service class for interacting with native Agentforce SDK.
@@ -72,25 +96,34 @@ const EVENTS = {
  */
 class AgentforceService {
   /**
-   * Token delegate for Employee Agent mode.
-   * Set this before configuring Employee Agent without accessToken.
-   */
-  private tokenDelegate: TokenDelegate | null = null;
-
-  /**
    * Native event emitter for receiving events from native layer
    */
   private eventEmitter: NativeEventEmitter | null = null;
 
   /**
-   * Subscription for token refresh events
+   * Logger delegate for receiving SDK log messages
    */
-  private tokenRefreshSubscription: EmitterSubscription | null = null;
+  private loggerDelegate: LoggerDelegate | null = null;
 
   /**
-   * Subscription for authentication failure events
+   * Subscription for log message events
    */
-  private authFailureSubscription: EmitterSubscription | null = null;
+  private loggerSubscription: EmitterSubscription | null = null;
+
+  /**
+   * Navigation delegate for receiving SDK navigation requests
+   */
+  private navigationDelegate: NavigationDelegate | null = null;
+
+  /**
+   * Subscription for navigation request events
+   */
+  private navigationSubscription: EmitterSubscription | null = null;
+
+  /**
+   * View provider delegate configuration (registered component types + React component name)
+   */
+  private viewProviderDelegate: ViewProviderDelegate | null = null;
 
   /**
    * Track if service has been initialized
@@ -102,123 +135,190 @@ class AgentforceService {
   }
 
   /**
-   * Initialize the native event emitter and set up listeners
+   * Initialize the native event emitter
    */
   private initializeEventEmitter(): void {
     if (!AgentforceModule) {
-      console.warn(
-        '[AgentforceService] Native module not available - events will not work',
-      );
+      console.warn('[AgentforceService] Native module not available - events will not work');
       return;
     }
 
     try {
       this.eventEmitter = new NativeEventEmitter(AgentforceModule);
-      this.setupEventListeners();
       this.initialized = true;
     } catch (error) {
-      console.warn(
-        '[AgentforceService] Failed to initialize event emitter:',
-        error,
-      );
+      console.warn('[AgentforceService] Failed to initialize event emitter:', error);
     }
   }
 
   /**
-   * Set up listeners for native events
+   * Register a logger delegate to receive log messages from the native Agentforce SDK.
+   *
+   * Register before calling `configure()` so the logger is attached when the SDK initializes.
+   *
+   * @param delegate - Logger delegate implementation
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setLoggerDelegate({
+   *   onLog(level, message, error) {
+   *     console.log(`[Agentforce ${level.toUpperCase()}] ${message}`);
+   *   },
+   * });
+   * ```
    */
-  private setupEventListeners(): void {
-    if (!this.eventEmitter) return;
+  setLoggerDelegate(delegate: LoggerDelegate): void {
+    this.loggerDelegate = delegate;
+    this.setupLoggerListener();
+    AgentforceModule?.enableLogForwarding(true);
+    console.log('[AgentforceService] Logger delegate registered');
+  }
 
-    // Listen for token refresh requests from native layer
-    this.tokenRefreshSubscription = this.eventEmitter.addListener(
-      EVENTS.TOKEN_REFRESH_NEEDED,
-      this.handleTokenRefreshRequest.bind(this),
-    );
+  /**
+   * Clear the registered logger delegate and stop receiving log messages.
+   */
+  clearLoggerDelegate(): void {
+    this.loggerDelegate = null;
+    this.loggerSubscription?.remove();
+    this.loggerSubscription = null;
+    AgentforceModule?.enableLogForwarding(false);
+    console.log('[AgentforceService] Logger delegate cleared');
+  }
 
-    // Listen for authentication failure events
-    this.authFailureSubscription = this.eventEmitter.addListener(
-      EVENTS.AUTHENTICATION_FAILURE,
-      this.handleAuthenticationFailure.bind(this),
+  /**
+   * Set up listener for log message events from native layer
+   */
+  private setupLoggerListener(): void {
+    this.loggerSubscription?.remove();
+    if (!this.eventEmitter) {
+      return;
+    }
+
+    this.loggerSubscription = this.eventEmitter.addListener(
+      EVENTS.LOG_MESSAGE,
+      (event: { level: LogLevel; message: string; error?: string }) => {
+        this.loggerDelegate?.onLog(event.level, event.message, event.error);
+      },
     );
   }
 
   /**
-   * Handle token refresh request from native layer
+   * Register a navigation delegate to receive navigation requests from the native Agentforce SDK.
+   *
+   * Register before calling `configure()` so the navigation handler is attached when the SDK initializes.
+   *
+   * @param delegate - Navigation delegate implementation
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setNavigationDelegate({
+   *   onNavigate(request) {
+   *     switch (request.type) {
+   *       case 'link':
+   *         if (request.uri) Linking.openURL(request.uri);
+   *         break;
+   *       case 'record':
+   *         console.log(`Open record: ${request.objectType} ${request.recordId}`);
+   *         break;
+   *     }
+   *   },
+   * });
+   * ```
    */
-  private async handleTokenRefreshRequest(): Promise<void> {
-    console.log('[AgentforceService] Token refresh requested by native layer');
+  setNavigationDelegate(delegate: NavigationDelegate): void {
+    this.navigationDelegate = delegate;
+    this.setupNavigationListener();
+    AgentforceModule?.enableNavigationForwarding(true);
+    console.log('[AgentforceService] Navigation delegate registered');
+  }
 
-    if (!this.tokenDelegate) {
-      console.error(
-        '[AgentforceService] Token refresh requested but no delegate registered',
-      );
+  /**
+   * Clear the registered navigation delegate and stop receiving navigation requests.
+   */
+  clearNavigationDelegate(): void {
+    this.navigationDelegate = null;
+    this.navigationSubscription?.remove();
+    this.navigationSubscription = null;
+    AgentforceModule?.enableNavigationForwarding(false);
+    console.log('[AgentforceService] Navigation delegate cleared');
+  }
+
+  /**
+   * Set up listener for navigation request events from native layer
+   */
+  private setupNavigationListener(): void {
+    this.navigationSubscription?.remove();
+    if (!this.eventEmitter) {
+      return;
+    }
+
+    this.navigationSubscription = this.eventEmitter.addListener(
+      EVENTS.NAVIGATION_REQUEST,
+      (event: NavigationRequest) => {
+        this.navigationDelegate?.onNavigate(event);
+      },
+    );
+  }
+
+  /**
+   * Register a view provider delegate to override native SDK output views
+   * with custom React Native components.
+   *
+   * Can be called before or after `configure()` — the native provider is
+   * always attached to the client and checks the component map dynamically.
+   *
+   * @param delegate - View provider delegate configuration
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setViewProviderDelegate({
+   *   componentMap: {
+   *     'copilot/richText': 'CustomRichTextView',
+   *     'copilot/markdown': 'CustomMarkdownView',
+   *   },
+   * });
+   * ```
+   */
+  async setViewProviderDelegate(delegate: ViewProviderDelegate): Promise<void> {
+    this.viewProviderDelegate = delegate;
+
+    if (!AgentforceModule?.registerViewProvider) {
+      console.warn('[AgentforceService] registerViewProvider not available on native module');
       return;
     }
 
     try {
-      const newToken = await this.tokenDelegate.refreshToken();
-      console.log('[AgentforceService] Token refreshed successfully');
-
-      // Provide the new token back to native layer
-      await AgentforceModule.provideRefreshedToken(newToken);
+      await AgentforceModule.registerViewProvider({
+        componentMap: delegate.componentMap,
+      });
+      console.log(
+        `[AgentforceService] View provider registered for ${
+          Object.keys(delegate.componentMap).length
+        } types`,
+      );
     } catch (error) {
-      console.error('[AgentforceService] Token refresh failed:', error);
-
-      // Notify delegate of authentication failure
-      this.tokenDelegate.onAuthenticationFailure?.();
+      console.error('[AgentforceService] Failed to register view provider:', error);
+      throw error;
     }
   }
 
   /**
-   * Handle authentication failure event from native layer
+   * Clear the registered view provider delegate.
+   * After clearing, the native SDK will render its built-in views for all types.
    */
-  private handleAuthenticationFailure(event: { error?: string }): void {
-    console.error(
-      '[AgentforceService] Authentication failure:',
-      event?.error || 'Unknown error',
-    );
+  async clearViewProviderDelegate(): Promise<void> {
+    this.viewProviderDelegate = null;
 
-    // Notify delegate if registered
-    this.tokenDelegate?.onAuthenticationFailure?.();
-  }
+    if (!AgentforceModule?.clearViewProvider) {
+      return;
+    }
 
-  /**
-   * Register a token delegate for Employee Agent mode.
-   *
-   * The delegate is used to obtain and refresh OAuth tokens for authenticated
-   * access. Must be set before configuring an Employee Agent without a direct
-   * accessToken.
-   *
-   * @param delegate - Token delegate implementation
-   *
-   * @example
-   * ```typescript
-   * AgentforceService.setTokenDelegate({
-   *   getAccessToken: async () => myAuthService.getToken(),
-   *   refreshToken: async () => myAuthService.refreshToken(),
-   *   onAuthenticationFailure: () => navigation.navigate('Login'),
-   * });
-   * ```
-   */
-  setTokenDelegate(delegate: TokenDelegate): void {
-    this.tokenDelegate = delegate;
-    console.log('[AgentforceService] Token delegate registered');
-  }
-
-  /**
-   * Clear the registered token delegate
-   */
-  clearTokenDelegate(): void {
-    this.tokenDelegate = null;
-    console.log('[AgentforceService] Token delegate cleared');
-  }
-
-  /**
-   * Check if a token delegate is registered
-   */
-  hasTokenDelegate(): boolean {
-    return this.tokenDelegate !== null;
+    try {
+      await AgentforceModule.clearViewProvider();
+      console.log('[AgentforceService] View provider delegate cleared');
+    } catch (error) {
+      console.warn('[AgentforceService] Failed to clear view provider:', error);
+    }
   }
 
   /**
@@ -259,9 +359,7 @@ class AgentforceService {
    * });
    * ```
    */
-  async configure(
-    config: AgentConfig | LegacyServiceAgentConfig,
-  ): Promise<boolean> {
+  async configure(config: AgentConfig | LegacyServiceAgentConfig): Promise<boolean> {
     if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
       console.warn('Agentforce only supported on Android and iOS');
       return false;
@@ -276,26 +374,22 @@ class AgentforceService {
       // Normalize config to ensure it has a type field
       const normalizedConfig = this.normalizeConfig(config);
 
-      // Handle Employee Agent token requirements
-      if (isEmployeeAgentConfig(normalizedConfig)) {
-        await this.prepareEmployeeAgentConfig(normalizedConfig);
-      }
+      // Merge stored feature flags into config if not provided (so native uses same defaults/stored)
+      const configWithFlags = await this.mergeFeatureFlagsIntoConfig(normalizedConfig);
 
       // Call native module with the unified config object
       // iOS uses configureWithConfig, Android uses configure with object
       let result: ConfigurationResult;
-      
+
       if (Platform.OS === 'ios') {
         // iOS: Use the new unified method that accepts NSDictionary
-        result = await AgentforceModule.configureWithConfig(normalizedConfig);
+        result = await AgentforceModule.configureWithConfig(configWithFlags);
       } else {
         // Android: Use configure with ReadableMap
-        result = await AgentforceModule.configure(normalizedConfig);
+        result = await AgentforceModule.configure(configWithFlags);
       }
 
-      console.log(
-        `[AgentforceService] Configured successfully (mode: ${normalizedConfig.type})`,
-      );
+      console.log(`[AgentforceService] Configured successfully (mode: ${configWithFlags.type})`);
       return result?.success ?? true;
     } catch (error) {
       console.error('[AgentforceService] Configuration failed:', error);
@@ -304,17 +398,86 @@ class AgentforceService {
   }
 
   /**
+   * Merge stored feature flags into config if config does not already have featureFlags.
+   * So the native layer receives a single source of truth (config.featureFlags or stored).
+   */
+  private async mergeFeatureFlagsIntoConfig(config: AgentConfig): Promise<AgentConfig> {
+    if (config.featureFlags != null) {
+      return config;
+    }
+    const stored = await this.getFeatureFlags();
+    return { ...config, featureFlags: stored };
+  }
+
+  /**
+   * Get the current feature flags (from native storage).
+   * Used by the Feature Flags screen and when configuring without explicit featureFlags.
+   */
+  async getFeatureFlags(): Promise<FeatureFlags> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return {
+        enableMultiAgent: true,
+        enableMultiModalInput: false,
+        enablePDFUpload: false,
+        enableVoice: false,
+        enableCustomViewProvider: false,
+      };
+    }
+    if (!AgentforceModule?.getFeatureFlags) {
+      return {
+        enableMultiAgent: true,
+        enableMultiModalInput: false,
+        enablePDFUpload: false,
+        enableVoice: false,
+        enableCustomViewProvider: false,
+      };
+    }
+    try {
+      const flags = await AgentforceModule.getFeatureFlags();
+      return {
+        enableMultiAgent: flags?.enableMultiAgent ?? true,
+        enableMultiModalInput: flags?.enableMultiModalInput ?? false,
+        enablePDFUpload: flags?.enablePDFUpload ?? false,
+        enableVoice: flags?.enableVoice ?? false,
+        enableCustomViewProvider: flags?.enableCustomViewProvider ?? false,
+      };
+    } catch {
+      return {
+        enableMultiAgent: true,
+        enableMultiModalInput: false,
+        enablePDFUpload: false,
+        enableVoice: false,
+        enableCustomViewProvider: false,
+      };
+    }
+  }
+
+  /**
+   * Save feature flags (persisted in native storage).
+   * Takes effect the next time configure() is called.
+   */
+  async setFeatureFlags(flags: FeatureFlags): Promise<void> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return;
+    }
+    if (!AgentforceModule?.setFeatureFlags) {
+      return;
+    }
+    try {
+      await AgentforceModule.setFeatureFlags(flags);
+    } catch (error) {
+      console.warn('[AgentforceService] Failed to save feature flags:', error);
+    }
+  }
+
+  /**
    * Normalize configuration to ensure it has a type field.
    * Handles backward compatibility with legacy Service Agent config format.
    */
-  private normalizeConfig(
-    config: AgentConfig | LegacyServiceAgentConfig,
-  ): AgentConfig {
+  private normalizeConfig(config: AgentConfig | LegacyServiceAgentConfig): AgentConfig {
     // If it's a legacy config (no type field), convert to new format
     if (isLegacyConfig(config)) {
-      console.log(
-        '[AgentforceService] Converting legacy config to new format',
-      );
+      console.log('[AgentforceService] Converting legacy config to new format');
       return {
         type: 'service',
         serviceApiURL: config.serviceApiURL,
@@ -325,37 +488,6 @@ class AgentforceService {
 
     // Already has type field
     return config;
-  }
-
-  /**
-   * Prepare Employee Agent config by obtaining token if needed
-   */
-  private async prepareEmployeeAgentConfig(
-    config: EmployeeAgentConfig,
-  ): Promise<void> {
-    // If token is already provided, nothing to do
-    if (config.accessToken) {
-      return;
-    }
-
-    // Token must come from delegate
-    if (!this.tokenDelegate) {
-      throw new Error(
-        'Employee Agent requires either accessToken or a registered tokenDelegate. ' +
-          'Call setTokenDelegate() first or provide accessToken in config.',
-      );
-    }
-
-    // Get token from delegate
-    console.log('[AgentforceService] Getting token from delegate');
-    const token = await this.tokenDelegate.getAccessToken();
-
-    if (!token) {
-      throw new Error('Token delegate returned empty token');
-    }
-
-    // Mutate config to include the token
-    config.accessToken = token;
   }
 
   /**
@@ -496,11 +628,7 @@ class AgentforceService {
       const config = await AgentforceModule.getConfiguration();
 
       // Return null if all fields are empty (no saved config)
-      if (
-        !config?.serviceApiURL &&
-        !config?.organizationId &&
-        !config?.esDeveloperName
-      ) {
+      if (!config?.serviceApiURL && !config?.organizationId && !config?.esDeveloperName) {
         return null;
       }
 
@@ -550,10 +678,7 @@ class AgentforceService {
         mode: configured ? 'service' : null, // Assume service for legacy
       };
     } catch (error) {
-      console.error(
-        '[AgentforceService] Failed to get configuration info:',
-        error,
-      );
+      console.error('[AgentforceService] Failed to get configuration info:', error);
       return { configured: false, mode: null };
     }
   }
@@ -619,6 +744,153 @@ class AgentforceService {
   }
 
   /**
+   * Set additional context for the conversation.
+   *
+   * Provides contextual information to the Agentforce conversation,
+   * such as user ID, account ID, case number, or any other relevant data.
+   * This helps the agent provide more personalized and relevant responses.
+   *
+   * **Must be called after launching a conversation.**
+   *
+   * @param context - The additional context with variables to set
+   * @returns Promise<boolean> indicating success
+   * @throws Error if no conversation exists or context is invalid
+   *
+   * @example
+   * ```typescript
+   * await AgentforceService.launchConversation();
+   *
+   * await AgentforceService.setAdditionalContext({
+   *   variables: [
+   *     { name: 'userId', type: 'Text', value: '005xx0000001234' },
+   *     { name: 'accountId', type: 'Text', value: '001xx0000001234' },
+   *     { name: 'priority', type: 'Text', value: 'high' }
+   *   ]
+   * });
+   * ```
+   */
+  async setAdditionalContext(context: AgentforceAdditionalContext): Promise<boolean> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      console.warn('Agentforce only supported on Android and iOS');
+      return false;
+    }
+
+    if (!AgentforceModule) {
+      console.error('AgentforceModule native module not found');
+      return false;
+    }
+
+    // Validate context structure
+    if (!context || !Array.isArray(context.variables)) {
+      throw new Error('Invalid context: must have "variables" array');
+    }
+
+    // Validate each variable
+    for (let i = 0; i < context.variables.length; i++) {
+      const variable = context.variables[i];
+      if (!variable.name || typeof variable.name !== 'string') {
+        throw new Error(`Invalid context variable at index ${i}: missing or invalid "name"`);
+      }
+      if (!variable.type || typeof variable.type !== 'string') {
+        throw new Error(`Invalid context variable at index ${i}: missing or invalid "type"`);
+      }
+      // Validate type against known types
+      if (!VALID_CONTEXT_TYPES.has(variable.type as AgentforceContextVariableType)) {
+        throw new Error(
+          `Invalid context variable at index ${i}: unknown type "${variable.type}". ` +
+            `Valid types: ${Array.from(VALID_CONTEXT_TYPES).join(', ')}`,
+        );
+      }
+    }
+
+    try {
+      const result = await AgentforceModule.setAdditionalContext(context);
+      console.log(
+        `[AgentforceService] Additional context set: ${context.variables.length} variables`,
+      );
+      return result?.success ?? true;
+    } catch (error) {
+      console.error('[AgentforceService] Failed to set additional context:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Pre-register hidden prechat field values for Service Agent conversations.
+   *
+   * Call this before `launchConversation()` to supply values for prechat fields
+   * hidden from the end user (e.g. ContactId, AccountId, session tokens).
+   * When the SDK initializes a Service Agent session, these values are returned
+   * to the native delegate automatically.
+   *
+   * Fields not present in the provided map are omitted (not sent as empty strings),
+   * so the SDK treats them as unset.
+   *
+   * @remarks Service Agent only. Has no effect for Employee Agent conversations.
+   *
+   * @param fields - Map of field developer names to string values
+   *
+   * @example
+   * ```typescript
+   * await AgentforceService.registerHiddenPreChatFields({
+   *   ContactId: '003xx0000001234',
+   *   AccountId: '001xx0000005678',
+   * });
+   * await AgentforceService.launchConversation();
+   * ```
+   */
+  async registerHiddenPreChatFields(fields: HiddenPreChatFields): Promise<void> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return;
+    }
+
+    if (!AgentforceModule) {
+      console.warn('[AgentforceService] Native module not available');
+      return;
+    }
+
+    try {
+      await AgentforceModule.registerHiddenPreChatFields(fields);
+      const count = Object.keys(fields).length;
+      console.log(`[AgentforceService] Hidden prechat fields registered: ${count} field(s)`);
+    } catch (error) {
+      console.error('[AgentforceService] Failed to register hidden prechat fields:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear all pre-registered hidden prechat field values.
+   *
+   * @remarks Service Agent only.
+   */
+  async clearHiddenPreChatFields(): Promise<void> {
+    await this.registerHiddenPreChatFields({});
+  }
+
+  /**
+   * Get the currently registered hidden prechat field values.
+   *
+   * @returns The stored field map, or an empty object if none registered.
+   */
+  async getHiddenPreChatFields(): Promise<HiddenPreChatFields> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return {};
+    }
+
+    if (!AgentforceModule?.getHiddenPreChatFields) {
+      return {};
+    }
+
+    try {
+      const fields = await AgentforceModule.getHiddenPreChatFields();
+      return (fields as HiddenPreChatFields) ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /**
    * Reset all settings and clear the SDK state.
    *
    * @returns Promise<boolean> indicating success
@@ -643,21 +915,27 @@ class AgentforceService {
   }
 
   /**
-   * Clean up event listeners and resources.
+   * Clean up resources.
    *
    * Call this when the service is no longer needed (e.g., app shutdown).
    */
   destroy(): void {
-    this.tokenRefreshSubscription?.remove();
-    this.tokenRefreshSubscription = null;
+    this.loggerSubscription?.remove();
+    this.loggerSubscription = null;
+    this.loggerDelegate = null;
 
-    this.authFailureSubscription?.remove();
-    this.authFailureSubscription = null;
+    this.navigationSubscription?.remove();
+    this.navigationSubscription = null;
+    this.navigationDelegate = null;
 
-    this.tokenDelegate = null;
+    // Clear native view provider registration before nulling the JS reference
+    if (this.viewProviderDelegate) {
+      this.clearViewProviderDelegate().catch(() => {});
+    }
+    this.viewProviderDelegate = null;
+
     this.eventEmitter = null;
     this.initialized = false;
-
     console.log('[AgentforceService] Service destroyed');
   }
 }
