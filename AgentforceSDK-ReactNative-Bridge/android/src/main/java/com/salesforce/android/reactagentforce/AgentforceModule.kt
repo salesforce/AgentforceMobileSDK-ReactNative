@@ -21,6 +21,8 @@ import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfigur
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
+import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceProviderFactory
+import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceUIProvider
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotContextVariable
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotAdditionalContext
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
@@ -179,6 +181,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                 agentforceConfigBuilder.setPermission(permissions)
+                agentforceConfigBuilder.setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
@@ -278,6 +281,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setNavigation(bridgeNavigation)
                     .setDataProvider(dataProvider)
                 agentforceConfigBuilder.setPermission(permissions)
+                agentforceConfigBuilder.setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
