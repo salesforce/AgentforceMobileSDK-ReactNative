@@ -105,14 +105,55 @@ Some version bumps require code changes beyond config files. Call these out expl
 
 - **New pod sources (iOS):** Some pods require additional sources in the Podfile (already handled — `livekit/podspecs.git` is present).
 
-### 7. Remind the user of next steps
+### 7. Offer a verification build
 
-After applying:
-1. `cd ios && pod install` (iOS)
-2. Gradle sync (Android)
-3. Build and test both Service Agent and Employee Agent targets
-4. Review `git diff` before committing
-5. Never commit bootconfig files
+After applying the version changes, ask the user if they'd like to run a local build on both platforms to catch compilation errors early.
+
+If the user accepts, run the setup scripts first (these handle pod install, xcodegen, gradle sync, etc.) and then the builds. Run iOS and Android in parallel where possible.
+
+#### Setup + Build Commands
+
+The install scripts must run before the build commands — they handle platform-specific dependency resolution (pod install, xcodegen, gradle setup).
+
+**iOS (Service Agent):**
+```bash
+node installios.js service
+npm run build:ios:service
+```
+
+**iOS (Employee Agent):**
+```bash
+node installios.js employee
+npm run build:ios:employee
+```
+
+**Android (Service Agent):**
+```bash
+node installandroid.js service
+npm run build:android:service
+```
+
+**Android (Employee Agent):**
+```bash
+node installandroid.js employee
+npm run build:android:employee
+```
+
+At minimum, build one variant per platform (Service Agent is lighter since it skips Mobile SDK). If the user wants thorough validation, build all four.
+
+#### Handling build failures
+
+If builds fail:
+- Read the error output and identify whether the failure is related to the version bump (e.g., missing import, renamed API, incompatible dependency).
+- If the fix is straightforward (missing import, updated class name from release notes), offer to apply it.
+- If the failure is unrelated to the bump (pre-existing issue, environment problem), let the user know so they can decide how to proceed.
+- If the fix requires code-level changes (like the voice module `.setAgentforceVoiceModule(...)` call), apply them and re-run the build.
+
+### 8. Remind the user of final steps
+
+After a successful build (or if the user skips the build step):
+1. Review `git diff` before committing
+2. Never commit bootconfig files
 
 ## Important Constraints
 
