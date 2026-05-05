@@ -152,11 +152,18 @@ If builds fail:
 - If the failure is unrelated to the bump (pre-existing issue, environment problem), let the user know so they can decide how to proceed.
 - If the fix requires code-level changes (like the voice module `.setAgentforceVoiceModule(...)` call), apply them and re-run the build.
 
-### 8. Remind the user of final steps
+### 8. Commit and push
 
-After a successful build (or if the user skips the build step):
-1. Review `git diff` before committing
-2. Never commit bootconfig files
+After all four variants build successfully, offer to commit and push the changes:
+
+1. Run `git diff` and show the user a summary of what changed.
+2. Verify no bootconfig files are staged (`ios/EmployeeAgent/bootconfig.plist`, `android/app/src/employeeAgent/res/values/bootconfig.xml`). If they are, unstage them with `git restore --staged`.
+3. Stage the relevant files (version config files + any code-level integration changes that were applied).
+4. Commit with a message like: `Bump Agentforce SDK: iOS <old> → <new>, Android <old> → <new>`
+5. Push to the current branch.
+6. If a PR doesn't exist yet for the branch, offer to create one.
+
+Only proceed with each step after user confirmation. Never force-push.
 
 ## Important Constraints
 
