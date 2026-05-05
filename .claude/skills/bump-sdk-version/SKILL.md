@@ -142,7 +142,7 @@ node installandroid.js employee
 npm run build:android:employee
 ```
 
-At minimum, build one variant per platform (Service Agent is lighter since it skips Mobile SDK). If the user wants thorough validation, build all four.
+Build all four variants (Service + Employee on both platforms) to ensure the bump doesn't break either integration path.
 
 #### Handling build failures
 
