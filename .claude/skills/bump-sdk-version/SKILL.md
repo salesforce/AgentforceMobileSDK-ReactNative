@@ -73,10 +73,13 @@ Show a clear comparison:
 ```
 Platform        | Dependency             | Current  | Latest   | Status
 iOS             | AgentforceSDK          | 15.2.6   | 15.7.6   | Update available
+iOS             | AgentforceService      | (transitive) | 5.3.3 | Informational
 iOS             | AgentforceVoice        | —        | 1.2.0    | New module (needs import)
 Android         | agentforce-sdk         | 14.177.0 | 15.0.2   | Update available
 Android         | agentforce-sdk-voice   | —        | 15.0.2   | New module (needs import)
 ```
+
+Always include `AgentforceService` in the comparison output even though it's a transitive dependency. This helps track which version of the service layer comes in with each bump.
 
 Summarize release notes highlights and flag anything that requires code changes beyond version strings.
 
