@@ -22,11 +22,11 @@ Or simply ask Claude to check for or apply SDK version updates — the skill tri
 
 ## External sources checked
 
-| Platform | Source | What's checked |
-|----------|--------|----------------|
-| iOS | [SalesforceMobileSDK-iOS-Specs](https://github.com/forcedotcom/SalesforceMobileSDK-iOS-Specs) | Pod versions (AgentforceSDK, AgentforceService, AgentforceVoice) |
-| iOS | [AgentforceMobileSDK-iOS](https://github.com/salesforce/AgentforceMobileSDK-iOS) | Release notes |
-| Android | [AgentforceMobileSDK-Android](https://github.com/salesforce/AgentforceMobileSDK-Android) | Maven artifact versions + release notes |
+| Platform | Source                                                                                        | What's checked                                                   |
+| -------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| iOS      | [SalesforceMobileSDK-iOS-Specs](https://github.com/forcedotcom/SalesforceMobileSDK-iOS-Specs) | Pod versions (AgentforceSDK, AgentforceService, AgentforceVoice) |
+| iOS      | [AgentforceMobileSDK-iOS](https://github.com/salesforce/AgentforceMobileSDK-iOS)              | Release notes                                                    |
+| Android  | [AgentforceMobileSDK-Android](https://github.com/salesforce/AgentforceMobileSDK-Android)      | Maven artifact versions + release notes                          |
 
 ## Local files modified
 

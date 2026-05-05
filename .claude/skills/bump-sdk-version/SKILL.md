@@ -38,10 +38,12 @@ Release notes: https://github.com/salesforce/AgentforceMobileSDK-Android/release
 ## Local Files That Hold Version Declarations
 
 ### iOS
+
 - **`ios/Podfile.common.rb`** — Pod version pins (e.g., `pod 'AgentforceSDK', '15.2.6'`)
 - **`AgentforceSDK-ReactNative-Bridge/ios/ReactNativeAgentforce.podspec`** — Pod dependencies in the `Core` subspec
 
 ### Android
+
 - **`AgentforceSDK-ReactNative-Bridge/android/build.gradle`** — Maven dependency versions (e.g., `api "com.salesforce.android.agentforcesdk:agentforce-sdk:14.177.0"`)
 
 ## Workflow
@@ -49,6 +51,7 @@ Release notes: https://github.com/salesforce/AgentforceMobileSDK-Android/release
 ### 1. Read current local versions
 
 Read the files above and extract:
+
 - iOS: `AgentforceSDK` version from `Podfile.common.rb`, whether `AgentforceVoice` pod exists
 - Android: `agentforce-sdk` version from bridge `build.gradle`, whether `agentforce-sdk-voice` exists
 
@@ -62,6 +65,7 @@ Use web fetch or the GitHub API to determine the latest available versions:
 ### 3. Fetch and summarize release notes
 
 Get the latest release from both SDK repos. Focus on:
+
 - Breaking changes or migration steps
 - New modules that need explicit import
 - API surface changes (renamed classes, new required configuration calls)
@@ -70,6 +74,7 @@ Get the latest release from both SDK repos. Focus on:
 ### 4. Present findings to the user
 
 Show a clear comparison:
+
 ```
 Platform        | Dependency             | Current  | Latest   | Status
 iOS             | AgentforceSDK          | 15.2.6   | 15.7.6   | Update available
@@ -86,13 +91,16 @@ Summarize release notes highlights and flag anything that requires code changes 
 ### 5. Apply updates (only after user confirms)
 
 **iOS — `Podfile.common.rb`:**
+
 - Update the `AgentforceSDK` version string
 - Add `AgentforceVoice` pod if it's a new module (insert after the `AgentforceSDK` line)
 
 **iOS — `ReactNativeAgentforce.podspec`:**
+
 - Add `core.dependency "AgentforceVoice"` in the Core subspec if the voice module is new
 
 **Android — bridge `build.gradle`:**
+
 - Update the `agentforce-sdk` version
 - Add `agentforce-sdk-voice` dependency if it's a new module (insert after the `agentforce-sdk` line)
 
@@ -101,9 +109,11 @@ Summarize release notes highlights and flag anything that requires code changes 
 Some version bumps require code changes beyond config files. Call these out explicitly so the user can handle them. Examples:
 
 - **Voice module (Android):** When adding `agentforce-sdk-voice`, the builder in `AgentforceModule.kt` needs:
+
   ```kotlin
   .setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
   ```
+
   This goes in the `AgentforceConfiguration.builder(...)` chain.
 
 - **New pod sources (iOS):** Some pods require additional sources in the Podfile (already handled — `livekit/podspecs.git` is present).
@@ -119,24 +129,28 @@ If the user accepts, run the setup scripts first (these handle pod install, xcod
 The install scripts must run before the build commands — they handle platform-specific dependency resolution (pod install, xcodegen, gradle setup).
 
 **iOS (Service Agent):**
+
 ```bash
 node installios.js service
 npm run build:ios:service
 ```
 
 **iOS (Employee Agent):**
+
 ```bash
 node installios.js employee
 npm run build:ios:employee
 ```
 
 **Android (Service Agent):**
+
 ```bash
 node installandroid.js service
 npm run build:android:service
 ```
 
 **Android (Employee Agent):**
+
 ```bash
 node installandroid.js employee
 npm run build:android:employee
@@ -147,14 +161,34 @@ Build all four variants (Service + Employee on both platforms) to ensure the bum
 #### Handling build failures
 
 If builds fail:
+
 - Read the error output and identify whether the failure is related to the version bump (e.g., missing import, renamed API, incompatible dependency).
 - If the fix is straightforward (missing import, updated class name from release notes), offer to apply it.
 - If the failure is unrelated to the bump (pre-existing issue, environment problem), let the user know so they can decide how to proceed.
 - If the fix requires code-level changes (like the voice module `.setAgentforceVoiceModule(...)` call), apply them and re-run the build.
 
-### 8. Commit and push
+### 8. Run lint and format checks
 
-After all four variants build successfully, offer to commit and push the changes:
+Before committing, run the formatting and type checks to ensure the changes pass CI:
+
+```bash
+npm run lint
+npm run format
+npm run typecheck
+```
+
+If lint or format checks fail, fix them automatically:
+
+```bash
+npm run lint:fix
+npm run format:fix
+```
+
+Then re-run the checks to confirm they pass. If `typecheck` fails, the issue likely requires a manual code fix — surface the error to the user.
+
+### 9. Commit and push
+
+After all four variants build successfully and lint/format/typecheck pass, offer to commit and push the changes:
 
 1. Run `git diff` and show the user a summary of what changed.
 2. Verify no bootconfig files are staged (`ios/EmployeeAgent/bootconfig.plist`, `android/app/src/employeeAgent/res/values/bootconfig.xml`). If they are, unstage them with `git restore --staged`.
