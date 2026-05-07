@@ -142,11 +142,10 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("serviceApiURL must be a valid URL (e.g. https://your-site.salesforce.com)")
         }
 
-        // Only cleanup if switching from Employee mode
-        if case .employee = currentMode {
-            print("[AgentforceModule] ⚠️ Switching from Employee to Service mode - cleaning up")
-            cleanupClient()
-        }
+        // Always close existing conversation and recreate client on reconfigure.
+        // This allows "Save Configuration" to act as a conversation reset.
+        await closeCurrentConversation()
+        cleanupClient()
 
         // Configure unified credential provider for Service Agent mode
         credentialProvider.configure(serviceAgent: config)
