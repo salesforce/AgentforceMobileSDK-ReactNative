@@ -151,20 +151,20 @@ class AgentforceModule: RCTEventEmitter {
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
 
-        // Also update the legacy ServiceAgentManager for backward compatibility
-        await MainActor.run {
-            ServiceAgentManager.shared.configure(
-                orgUrl: config.organizationId,
-                devName: config.esDeveloperName,
-                siteUrl: config.serviceApiURL
-            )
-        }
+        // Persist service agent config to UserDefaults for cross-session recall
+        UserDefaults.standard.set(config.serviceApiURL, forKey: "ServiceAgentSiteUrl")
+        UserDefaults.standard.set(config.organizationId, forKey: "ServiceAgentOrgUrl")
+        UserDefaults.standard.set(config.esDeveloperName, forKey: "ServiceAgentDevName")
 
         // Use .serviceAgent() mode with overrides for logger and navigation.
         let serviceConfig = ServiceAgentConfiguration(
             esDeveloperName: config.esDeveloperName,
             organizationId: config.organizationId,
             serviceApiURL: config.serviceApiURL,
+            serviceUISettings: ServiceUISettings(
+                showQueueStatus: true,
+                secureForms: true
+            ),
             forceConfigEndPoint: config.serviceApiURL
         )
         .withLogger(bridgeLogger)
@@ -360,51 +360,15 @@ class AgentforceModule: RCTEventEmitter {
     ) {
         Task { @MainActor in
             do {
-                // Try new unified path first
-                if let client = agentforceClient, let mode = currentMode {
-                    let conversation = try getOrCreateConversation(client: client, mode: mode)
-
-                    // Create voice delegate to handle voice button taps
-                    let delegate = AgentforceVoiceDelegate(
-                        agentforceClient: client,
-                        presentingViewController: nil // Will find topmost VC automatically
-                    )
-                    self.voiceDelegate = delegate
-
-                    let chatView = try client.createAgentforceChatView(
-                        conversation: conversation,
-                        delegate: delegate,
-                        showTopBar: true,
-                        onContainerClose: { [weak self] in
-                            Task { @MainActor in
-                                self?.dismissConversation()
-                            }
-                        }
-                    )
-
-                    presentConversationView(chatView)
-                    resolve(["success": true])
-                    return
+                guard let client = agentforceClient, let mode = currentMode else {
+                    throw AgentConfigError.missingRequiredField("SDK not configured. Call configure() first.")
                 }
 
-                // Fall back to legacy ServiceAgentManager path
-                if !ServiceAgentManager.shared.isInitialized {
-                    guard ServiceAgentManager.shared.isConfigured else {
-                        throw ServiceAgentError.notConfigured
-                    }
-                    try ServiceAgentManager.shared.initializeSDK()
-                }
+                let conversation = try getOrCreateConversation(client: client, mode: mode)
 
-                guard let client = ServiceAgentManager.shared.getClient() else {
-                    throw ServiceAgentError.sdkNotInitialized
-                }
-
-                let conversation = ServiceAgentManager.shared.startConversation()
-
-                // Create voice delegate to handle voice button taps
                 let delegate = AgentforceVoiceDelegate(
                     agentforceClient: client,
-                    presentingViewController: nil // Will find topmost VC automatically
+                    presentingViewController: nil
                 )
                 self.voiceDelegate = delegate
 
@@ -423,8 +387,6 @@ class AgentforceModule: RCTEventEmitter {
                 resolve(["success": true])
             } catch {
                 print("[AgentforceModule] ❌ Launch failed: \(error)")
-                print("[AgentforceModule] ❌ Error details: \((error as NSError).domain) code: \((error as NSError).code)")
-                print("[AgentforceModule] ❌ Full error: \(error)")
                 let desc = (error as NSError).localizedDescription
                 let hint = desc.contains("sessionId")
                     ? " Session start failed (400 = config; 500 = server/org). See docs/TROUBLESHOOTING.md."
@@ -442,54 +404,17 @@ class AgentforceModule: RCTEventEmitter {
     ) {
         Task { @MainActor in
             do {
-                // Close existing conversation
                 await closeCurrentConversation()
 
-                // Try new unified path first
-                if let client = agentforceClient, let mode = currentMode {
-                    let conversation = try getOrCreateConversation(client: client, mode: mode, forceNew: true)
-
-                    // Create voice delegate to handle voice button taps
-                    let delegate = AgentforceVoiceDelegate(
-                        agentforceClient: client,
-                        presentingViewController: nil // Will find topmost VC automatically
-                    )
-                    self.voiceDelegate = delegate
-
-                    let chatView = try client.createAgentforceChatView(
-                        conversation: conversation,
-                        delegate: delegate,
-                        showTopBar: true,
-                        onContainerClose: { [weak self] in
-                            Task { @MainActor in
-                                self?.dismissConversation()
-                            }
-                        }
-                    )
-
-                    presentConversationView(chatView)
-                    resolve(["success": true])
-                    return
+                guard let client = agentforceClient, let mode = currentMode else {
+                    throw AgentConfigError.missingRequiredField("SDK not configured. Call configure() first.")
                 }
 
-                // Fall back to legacy path
-                if !ServiceAgentManager.shared.isInitialized {
-                    guard ServiceAgentManager.shared.isConfigured else {
-                        throw ServiceAgentError.notConfigured
-                    }
-                    try ServiceAgentManager.shared.initializeSDK()
-                }
+                let conversation = try getOrCreateConversation(client: client, mode: mode, forceNew: true)
 
-                guard let client = ServiceAgentManager.shared.getClient() else {
-                    throw ServiceAgentError.sdkNotInitialized
-                }
-
-                let conversation = await ServiceAgentManager.shared.startNewConversation()
-
-                // Create voice delegate to handle voice button taps
                 let delegate = AgentforceVoiceDelegate(
                     agentforceClient: client,
-                    presentingViewController: nil // Will find topmost VC automatically
+                    presentingViewController: nil
                 )
                 self.voiceDelegate = delegate
 
@@ -577,14 +502,7 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
-            // Check new unified path first
-            if credentialProvider.isConfigured {
-                resolve(true)
-                return
-            }
-            // Fall back to legacy
-            let configured = ServiceAgentManager.shared.isConfigured
-            resolve(configured)
+            resolve(credentialProvider.isConfigured)
         }
     }
 
@@ -713,29 +631,27 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
 
-    /// Get current configuration values (legacy format for backward compatibility)
+    /// Get current service agent configuration values
     @objc
     func getConfiguration(
         _ resolve: @escaping RCTPromiseResolveBlock,
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
-            // Return service agent config format for backward compatibility
             if case .service(let config) = currentMode {
-                let configDict: [String: String] = [
+                resolve([
                     "serviceApiURL": config.serviceApiURL,
                     "organizationId": config.organizationId,
                     "esDeveloperName": config.esDeveloperName
-                ]
-                resolve(configDict)
+                ])
                 return
             }
 
-            // Fall back to legacy ServiceAgentManager
+            // Read persisted values from UserDefaults (survives app restart)
             let config: [String: String] = [
-                "serviceApiURL": ServiceAgentManager.shared.siteUrl,
-                "organizationId": ServiceAgentManager.shared.orgUrl,
-                "esDeveloperName": ServiceAgentManager.shared.devName
+                "serviceApiURL": UserDefaults.standard.string(forKey: "ServiceAgentSiteUrl") ?? "",
+                "organizationId": UserDefaults.standard.string(forKey: "ServiceAgentOrgUrl") ?? "",
+                "esDeveloperName": UserDefaults.standard.string(forKey: "ServiceAgentDevName") ?? ""
             ]
             resolve(config)
         }
@@ -754,12 +670,6 @@ class AgentforceModule: RCTEventEmitter {
                     "mode": credentialProvider.isServiceAgent ? "service" : "employee",
                     "description": credentialProvider.currentConfiguration
                 ])
-            } else if ServiceAgentManager.shared.isConfigured {
-                resolve([
-                    "configured": true,
-                    "mode": "service",
-                    "description": "Service Agent (legacy) - Org: \(ServiceAgentManager.shared.orgUrl)"
-                ])
             } else {
                 resolve([
                     "configured": false,
@@ -776,12 +686,7 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
-            if agentforceClient != nil {
-                resolve(true)
-                return
-            }
-            let initialized = ServiceAgentManager.shared.isInitialized
-            resolve(initialized)
+            resolve(agentforceClient != nil)
         }
     }
 
@@ -880,7 +785,6 @@ class AgentforceModule: RCTEventEmitter {
     ) {
         Task { @MainActor in
             await closeCurrentConversation()
-            await ServiceAgentManager.shared.closeConversation()
             dismissConversation()
             resolve(["success": true])
         }
@@ -1038,7 +942,9 @@ class AgentforceModule: RCTEventEmitter {
             currentMode = nil
             credentialProvider.reset()
             bridgeViewProvider.reset()
-            ServiceAgentManager.shared.resetToDefaults()
+            UserDefaults.standard.removeObject(forKey: "ServiceAgentSiteUrl")
+            UserDefaults.standard.removeObject(forKey: "ServiceAgentOrgUrl")
+            UserDefaults.standard.removeObject(forKey: "ServiceAgentDevName")
             UserDefaults.standard.removeObject(forKey: "EmployeeAgentId")
             resolve(["success": true])
         }
