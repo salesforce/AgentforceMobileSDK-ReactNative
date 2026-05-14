@@ -27,6 +27,13 @@ import type {
 } from '../types/AgentforceContext';
 import { ViewProviderDelegate } from '../types/ViewProviderDelegate';
 import type { HiddenPreChatFields } from '../types/HiddenPreChatFields';
+import type {
+  UIDelegate,
+  AgentResponseEvent,
+  UtteranceSentEvent,
+  AgentSwitchEvent,
+  ModifyUtteranceRequest,
+} from '../types/UIDelegate';
 
 const { AgentforceModule } = NativeModules;
 
@@ -37,6 +44,13 @@ export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
 export type { ViewProviderDelegate };
 export type { HiddenPreChatFields };
+export type {
+  UIDelegate,
+  AgentResponseEvent,
+  UtteranceSentEvent,
+  AgentSwitchEvent,
+  ModifyUtteranceRequest,
+};
 
 /**
  * Native module event names
@@ -44,6 +58,10 @@ export type { HiddenPreChatFields };
 const EVENTS = {
   LOG_MESSAGE: 'onLogMessage',
   NAVIGATION_REQUEST: 'onNavigationRequest',
+  AGENT_RESPONSE: 'onAgentResponse',
+  UTTERANCE_SENT: 'onUtteranceSent',
+  AGENT_SWITCH: 'onAgentSwitch',
+  MODIFY_UTTERANCE_REQUEST: 'onModifyUtteranceRequest',
 } as const;
 
 /**
@@ -119,6 +137,16 @@ class AgentforceService {
    * Subscription for navigation request events
    */
   private navigationSubscription: EmitterSubscription | null = null;
+
+  /**
+   * UI delegate for receiving agent response events
+   */
+  private uiDelegate: UIDelegate | null = null;
+
+  /**
+   * Subscriptions for UI delegate events (response, utterance sent, agent switch, modify utterance)
+   */
+  private uiDelegateSubscriptions: EmitterSubscription[] = [];
 
   /**
    * View provider delegate configuration (registered component types + React component name)
@@ -257,6 +285,87 @@ class AgentforceService {
       (event: NavigationRequest) => {
         this.navigationDelegate?.onNavigate(event);
       },
+    );
+  }
+
+  /**
+   * Register a UI delegate to receive agent response events from the native Agentforce SDK.
+   *
+   * Can be called before or after launching a conversation. Events are emitted only for
+   * complete (non-streaming) agent responses.
+   *
+   * @param delegate - UI delegate implementation
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setUIDelegate({
+   *   onAgentResponse(event) {
+   *     console.log(`Agent response: ${event.message}`);
+   *     console.log(`Conversation: ${event.conversationId}`);
+   *   },
+   * });
+   * ```
+   */
+  setUIDelegate(delegate: UIDelegate): void {
+    this.uiDelegate = delegate;
+    this.setupUIDelegateListeners();
+    AgentforceModule?.enableUIDelegateForwarding(true);
+    console.log('[AgentforceService] UI delegate registered');
+  }
+
+  /**
+   * Clear the registered UI delegate and stop receiving agent response events.
+   */
+  clearUIDelegate(): void {
+    this.uiDelegate = null;
+    this.uiDelegateSubscriptions.forEach(s => s.remove());
+    this.uiDelegateSubscriptions = [];
+    AgentforceModule?.enableUIDelegateForwarding(false);
+    console.log('[AgentforceService] UI delegate cleared');
+  }
+
+  /**
+   * Set up listeners for all UI delegate events from native layer
+   */
+  private setupUIDelegateListeners(): void {
+    this.uiDelegateSubscriptions.forEach(s => s.remove());
+    this.uiDelegateSubscriptions = [];
+    if (!this.eventEmitter) {
+      return;
+    }
+
+    this.uiDelegateSubscriptions.push(
+      this.eventEmitter.addListener(EVENTS.AGENT_RESPONSE, (event: AgentResponseEvent) => {
+        this.uiDelegate?.onAgentResponse(event);
+      }),
+    );
+
+    this.uiDelegateSubscriptions.push(
+      this.eventEmitter.addListener(EVENTS.UTTERANCE_SENT, (event: UtteranceSentEvent) => {
+        this.uiDelegate?.onUtteranceSent?.(event);
+      }),
+    );
+
+    this.uiDelegateSubscriptions.push(
+      this.eventEmitter.addListener(EVENTS.AGENT_SWITCH, (event: AgentSwitchEvent) => {
+        this.uiDelegate?.onAgentSwitch?.(event);
+      }),
+    );
+
+    this.uiDelegateSubscriptions.push(
+      this.eventEmitter.addListener(
+        EVENTS.MODIFY_UTTERANCE_REQUEST,
+        async (request: ModifyUtteranceRequest) => {
+          try {
+            const modified = this.uiDelegate?.modifyUtterance
+              ? await Promise.resolve(this.uiDelegate.modifyUtterance(request))
+              : request.utterance;
+            AgentforceModule?.provideModifiedUtterance(request.requestId, modified);
+          } catch {
+            AgentforceModule?.provideModifiedUtterance(request.requestId, request.utterance);
+          }
+        },
+      ),
     );
   }
 
@@ -927,6 +1036,10 @@ class AgentforceService {
     this.navigationSubscription?.remove();
     this.navigationSubscription = null;
     this.navigationDelegate = null;
+
+    this.uiDelegateSubscriptions.forEach(s => s.remove());
+    this.uiDelegateSubscriptions = [];
+    this.uiDelegate = null;
 
     // Clear native view provider registration before nulling the JS reference
     if (this.viewProviderDelegate) {

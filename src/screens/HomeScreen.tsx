@@ -44,6 +44,11 @@ import {
   LogLevel,
   NavigationDelegate,
   NavigationRequest,
+  UIDelegate,
+  AgentResponseEvent,
+  UtteranceSentEvent,
+  AgentSwitchEvent,
+  ModifyUtteranceRequest,
 } from 'react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
 import { getContextVariables } from '../store/ContextVariablesStore';
@@ -79,6 +84,27 @@ const agentforceNavigation: NavigationDelegate = {
   },
 };
 
+const agentforceUIDelegate: UIDelegate = {
+  onAgentResponse(event: AgentResponseEvent) {
+    console.log(`[Agentforce Response] ${event.type}: ${event.message}`);
+    console.log(
+      `[Agentforce Response] conversationId=${event.conversationId}, responseId=${event.responseId}`,
+    );
+  },
+  onUtteranceSent(event: UtteranceSentEvent) {
+    console.log(
+      `[Agentforce UtteranceSent] "${event.utterance}" hasAttachment=${event.hasAttachment}`,
+    );
+  },
+  onAgentSwitch(event: AgentSwitchEvent) {
+    console.log(`[Agentforce AgentSwitch] new conversationId=${event.conversationId}`);
+  },
+  modifyUtterance(request: ModifyUtteranceRequest) {
+    console.log(`[Agentforce ModifyUtterance] original="${request.utterance}"`);
+    return request.utterance;
+  },
+};
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [isServiceAgentConfigured, setIsServiceAgentConfigured] = useState(false);
   const [isEmployeeAgentConfigured, setIsEmployeeAgentConfigured] = useState(false);
@@ -90,6 +116,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     AgentforceService.setLoggerDelegate(agentforceLogger);
     // Register navigation delegate so SDK navigation requests are forwarded to JS
     AgentforceService.setNavigationDelegate(agentforceNavigation);
+    // Register UI delegate so agent responses are forwarded to JS
+    AgentforceService.setUIDelegate(agentforceUIDelegate);
     // Register custom view provider if enabled, then check configurations.
     // Sequential to avoid a race where configure() runs before registration completes.
     const init = async () => {
@@ -101,6 +129,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     return () => {
       AgentforceService.clearLoggerDelegate();
       AgentforceService.clearNavigationDelegate();
+      AgentforceService.clearUIDelegate();
       AgentforceService.clearViewProviderDelegate();
     };
   }, []);
