@@ -151,10 +151,13 @@ class AgentforceModule: RCTEventEmitter {
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
 
-        // Persist service agent config to UserDefaults for cross-session recall
-        UserDefaults.standard.set(config.serviceApiURL, forKey: "ServiceAgentSiteUrl")
-        UserDefaults.standard.set(config.organizationId, forKey: "ServiceAgentOrgUrl")
-        UserDefaults.standard.set(config.esDeveloperName, forKey: "ServiceAgentDevName")
+        // Persist trimmed values to UserDefaults for cross-session recall
+        let trimmedSiteUrl = config.serviceApiURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedOrgId = config.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDevName = config.esDeveloperName.trimmingCharacters(in: .whitespacesAndNewlines)
+        UserDefaults.standard.set(trimmedSiteUrl, forKey: "ServiceAgentSiteUrl")
+        UserDefaults.standard.set(trimmedOrgId, forKey: "ServiceAgentOrgUrl")
+        UserDefaults.standard.set(trimmedDevName, forKey: "ServiceAgentDevName")
 
         // Use .serviceAgent() mode with overrides for logger and navigation.
         let serviceConfig = ServiceAgentConfiguration(
@@ -361,7 +364,7 @@ class AgentforceModule: RCTEventEmitter {
         Task { @MainActor in
             do {
                 guard let client = agentforceClient, let mode = currentMode else {
-                    throw AgentConfigError.missingRequiredField("SDK not configured. Call configure() first.")
+                    throw AgentConfigError.notConfigured
                 }
 
                 let conversation = try getOrCreateConversation(client: client, mode: mode)
@@ -407,7 +410,7 @@ class AgentforceModule: RCTEventEmitter {
                 await closeCurrentConversation()
 
                 guard let client = agentforceClient, let mode = currentMode else {
-                    throw AgentConfigError.missingRequiredField("SDK not configured. Call configure() first.")
+                    throw AgentConfigError.notConfigured
                 }
 
                 let conversation = try getOrCreateConversation(client: client, mode: mode, forceNew: true)
