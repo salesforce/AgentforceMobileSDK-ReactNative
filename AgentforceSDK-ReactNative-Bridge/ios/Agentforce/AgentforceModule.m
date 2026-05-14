@@ -109,6 +109,17 @@ RCT_EXTERN_METHOD(enableNavigationForwarding:(BOOL)enabled
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Agent Response
+
+RCT_EXTERN_METHOD(enableUIDelegateForwarding:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(provideModifiedUtterance:(NSString *)requestId
+                  modifiedUtterance:(NSString *)modifiedUtterance
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 // MARK: - View Provider
 
 RCT_EXTERN_METHOD(registerViewProvider:(NSDictionary *)config

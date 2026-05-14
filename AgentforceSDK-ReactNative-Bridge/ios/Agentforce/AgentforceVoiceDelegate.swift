@@ -6,18 +6,28 @@
 import Foundation
 import UIKit
 import SwiftUI
-import AgentforceSDK
-import AgentforceService
+@preconcurrency import AgentforceSDK
+@preconcurrency import AgentforceService
 
 /// Delegate that handles voice interactions for the Agentforce SDK
 public class AgentforceVoiceDelegate: AgentforceUIDelegate {
 
     weak var agentforceClient: AgentforceClient?
     weak var presentingViewController: UIViewController?
+    weak var module: AgentforceModule?
 
-    public init(agentforceClient: AgentforceClient?, presentingViewController: UIViewController?) {
+    private let forwardingLock = NSLock()
+    private var _forwardingEnabled: Bool = false
+
+    var forwardingEnabled: Bool {
+        get { forwardingLock.withLock { _forwardingEnabled } }
+        set { forwardingLock.withLock { _forwardingEnabled = newValue } }
+    }
+
+    init(agentforceClient: AgentforceClient?, presentingViewController: UIViewController?, module: AgentforceModule? = nil) {
         self.agentforceClient = agentforceClient
         self.presentingViewController = presentingViewController
+        self.module = module
     }
 
     /// Called when the user taps the voice button in the chat UI
@@ -79,17 +89,54 @@ public class AgentforceVoiceDelegate: AgentforceUIDelegate {
         return topController
     }
 
-    // MARK: - Optional AgentforceUIDelegate methods (default implementations)
+    // MARK: - AgentforceUIDelegate forwarding methods
 
     public func modifyUtteranceBeforeSending(_ utterance: AgentforceUtterance) async -> AgentforceUtterance {
+        guard forwardingEnabled, let module = module else { return utterance }
+
+        let requestId = UUID().uuidString
+
+        // awaitModifiedUtterance registers the continuation then emits the request internally
+        let result = await module.awaitModifiedUtterance(
+            requestId: requestId,
+            utteranceText: utterance.utterance,
+            timeout: 5.0
+        )
+        if let modifiedText = result {
+            return AgentforceUtterance(utterance: modifiedText, attachment: utterance.attachment)
+        }
         return utterance
     }
 
     public func didSendUtterance(_ utterance: AgentforceUtterance) {
-        // No-op
+        guard forwardingEnabled else { return }
+
+        module?.emitUtteranceSentEvent([
+            "utterance": utterance.utterance,
+            "hasAttachment": utterance.attachment != nil,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
     }
 
     public func userDidSwitchAgents(newConversation: AgentConversation) {
-        // No-op
+        guard forwardingEnabled else { return }
+
+        module?.emitAgentSwitchEvent([
+            "conversationId": newConversation.conversationId.uuidString,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+    }
+
+    public func didReceiveResponse(_ message: AgentforceMessage, from conversation: AgentConversation) {
+        guard forwardingEnabled else { return }
+
+        let payload: [String: Any] = [
+            "message": message.message ?? NSNull(),
+            "type": "agent",
+            "conversationId": conversation.conversationId.uuidString,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ]
+
+        module?.emitAgentResponseEvent(payload)
     }
 }

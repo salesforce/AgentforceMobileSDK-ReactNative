@@ -82,6 +82,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Bridge hidden prechat fields (Service Agent only)
     private val bridgeHiddenPreChat = BridgeHiddenPreChat()
 
+    // Bridge UI delegate for forwarding agent response events to JS
+    private val bridgeUIDelegate = BridgeUIDelegate(reactContext)
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -178,6 +181,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
+                    .setDelegate(bridgeUIDelegate)
                 agentforceConfigBuilder.setPermission(permissions)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
@@ -277,6 +281,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                     .setDataProvider(dataProvider)
+                    .setDelegate(bridgeUIDelegate)
                 agentforceConfigBuilder.setPermission(permissions)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
@@ -605,6 +610,23 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun enableNavigationForwarding(enabled: Boolean, promise: Promise) {
         bridgeNavigation.forwardingEnabled = enabled
         Log.d(TAG, "Navigation forwarding ${if (enabled) "enabled" else "disabled"}")
+        promise.resolve(true)
+    }
+
+    // endregion
+
+    // region Agent Response Forwarding
+
+    @ReactMethod
+    fun enableUIDelegateForwarding(enabled: Boolean, promise: Promise) {
+        bridgeUIDelegate.forwardingEnabled = enabled
+        Log.d(TAG, "UI delegate forwarding ${if (enabled) "enabled" else "disabled"}")
+        promise.resolve(true)
+    }
+
+    @ReactMethod
+    fun provideModifiedUtterance(requestId: String, modifiedUtterance: String, promise: Promise) {
+        bridgeUIDelegate.completeModification(requestId, modifiedUtterance)
         promise.resolve(true)
     }
 

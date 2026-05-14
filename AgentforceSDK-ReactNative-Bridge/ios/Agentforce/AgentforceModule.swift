@@ -81,8 +81,23 @@ class AgentforceModule: RCTEventEmitter {
         return true
     }
 
+    /// Stored UI delegate forwarding flag applied to each new voice delegate instance
+    private var _uiDelegateForwardingEnabled = false
+
+    /// Pending modify-utterance continuations keyed by requestId.
+    /// Value is called with the modified text, or nil on timeout.
+    private let modifyContinuationLock = NSLock()
+    private var modifyContinuations: [String: (String?) -> Void] = [:]
+
     override func supportedEvents() -> [String]! {
-        return ["onLogMessage", "onNavigationRequest"]
+        return [
+            "onLogMessage",
+            "onNavigationRequest",
+            "onAgentResponse",
+            "onUtteranceSent",
+            "onAgentSwitch",
+            "onModifyUtteranceRequest"
+        ]
     }
 
     override func startObserving() {
@@ -368,8 +383,10 @@ class AgentforceModule: RCTEventEmitter {
                     // Create voice delegate to handle voice button taps
                     let delegate = AgentforceVoiceDelegate(
                         agentforceClient: client,
-                        presentingViewController: nil // Will find topmost VC automatically
+                        presentingViewController: nil,
+                        module: self
                     )
+                    delegate.forwardingEnabled = _uiDelegateForwardingEnabled
                     self.voiceDelegate = delegate
 
                     let chatView = try client.createAgentforceChatView(
@@ -453,8 +470,10 @@ class AgentforceModule: RCTEventEmitter {
                     // Create voice delegate to handle voice button taps
                     let delegate = AgentforceVoiceDelegate(
                         agentforceClient: client,
-                        presentingViewController: nil // Will find topmost VC automatically
+                        presentingViewController: nil,
+                        module: self
                     )
+                    delegate.forwardingEnabled = _uiDelegateForwardingEnabled
                     self.voiceDelegate = delegate
 
                     let chatView = try client.createAgentforceChatView(
@@ -832,6 +851,79 @@ class AgentforceModule: RCTEventEmitter {
     func emitNavigationEvent(_ payload: [String: Any]) {
         guard listenerLock.withLock({ _hasListeners }) else { return }
         sendEvent(withName: "onNavigationRequest", body: payload)
+    }
+
+    // MARK: - Agent Response
+
+    @objc
+    func enableUIDelegateForwarding(
+        _ enabled: Bool,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        _uiDelegateForwardingEnabled = enabled
+        voiceDelegate?.forwardingEnabled = enabled
+        resolve(true)
+    }
+
+    func emitAgentResponseEvent(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onAgentResponse", body: payload)
+    }
+
+    func emitUtteranceSentEvent(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onUtteranceSent", body: payload)
+    }
+
+    func emitAgentSwitchEvent(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onAgentSwitch", body: payload)
+    }
+
+    func emitModifyUtteranceRequest(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onModifyUtteranceRequest", body: payload)
+    }
+
+    func awaitModifiedUtterance(requestId: String, utteranceText: String, timeout: TimeInterval) async -> String? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            // 1. Register continuation before emitting so early responses aren't lost
+            modifyContinuationLock.withLock {
+                modifyContinuations[requestId] = { text in
+                    continuation.resume(returning: text)
+                }
+            }
+
+            // 2. Emit request to JS
+            emitModifyUtteranceRequest([
+                "requestId": requestId,
+                "utterance": utteranceText
+            ])
+
+            // 3. Timeout: complete with nil if JS hasn't responded
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [weak self] in
+                guard let self else { return }
+                let pending: ((String?) -> Void)? = self.modifyContinuationLock.withLock {
+                    self.modifyContinuations.removeValue(forKey: requestId)
+                }
+                pending?(nil)
+            }
+        }
+    }
+
+    @objc
+    func provideModifiedUtterance(
+        _ requestId: String,
+        modifiedUtterance: String,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        let completion: ((String?) -> Void)? = modifyContinuationLock.withLock {
+            modifyContinuations.removeValue(forKey: requestId)
+        }
+        completion?(modifiedUtterance)
+        resolve(true)
     }
 
     // MARK: - View Provider
