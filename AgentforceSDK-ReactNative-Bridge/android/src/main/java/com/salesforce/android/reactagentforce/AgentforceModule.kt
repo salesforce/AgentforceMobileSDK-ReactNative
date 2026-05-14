@@ -626,8 +626,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun provideModifiedUtterance(requestId: String, modifiedUtterance: String, promise: Promise) {
-        bridgeUIDelegate.completeModification(requestId, modifiedUtterance)
-        promise.resolve(true)
+        val applied = bridgeUIDelegate.completeModification(requestId, modifiedUtterance)
+        promise.resolve(applied)
     }
 
     // endregion

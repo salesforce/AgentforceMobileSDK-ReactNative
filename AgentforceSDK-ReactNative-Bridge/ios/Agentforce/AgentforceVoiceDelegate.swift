@@ -131,8 +131,9 @@ public class AgentforceVoiceDelegate: AgentforceUIDelegate {
         guard forwardingEnabled else { return }
 
         let payload: [String: Any] = [
+            "responseId": message.id,
             "message": message.message ?? NSNull(),
-            "type": "agent",
+            "type": message.type,
             "conversationId": conversation.conversationId.uuidString,
             "timestamp": ISO8601DateFormatter().string(from: Date())
         ]

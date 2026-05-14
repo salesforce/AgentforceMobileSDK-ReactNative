@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-present, salesforce.com, inc.
+ * Copyright (c) 2026-present, salesforce.com, inc.
  * All rights reserved.
  */
 package com.salesforce.android.reactagentforce
@@ -67,8 +67,10 @@ class BridgeUIDelegate(private val reactContext: ReactContext) : AgentforceUIDel
         }
     }
 
-    fun completeModification(requestId: String, modifiedUtterance: String) {
-        pendingModifications[requestId]?.complete(modifiedUtterance)
+    fun completeModification(requestId: String, modifiedUtterance: String): Boolean {
+        val deferred = pendingModifications[requestId] ?: return false
+        deferred.complete(modifiedUtterance)
+        return true
     }
 
     override fun didSendUtterance(agentforceUtterance: AgentforceUtterance) {

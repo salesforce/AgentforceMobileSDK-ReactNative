@@ -901,9 +901,11 @@ class AgentforceModule: RCTEventEmitter {
                 "utterance": utteranceText
             ])
 
-            // 3. Timeout: complete with nil if JS hasn't responded
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [weak self] in
-                guard let self else { return }
+            // 3. Timeout: complete with nil if JS hasn't responded.
+            // No [weak self] — the continuation MUST be resumed exactly once.
+            // If self were deallocated before the timeout, skipping resume
+            // would leave the CheckedContinuation un-resumed (undefined behavior).
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
                 let pending: ((String?) -> Void)? = self.modifyContinuationLock.withLock {
                     self.modifyContinuations.removeValue(forKey: requestId)
                 }
@@ -922,8 +924,12 @@ class AgentforceModule: RCTEventEmitter {
         let completion: ((String?) -> Void)? = modifyContinuationLock.withLock {
             modifyContinuations.removeValue(forKey: requestId)
         }
-        completion?(modifiedUtterance)
-        resolve(true)
+        if let completion {
+            completion(modifiedUtterance)
+            resolve(true)
+        } else {
+            resolve(false)
+        }
     }
 
     // MARK: - View Provider
