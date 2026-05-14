@@ -46,6 +46,13 @@ def common_pre_install(installer)
         Pod::BuildType.static_library
       end
     end
+
+    # AgentforceVoice.xcframework links against @rpath/LiveKit.framework/LiveKit,
+    # but CocoaPods builds LiveKitClient as LiveKitClient.framework by default.
+    # Override module_name so it produces LiveKit.framework instead.
+    if pod.name == 'LiveKitClient'
+      pod.root_spec.attributes_hash['module_name'] = 'LiveKit'
+    end
   end
 end
 
