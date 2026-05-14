@@ -87,10 +87,14 @@ const agentforceNavigation: NavigationDelegate = {
 const agentforceUIDelegate: UIDelegate = {
   onAgentResponse(event: AgentResponseEvent) {
     console.log(`[Agentforce Response] ${event.type}: ${event.message}`);
-    console.log(`[Agentforce Response] conversationId=${event.conversationId}, responseId=${event.responseId}`);
+    console.log(
+      `[Agentforce Response] conversationId=${event.conversationId}, responseId=${event.responseId}`,
+    );
   },
   onUtteranceSent(event: UtteranceSentEvent) {
-    console.log(`[Agentforce UtteranceSent] "${event.utterance}" hasAttachment=${event.hasAttachment}`);
+    console.log(
+      `[Agentforce UtteranceSent] "${event.utterance}" hasAttachment=${event.hasAttachment}`,
+    );
   },
   onAgentSwitch(event: AgentSwitchEvent) {
     console.log(`[Agentforce AgentSwitch] new conversationId=${event.conversationId}`);

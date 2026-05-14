@@ -44,7 +44,13 @@ export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
 export type { ViewProviderDelegate };
 export type { HiddenPreChatFields };
-export type { UIDelegate, AgentResponseEvent, UtteranceSentEvent, AgentSwitchEvent, ModifyUtteranceRequest };
+export type {
+  UIDelegate,
+  AgentResponseEvent,
+  UtteranceSentEvent,
+  AgentSwitchEvent,
+  ModifyUtteranceRequest,
+};
 
 /**
  * Native module event names
@@ -312,7 +318,7 @@ class AgentforceService {
    */
   clearUIDelegate(): void {
     this.uiDelegate = null;
-    this.uiDelegateSubscriptions.forEach((s) => s.remove());
+    this.uiDelegateSubscriptions.forEach(s => s.remove());
     this.uiDelegateSubscriptions = [];
     AgentforceModule?.enableUIDelegateForwarding(false);
     console.log('[AgentforceService] UI delegate cleared');
@@ -322,37 +328,28 @@ class AgentforceService {
    * Set up listeners for all UI delegate events from native layer
    */
   private setupUIDelegateListeners(): void {
-    this.uiDelegateSubscriptions.forEach((s) => s.remove());
+    this.uiDelegateSubscriptions.forEach(s => s.remove());
     this.uiDelegateSubscriptions = [];
     if (!this.eventEmitter) {
       return;
     }
 
     this.uiDelegateSubscriptions.push(
-      this.eventEmitter.addListener(
-        EVENTS.AGENT_RESPONSE,
-        (event: AgentResponseEvent) => {
-          this.uiDelegate?.onAgentResponse(event);
-        },
-      ),
+      this.eventEmitter.addListener(EVENTS.AGENT_RESPONSE, (event: AgentResponseEvent) => {
+        this.uiDelegate?.onAgentResponse(event);
+      }),
     );
 
     this.uiDelegateSubscriptions.push(
-      this.eventEmitter.addListener(
-        EVENTS.UTTERANCE_SENT,
-        (event: UtteranceSentEvent) => {
-          this.uiDelegate?.onUtteranceSent?.(event);
-        },
-      ),
+      this.eventEmitter.addListener(EVENTS.UTTERANCE_SENT, (event: UtteranceSentEvent) => {
+        this.uiDelegate?.onUtteranceSent?.(event);
+      }),
     );
 
     this.uiDelegateSubscriptions.push(
-      this.eventEmitter.addListener(
-        EVENTS.AGENT_SWITCH,
-        (event: AgentSwitchEvent) => {
-          this.uiDelegate?.onAgentSwitch?.(event);
-        },
-      ),
+      this.eventEmitter.addListener(EVENTS.AGENT_SWITCH, (event: AgentSwitchEvent) => {
+        this.uiDelegate?.onAgentSwitch?.(event);
+      }),
     );
 
     this.uiDelegateSubscriptions.push(
@@ -1040,7 +1037,7 @@ class AgentforceService {
     this.navigationSubscription = null;
     this.navigationDelegate = null;
 
-    this.uiDelegateSubscriptions.forEach((s) => s.remove());
+    this.uiDelegateSubscriptions.forEach(s => s.remove());
     this.uiDelegateSubscriptions = [];
     this.uiDelegate = null;
 
