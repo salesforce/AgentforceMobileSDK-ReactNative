@@ -130,10 +130,13 @@ public class AgentforceVoiceDelegate: AgentforceUIDelegate {
     public func didReceiveResponse(_ message: AgentforceMessage, from conversation: AgentConversation) {
         guard forwardingEnabled else { return }
 
+        // AgentforceSDK.AgentforceMessage does not yet expose `id` or `type`.
+        // Generate a local responseId and derive type from isUserMessage until
+        // the SDK surfaces those properties.
         let payload: [String: Any] = [
-            "responseId": message.id,
+            "responseId": UUID().uuidString,
             "message": message.message ?? NSNull(),
-            "type": message.type,
+            "type": message.isUserMessage ? "user" : "agent",
             "conversationId": conversation.conversationId.uuidString,
             "timestamp": ISO8601DateFormatter().string(from: Date())
         ]
