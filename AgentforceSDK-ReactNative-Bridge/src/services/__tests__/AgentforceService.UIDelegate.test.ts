@@ -31,7 +31,9 @@ jest.mock('react-native', () => {
     },
     NativeEventEmitter: jest.fn().mockImplementation(() => ({
       addListener: jest.fn((eventName: string, listener: Listener) => {
-        if (!listeners[eventName]) listeners[eventName] = [];
+        if (!listeners[eventName]) {
+          listeners[eventName] = [];
+        }
         const entry: ListenerEntry = { remove: jest.fn() };
         listeners[eventName].push({ listener, entry });
         return entry;
@@ -42,7 +44,11 @@ jest.mock('react-native', () => {
 
 import { NativeModules } from 'react-native';
 import AgentforceService from '../AgentforceService';
-import type { UIDelegate, AgentResponseEvent, ModifyUtteranceRequest } from '../../types/UIDelegate';
+import type {
+  UIDelegate,
+  AgentResponseEvent,
+  ModifyUtteranceRequest,
+} from '../../types/UIDelegate';
 
 const nativeModule = NativeModules.AgentforceModule;
 
@@ -57,7 +63,9 @@ function getSubscriptionEntries(): ListenerEntry[] {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  for (const key of Object.keys(listeners)) delete listeners[key];
+  for (const key of Object.keys(listeners)) {
+    delete listeners[key];
+  }
   AgentforceService.clearUIDelegate();
 });
 
@@ -116,9 +124,7 @@ describe('UIDelegate forwarding', () => {
   });
 
   it('calls provideModifiedUtterance with the delegate return value', async () => {
-    const modifyUtterance = jest.fn(
-      (req: ModifyUtteranceRequest) => `modified: ${req.utterance}`,
-    );
+    const modifyUtterance = jest.fn((req: ModifyUtteranceRequest) => `modified: ${req.utterance}`);
     AgentforceService.setUIDelegate({ onAgentResponse: jest.fn(), modifyUtterance });
 
     const request: ModifyUtteranceRequest = { requestId: 'req-1', utterance: 'original' };
