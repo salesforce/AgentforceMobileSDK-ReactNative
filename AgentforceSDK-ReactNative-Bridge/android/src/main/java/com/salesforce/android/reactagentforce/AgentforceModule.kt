@@ -13,8 +13,13 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
-import com.facebook.react.bridge.*
-import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.ReadableType
 import com.salesforce.android.agentforcesdkimpl.AgentforceClient
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
@@ -32,7 +37,11 @@ import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvide
 import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
 import com.salesforce.android.agentforcesdkimpl.network.AgentforceNetworkImpl
 import com.salesforce.androidsdk.app.SalesforceSDKManager
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * React Native bridge module for Agentforce SDK.
@@ -809,13 +818,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     }
 
                     conversation.setAdditionalContext(additionalContext)
-                    Log.d(TAG, "✓ Additional context set: ${contextVariables.size} variables")
+                    Log.d(TAG, "Additional context set: ${contextVariables.size} variables")
 
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
                 } catch (e: Exception) {
-                    Log.e(TAG, "❌ Failed to set additional context", e)
+                    Log.e(TAG, "Failed to set additional context", e)
                     promise.reject("CONTEXT_ERROR", e.message, e)
                 }
             }
