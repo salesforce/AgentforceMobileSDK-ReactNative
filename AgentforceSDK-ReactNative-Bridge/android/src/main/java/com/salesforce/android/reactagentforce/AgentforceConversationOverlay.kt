@@ -16,12 +16,20 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.salesforce.android.reactagentforce.models.AgentMode
 
 /**
  * Manages the Agentforce conversation UI as an overlay on the current Activity.
@@ -125,6 +133,7 @@ object AgentforceConversationOverlay {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConversationOverlayContent(onClose: () -> Unit) {
     val visible by AgentforceConversationOverlay.isVisible
@@ -145,16 +154,59 @@ private fun ConversationOverlayContent(onClose: () -> Unit) {
         val client = AgentforceClientHolder.agentforceClient
         val conversation = AgentforceClientHolder.currentConversation
 
+        val title = when (AgentforceClientHolder.currentMode) {
+            is AgentMode.Employee -> AgentforceClientHolder.agentLabel ?: "Employee Agent"
+            is AgentMode.Service -> "Service Agent"
+            null -> "Agentforce"
+        }
+
         if (conversation != null && client != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding()
-            ) {
-                client.AgentforceConversationContainer(
-                    conversation = conversation,
-                    onClose = onClose
-                )
+            MaterialTheme {
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    title,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = onClose) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back",
+                                        tint = Color.White
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color(0xFF0176D3),
+                                titleContentColor = Color.White,
+                                navigationIconContentColor = Color.White
+                            ),
+                            windowInsets = WindowInsets(top = 50.dp, bottom = 0.dp),
+                            modifier = Modifier.heightIn(max = 95.dp)
+                        )
+                    },
+                    contentWindowInsets = WindowInsets(0.dp)
+                ) { paddingValues ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                            .navigationBarsPadding()
+                            .imePadding()
+                    ) {
+                        client.AgentforceConversationContainer(
+                            conversation = conversation,
+                            onClose = onClose
+                        )
+                    }
+                }
             }
         }
     }
