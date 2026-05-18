@@ -9,13 +9,17 @@ package com.salesforce.android.reactagentforce
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
-import com.facebook.react.bridge.*
-import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.ReadableType
 import com.salesforce.android.agentforcesdkimpl.AgentforceClient
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
@@ -33,7 +37,11 @@ import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvide
 import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
 import com.salesforce.android.agentforcesdkimpl.network.AgentforceNetworkImpl
 import com.salesforce.androidsdk.app.SalesforceSDKManager
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * React Native bridge module for Agentforce SDK.
@@ -137,10 +145,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Configure unified credential provider
         credentialProvider.configure(serviceConfig)
         currentMode = LocalAgentMode.Service(serviceConfig)
-        
-        // Clear existing client
-        AgentforceClientHolder.clear()
-        
+
         // Also update the legacy ViewModel for backward compatibility
         ensureViewModel()
         viewModel?.updateConfiguration(
@@ -148,8 +153,12 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             organizationId = serviceConfig.organizationId,
             esDeveloperName = serviceConfig.esDeveloperName
         )
-        
-        scope.launch {
+
+        scope.launch(Dispatchers.Main) {
+            // Destroy overlay and clear client on main thread to avoid
+            // "Method recordObserver must be called on the main thread" error
+            AgentforceConversationOverlay.destroy()
+            AgentforceClientHolder.clear()
             try {
                 // Create SDK Service Agent configuration
                 val sdkServiceConfig = ServiceAgentConfiguration
@@ -239,15 +248,17 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Persist employee agentId (editable in Settings tab)
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
 
-        // Only clear if switching from Service mode or agentId changed
-        if (AgentforceClientHolder.isServiceAgent || agentIdChanged) {
-            Log.d(TAG, "AgentId changed or switching modes - clearing client and conversation")
-            AgentforceClientHolder.clear()
-        } else {
-            Log.d(TAG, "AgentId unchanged - preserving conversation")
-        }
-        
-        scope.launch {
+        val shouldClear = AgentforceClientHolder.isServiceAgent || agentIdChanged
+
+        scope.launch(Dispatchers.Main) {
+            // Destroy overlay and clear on main thread to avoid Compose observer errors
+            if (shouldClear) {
+                Log.d(TAG, "AgentId changed or switching modes - clearing client and conversation")
+                AgentforceConversationOverlay.destroy()
+                AgentforceClientHolder.clear()
+            } else {
+                Log.d(TAG, "AgentId unchanged - preserving conversation")
+            }
             try {
                 // Create AgentforceConfiguration for FullConfig mode
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
@@ -363,12 +374,11 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
         // Initialize SDK if needed (legacy path)
         if (!AgentforceClientHolder.isConfigured && isConfiguredLegacy) {
-            scope.launch {
+            scope.launch(Dispatchers.Main) {
                 try {
                     viewModel?.initializeAgentforce()
 
-                    val intent = Intent(activity, AgentforceConversationActivity::class.java)
-                    activity.startActivity(intent)
+                    AgentforceConversationOverlay.show(activity)
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
@@ -380,21 +390,20 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             return
         }
 
-        // Create conversation and launch activity on main thread to avoid
+        // Create conversation and show overlay on main thread to avoid
         // "Method addObserver must be called on the main thread" error
         scope.launch(Dispatchers.Main) {
             try {
-                // Create conversation before launching Activity so setAdditionalContext
+                // Create conversation before showing UI so setAdditionalContext
                 // can find it immediately after the promise resolves (matches iOS behavior).
                 if (AgentforceClientHolder.currentConversation == null) {
                     if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
                 }
 
-                // Launch conversation UI
-                val intent = Intent(activity, AgentforceConversationActivity::class.java)
-                activity.startActivity(intent)
+                // Show conversation as overlay on current Activity (preserves ViewModel across show/hide)
+                AgentforceConversationOverlay.show(activity)
 
-                Log.d(TAG, "Conversation activity launched")
+                Log.d(TAG, "Conversation overlay shown")
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                 })
@@ -427,15 +436,18 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // "Method addObserver must be called on the main thread" error
         scope.launch(Dispatchers.Main) {
             try {
+                // Destroy overlay so a fresh ViewModel is created for the new conversation
+                AgentforceConversationOverlay.destroy()
+
                 AgentforceClientHolder.clearConversation()
                 viewModel?.closeConversation()
 
-                // Create new conversation before launching Activity so setAdditionalContext
+                // Create new conversation before showing UI so setAdditionalContext
                 // can find it immediately after the promise resolves (matches iOS behavior).
                 if (!createConversation(promise, "START_NEW_ERROR")) return@launch
 
-                val intent = Intent(activity, AgentforceConversationActivity::class.java)
-                activity.startActivity(intent)
+                // Show conversation as overlay on current Activity
+                AgentforceConversationOverlay.show(activity)
 
                 Log.d(TAG, "New conversation started")
                 promise.resolve(Arguments.createMap().apply {
@@ -661,25 +673,31 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun closeConversation(promise: Promise) {
-        AgentforceClientHolder.clearConversation()
-        viewModel?.closeConversation()
-        promise.resolve(Arguments.createMap().apply {
-            putBoolean("success", true)
-        })
+        scope.launch(Dispatchers.Main) {
+            AgentforceConversationOverlay.destroy()
+            AgentforceClientHolder.clearConversation()
+            viewModel?.closeConversation()
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", true)
+            })
+        }
     }
 
     @ReactMethod
     fun resetSettings(promise: Promise) {
-        AgentforceClientHolder.clear()
-        viewModel?.resetConfiguration()
-        currentMode = null
-        credentialProvider.reset()
-        bridgeViewProvider.reset()
-        bridgeHiddenPreChat.setFields(emptyMap())
-        employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
-        promise.resolve(Arguments.createMap().apply {
-            putBoolean("success", true)
-        })
+        scope.launch(Dispatchers.Main) {
+            AgentforceConversationOverlay.destroy()
+            AgentforceClientHolder.clear()
+            viewModel?.resetConfiguration()
+            currentMode = null
+            credentialProvider.reset()
+            bridgeViewProvider.reset()
+            bridgeHiddenPreChat.setFields(emptyMap())
+            employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", true)
+            })
+        }
     }
 
     // endregion
@@ -800,13 +818,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     }
 
                     conversation.setAdditionalContext(additionalContext)
-                    Log.d(TAG, "✓ Additional context set: ${contextVariables.size} variables")
+                    Log.d(TAG, "Additional context set: ${contextVariables.size} variables")
 
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
                 } catch (e: Exception) {
-                    Log.e(TAG, "❌ Failed to set additional context", e)
+                    Log.e(TAG, "Failed to set additional context", e)
                     promise.reject("CONTEXT_ERROR", e.message, e)
                 }
             }

@@ -8,12 +8,5 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Components merged into host app's application -->
-    <application>
-        <activity
-            android:name="com.salesforce.android.reactagentforce.AgentforceConversationActivity"
-            android:theme="@style/Theme.Material3.DayNight"
-            android:windowSoftInputMode="adjustResize"
-            android:exported="false" />
-    </application>
+    <application />
 </manifest>
