@@ -34,7 +34,7 @@ Pod::Spec.new do |s|
     ]
     core.dependency "React-Core"
     core.dependency "AgentforceSDK"
-    core.dependency "AgentforceVoice"
+    core.dependency "AgentforceVoice", "1.1.3"
   end
 
   # Optional: add for Employee Agent auth (OAuth via Salesforce Mobile SDK).

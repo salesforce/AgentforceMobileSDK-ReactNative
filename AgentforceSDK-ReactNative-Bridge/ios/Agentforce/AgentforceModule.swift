@@ -37,8 +37,6 @@ class AgentforceModule: RCTEventEmitter {
     /// Current mode configuration
     private var currentMode: AgentMode?
 
-    /// Voice delegate for handling voice interactions
-    private var voiceDelegate: AgentforceVoiceDelegate?
 
     private let listenerLock = NSLock()
     private var _hasListeners = false
@@ -369,15 +367,9 @@ class AgentforceModule: RCTEventEmitter {
 
                 let conversation = try getOrCreateConversation(client: client, mode: mode)
 
-                let delegate = AgentforceVoiceDelegate(
-                    agentforceClient: client,
-                    presentingViewController: nil
-                )
-                self.voiceDelegate = delegate
-
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: delegate,
+                    delegate: nil,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
@@ -415,15 +407,9 @@ class AgentforceModule: RCTEventEmitter {
 
                 let conversation = try getOrCreateConversation(client: client, mode: mode, forceNew: true)
 
-                let delegate = AgentforceVoiceDelegate(
-                    agentforceClient: client,
-                    presentingViewController: nil
-                )
-                self.voiceDelegate = delegate
-
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: delegate,
+                    delegate: nil,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
