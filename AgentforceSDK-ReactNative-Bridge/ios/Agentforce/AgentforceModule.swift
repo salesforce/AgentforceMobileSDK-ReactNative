@@ -73,6 +73,17 @@ class AgentforceModule: RCTEventEmitter {
         return BridgeViewProvider(bridge: self.bridge)
     }()
 
+    // MARK: - UI Delegate
+
+    /// Bridge UI delegate for forwarding SDK UI events to JavaScript.
+    private lazy var bridgeUIDelegate: BridgeUIDelegate = {
+        return BridgeUIDelegate(module: self)
+    }()
+
+    /// Pending modify-utterance continuations keyed by requestId.
+    private var modifyContinuations: [String: CheckedContinuation<String?, Never>] = [:]
+    private let modifyContinuationsLock = NSLock()
+
     // MARK: - Module Setup
 
     override static func requiresMainQueueSetup() -> Bool {
@@ -80,7 +91,13 @@ class AgentforceModule: RCTEventEmitter {
     }
 
     override func supportedEvents() -> [String]! {
-        return ["onLogMessage", "onNavigationRequest"]
+        return [
+            "onLogMessage",
+            "onNavigationRequest",
+            "onUtteranceSent",
+            "onAgentSwitch",
+            "onModifyUtteranceRequest",
+        ]
     }
 
     override func startObserving() {
@@ -369,7 +386,7 @@ class AgentforceModule: RCTEventEmitter {
 
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: nil,
+                    delegate: bridgeUIDelegate,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
@@ -409,7 +426,7 @@ class AgentforceModule: RCTEventEmitter {
 
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: nil,
+                    delegate: bridgeUIDelegate,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
@@ -725,6 +742,72 @@ class AgentforceModule: RCTEventEmitter {
     func emitNavigationEvent(_ payload: [String: Any]) {
         guard listenerLock.withLock({ _hasListeners }) else { return }
         sendEvent(withName: "onNavigationRequest", body: payload)
+    }
+
+    // MARK: - UI Delegate Forwarding
+
+    @objc
+    func enableUIDelegateForwarding(
+        _ enabled: Bool,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        bridgeUIDelegate.forwardingEnabled = enabled
+        resolve(true)
+    }
+
+    @objc
+    func provideModifiedUtterance(
+        _ requestId: String,
+        utterance: String,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        modifyContinuationsLock.lock()
+        let continuation = modifyContinuations.removeValue(forKey: requestId)
+        modifyContinuationsLock.unlock()
+
+        if let continuation = continuation {
+            continuation.resume(returning: utterance)
+            resolve(true)
+        } else {
+            resolve(false)
+        }
+    }
+
+    /// Called by BridgeUIDelegate to emit a modify-utterance request to JS
+    /// and await the response (or timeout).
+    func awaitModifiedUtterance(requestId: String, utteranceText: String, timeout: TimeInterval) async -> String? {
+        guard listenerLock.withLock({ _hasListeners }) else { return nil }
+
+        sendEvent(withName: "onModifyUtteranceRequest", body: [
+            "requestId": requestId,
+            "utterance": utteranceText,
+        ])
+
+        return await withCheckedContinuation { continuation in
+            modifyContinuationsLock.lock()
+            modifyContinuations[requestId] = continuation
+            modifyContinuationsLock.unlock()
+
+            Task {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                self.modifyContinuationsLock.lock()
+                let pending = self.modifyContinuations.removeValue(forKey: requestId)
+                self.modifyContinuationsLock.unlock()
+                pending?.resume(returning: nil)
+            }
+        }
+    }
+
+    func emitUtteranceSentEvent(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onUtteranceSent", body: payload)
+    }
+
+    func emitAgentSwitchEvent(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onAgentSwitch", body: payload)
     }
 
     // MARK: - View Provider
