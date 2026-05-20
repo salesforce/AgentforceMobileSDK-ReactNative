@@ -9,6 +9,7 @@ Look for these in the working directory:
 3. `app.json` with `"expo"` key + no `ios/` or `android/` → **Expo managed workflow**. Refuse and tell the user to `expo prebuild` first or migrate to a bare workflow. The bridge cannot autolink into a managed Expo app.
 
 Common false positives:
+
 - A monorepo where `package.json` is at the root but the RN app is in `apps/mobile/`. Walk into the RN app dir before continuing.
 
 ## Refusing to run inside the SDK repo
@@ -33,6 +34,7 @@ node node_modules/react-native-agentforce/installandroid.js service
 ```
 
 These scripts:
+
 - Install Boost via Homebrew (or surface a clear error if it's missing).
 - Patch `boost.podspec` (iOS) or set `REACT_NATIVE_BOOST_PATH` (Android) so React Native uses the local Homebrew install instead of downloading ~100MB during builds.
 - Run `xcodegen generate` (iOS) to (re)build `*.xcodeproj` from `project.yml`.

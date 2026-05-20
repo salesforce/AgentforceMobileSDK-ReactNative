@@ -20,7 +20,5 @@
     "integration",
     "scaffold"
   ],
-  "skills": [
-    "./skills/integrate-agentforce-react-native"
-  ]
+  "skills": ["./skills/integrate-agentforce-react-native"]
 }

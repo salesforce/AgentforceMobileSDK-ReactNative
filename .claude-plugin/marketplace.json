@@ -32,13 +32,7 @@
         "agent",
         "integration"
       ],
-      "tags": [
-        "salesforce",
-        "agentforce",
-        "react-native",
-        "typescript",
-        "scaffold"
-      ],
+      "tags": ["salesforce", "agentforce", "react-native", "typescript", "scaffold"],
       "source": "./"
     }
   ]

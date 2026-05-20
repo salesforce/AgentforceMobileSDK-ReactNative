@@ -18,9 +18,9 @@ interface EmployeeAgentConfig {
   instanceUrl: string;
   organizationId: string;
   userId: string;
-  agentId?: string;        // omit for multi-agent
+  agentId?: string; // omit for multi-agent
   agentLabel?: string;
-  accessToken?: string;    // optional; native SDK can refresh from Mobile SDK
+  accessToken?: string; // optional; native SDK can refresh from Mobile SDK
   featureFlags?: FeatureFlags;
 }
 ```
@@ -60,6 +60,7 @@ Is the agent customer-facing (anyone can chat without signing in)?
 ## Service Agent — what's actually happening under the hood
 
 When you `configure({ type: 'service', ... })`:
+
 - The bridge sets up an unauthenticated session against the MIAW deployment identified by `esDeveloperName`.
 - Internally the SDKs use empty OAuth credentials (Guest mode).
 - The conversation UI doesn't show any sign-in affordance.
@@ -88,7 +89,7 @@ Typical flow:
 // On app start
 if (await isEmployeeAgentAuthSupported()) {
   if (!(await hasEmployeeAgentSession())) {
-    await loginForEmployeeAgent();   // shows native OAuth screen
+    await loginForEmployeeAgent(); // shows native OAuth screen
   }
   const creds = await getEmployeeAgentCredentials();
   await AgentforceService.configure({
@@ -96,13 +97,14 @@ if (await isEmployeeAgentAuthSupported()) {
     instanceUrl: creds!.instanceUrl,
     organizationId: creds!.organizationId,
     userId: creds!.userId,
-    agentId: '0Xxxx0000001234',       // or omit for multi-agent
-    accessToken: creds!.accessToken,  // optional but recommended
+    agentId: '0Xxxx0000001234', // or omit for multi-agent
+    accessToken: creds!.accessToken, // optional but recommended
   });
 }
 ```
 
 `isEmployeeAgentAuthSupported()` returns `false` if:
+
 - The host app didn't include the Mobile SDK (e.g. iOS pod `SalesforceReact` not in Podfile).
 - The bridge's `EmployeeAgentAuthBridge` native module isn't registered.
 
@@ -141,8 +143,8 @@ If the consumer needs `OrgJWT` or `PassThroughAuth`, they currently have to fork
 
 Before scaffolding, confirm the user has:
 
-| Branch | Prerequisites |
-|---|---|
-| Service Agent | MIAW mobile deployment configured; `serviceApiURL`, `organizationId`, `esDeveloperName` |
-| Employee + Mobile SDK | Mobile SDK in iOS Podfile and Android `app/build.gradle`; bootconfig.plist / bootconfig.xml configured; `instanceUrl`, `organizationId`, `userId`, `agentId` (optional) |
-| Employee + direct token | Existing OAuth flow that returns Salesforce access tokens; same instanceUrl/orgId/userId values; refresh strategy |
+| Branch                  | Prerequisites                                                                                                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service Agent           | MIAW mobile deployment configured; `serviceApiURL`, `organizationId`, `esDeveloperName`                                                                                 |
+| Employee + Mobile SDK   | Mobile SDK in iOS Podfile and Android `app/build.gradle`; bootconfig.plist / bootconfig.xml configured; `instanceUrl`, `organizationId`, `userId`, `agentId` (optional) |
+| Employee + direct token | Existing OAuth flow that returns Salesforce access tokens; same instanceUrl/orgId/userId values; refresh strategy                                                       |

@@ -27,9 +27,7 @@ export function ChatLaunchButton() {
         style={[styles.button, !configured && styles.buttonDisabled]}
         onPress={onPress}
         disabled={!configured}>
-        <Text style={styles.buttonText}>
-          {configured ? 'Ask the agent' : 'Configuring…'}
-        </Text>
+        <Text style={styles.buttonText}>{configured ? 'Ask the agent' : 'Configuring…'}</Text>
       </TouchableOpacity>
     </View>
   );

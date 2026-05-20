@@ -15,8 +15,8 @@ export async function configureAgentforce(): Promise<boolean> {
 
   return AgentforceService.configure({
     type: 'service',
-    serviceApiURL: '{{SERVICE_API_URL}}',     // e.g. 'https://your-domain.my.salesforce-scrt.com'
-    organizationId: '{{ORGANIZATION_ID}}',     // 15 or 18 char Org ID
-    esDeveloperName: '{{ES_DEVELOPER_NAME}}',  // Einstein Service Agent dev name
+    serviceApiURL: '{{SERVICE_API_URL}}', // e.g. 'https://your-domain.my.salesforce-scrt.com'
+    organizationId: '{{ORGANIZATION_ID}}', // 15 or 18 char Org ID
+    esDeveloperName: '{{ES_DEVELOPER_NAME}}', // Einstein Service Agent dev name
   });
 }

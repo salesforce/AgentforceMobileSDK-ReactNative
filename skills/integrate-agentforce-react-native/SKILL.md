@@ -11,7 +11,7 @@ This skill walks a consumer through wiring the **Agentforce Mobile SDK** (via th
 
 - **Run inside the consumer's React Native project, not inside the SDK repo.** If the working directory contains `AgentforceSDK-ReactNative-Bridge/` as a sibling of `package.json`, refuse and tell the user to `cd` into their consuming app.
 - **Discover before deciding.** Always run Phase 1 (use-case discovery) before recommending a config mode. Don't ask "Service Agent or Employee Agent?" — most consumers don't know what those map to.
-- **Employee Agent requires the host app to bring its own Salesforce Mobile SDK** for OAuth. The bridge does **not** bundle it. Surface this *before* scaffolding so the user can confirm they have it (or are willing to add it).
+- **Employee Agent requires the host app to bring its own Salesforce Mobile SDK** for OAuth. The bridge does **not** bundle it. Surface this _before_ scaffolding so the user can confirm they have it (or are willing to add it).
 - **Use `AskUserQuestion` for branching choices.** Don't free-text prompts — give 2–4 explicit options.
 - **Substitute placeholders, don't leave `{{TOKENS}}` in the final files.** Collect values up front; if the user can't provide a value, leave a clearly-marked `// TODO:` comment instead.
 - **Configuration must precede `launchConversation()`.** Document this in scaffolded files; it's a common cause of runtime failures.
@@ -26,7 +26,7 @@ Look in the current working directory for:
 
 If none is present, ask the user where the React Native project root is and `cd` there. If the directory contains `AgentforceSDK-ReactNative-Bridge/` at the root and the package name is `react-native-agentforce-sample` or similar, refuse — that's this SDK's own repo.
 
-**Expo managed workflow is not supported** — the bridge requires native code. If you detect `expo` in `package.json` *without* `ios/` and `android/` folders, tell the user they need to `expo prebuild` (or migrate to a bare workflow) first.
+**Expo managed workflow is not supported** — the bridge requires native code. If you detect `expo` in `package.json` _without_ `ios/` and `android/` folders, tell the user they need to `expo prebuild` (or migrate to a bare workflow) first.
 
 See `references/dep-detection.md` for the full setup checklist.
 
@@ -69,6 +69,7 @@ AskUserQuestion: "Does this app already use the Salesforce Mobile SDK for login?
 ```
 
 Mobile SDK setup docs to link when they need them:
+
 - iOS: https://developer.salesforce.com/docs/atlas.en-us.mobile_sdk.meta/mobile_sdk/ios_introduction.htm
 - Android: https://developer.salesforce.com/docs/atlas.en-us.mobile_sdk.meta/mobile_sdk/android_introduction.htm
 - Connected App / OAuth setup: https://developer.salesforce.com/docs/atlas.en-us.mobile_sdk.meta/mobile_sdk/oauth_configure_connected_app.htm
@@ -84,7 +85,7 @@ Walk them through `references/auth-flows.md`. The two extra notes to surface her
 
 ## Phase 2 — Pick where to launch the conversation
 
-The bridge launches a **native** conversation UI (the iOS/Android SDK's pre-built chat surface) — there is no React Native chat component to embed inline. So the choice is just *where in your RN app the launch trigger lives*:
+The bridge launches a **native** conversation UI (the iOS/Android SDK's pre-built chat surface) — there is no React Native chat component to embed inline. So the choice is just _where in your RN app the launch trigger lives_:
 
 ```
 AskUserQuestion: "Where should the launch trigger live?"
@@ -100,15 +101,16 @@ Each option corresponds to one snippet in `references/snippets/`. The launch tri
 
 Based on the chosen branch:
 
-| Branch | Required values |
-|---|---|
-| Service Agent | `serviceApiURL`, `organizationId`, `esDeveloperName` |
-| Employee + Mobile SDK | `instanceUrl`, `organizationId`, `userId`, `agentId` (or omit for multi-agent), Connected App Consumer Key + Callback URL |
-| Employee + direct token | All of the above plus `accessToken` (and a refresh strategy) |
+| Branch                  | Required values                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Service Agent           | `serviceApiURL`, `organizationId`, `esDeveloperName`                                                                      |
+| Employee + Mobile SDK   | `instanceUrl`, `organizationId`, `userId`, `agentId` (or omit for multi-agent), Connected App Consumer Key + Callback URL |
+| Employee + direct token | All of the above plus `accessToken` (and a refresh strategy)                                                              |
 
 Ask one question per missing value. If the user gives "I don't know" for a Service Agent value, point them back at the MIAW deployment link and stop.
 
 For Employee Agent without an existing Mobile SDK setup, also collect:
+
 - **Consumer Key** (from the Connected App)
 - **Callback URL** (from the Connected App, e.g. `myapp://oauth/callback`)
 
@@ -167,13 +169,13 @@ See `references/dep-detection.md` for the full Podfile / Gradle / Boost / XcodeG
 
 Create the directory `src/agentforce/` (or `agentforce/` at the project root if the consumer doesn't use `src/`) and write:
 
-| File | When | Source snippet |
-|---|---|---|
-| `agentforceConfig.ts` | Always | `snippets/configure-service.ts` or `configure-employee.ts` based on Phase 1 |
-| `agentforceLogger.ts` | Always | `snippets/agentforceLogger.ts` |
-| `agentforceNavigation.ts` | Always | `snippets/agentforceNavigation.ts` |
-| `employeeAuth.ts` | Employee + Mobile SDK only | `snippets/employee-auth.ts` |
-| `ChatLaunchButton.tsx` | Always | one of `snippets/ChatLaunchButton.tsx`, `HeaderLaunchButton.tsx`, `AutoLaunchOnMount.tsx` based on Phase 2 |
+| File                      | When                       | Source snippet                                                                                             |
+| ------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `agentforceConfig.ts`     | Always                     | `snippets/configure-service.ts` or `configure-employee.ts` based on Phase 1                                |
+| `agentforceLogger.ts`     | Always                     | `snippets/agentforceLogger.ts`                                                                             |
+| `agentforceNavigation.ts` | Always                     | `snippets/agentforceNavigation.ts`                                                                         |
+| `employeeAuth.ts`         | Employee + Mobile SDK only | `snippets/employee-auth.ts`                                                                                |
+| `ChatLaunchButton.tsx`    | Always                     | one of `snippets/ChatLaunchButton.tsx`, `HeaderLaunchButton.tsx`, `AutoLaunchOnMount.tsx` based on Phase 2 |
 
 The configuration helper exposes a single `configureAgentforce()` function that calls `setLoggerDelegate(...)` and `setNavigationDelegate(...)` first, then `configure(...)`. Order matters — register delegates **before** configuring so the logger captures init-time SDK output.
 
