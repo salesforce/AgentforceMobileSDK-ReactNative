@@ -1,0 +1,26 @@
+{
+  "name": "agentforce-mobile-sdk-react-native",
+  "version": "0.1.0",
+  "description": "Integrate the Agentforce Mobile SDK into a React Native app via the react-native-agentforce bridge. Walks consumers through use-case discovery, picks the right configuration mode (Service Agent for public/customer-facing, Employee Agent for signed-in workforce), wires the bridge package and native iOS/Android dependencies, and scaffolds TypeScript files for AgentforceService configuration, logger/navigation/view-provider delegates, and a launch button.",
+  "author": {
+    "name": "Salesforce",
+    "url": "https://github.com/salesforce/AgentforceMobileSDK-ReactNative"
+  },
+  "repository": "https://github.com/salesforce/AgentforceMobileSDK-ReactNative",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "salesforce",
+    "agentforce",
+    "react-native",
+    "typescript",
+    "ios",
+    "android",
+    "ai",
+    "agent",
+    "integration",
+    "scaffold"
+  ],
+  "skills": [
+    "./skills/integrate-agentforce-react-native"
+  ]
+}
