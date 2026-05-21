@@ -24,6 +24,7 @@ import com.salesforce.android.agentforcesdkimpl.AgentforceClient
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
+import com.salesforce.android.agentforcesdkimpl.configuration.ServiceUISettings
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
 import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceProviderFactory
 import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceUIProvider
@@ -160,6 +161,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             AgentforceConversationOverlay.destroy()
             AgentforceClientHolder.clear()
             try {
+                // Build ServiceUISettings from JS config (use SDK defaults for omitted keys)
+                val uiSettings = serviceConfig.serviceUISettings?.let { raw ->
+                    ServiceUISettings(
+                        downloadTranscript = raw["downloadTranscript"] ?: true,
+                        endConversation = raw["endConversation"] ?: true,
+                        enableLightingType = raw["enableLightningType"] ?: false
+                    )
+                } ?: ServiceUISettings()
+
                 // Create SDK Service Agent configuration
                 val sdkServiceConfig = ServiceAgentConfiguration
                     .builder(
@@ -167,6 +177,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                         organizationId = serviceConfig.organizationId,
                         serviceApiURL = serviceConfig.serviceApiURL
                     )
+                    .setServiceUISettings(uiSettings)
                     .build()
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()

@@ -157,15 +157,33 @@ class AgentforceModule: RCTEventEmitter {
         UserDefaults.standard.set(trimmedOrgId, forKey: "ServiceAgentOrgUrl")
         UserDefaults.standard.set(trimmedDevName, forKey: "ServiceAgentDevName")
 
+        // Build ServiceUISettings from JS config (use SDK defaults for omitted keys)
+        let uiSettings: ServiceUISettings
+        if let raw = config.serviceUISettings {
+            uiSettings = ServiceUISettings(
+                downloadTranscript: raw["downloadTranscript"] ?? true,
+                endConversation: raw["endConversation"] ?? true,
+                validationFailureChunkEnabled: raw["validationFailureChunkEnabled"] ?? true,
+                useWelcomeUtterances: raw["useWelcomeUtterances"] ?? false,
+                showQueueStatus: raw["showQueueStatus"] ?? true,
+                enableVideoUpload: raw["enableVideoUpload"] ?? false,
+                enableLightningType: raw["enableLightningType"] ?? false,
+                secureForms: raw["secureForms"] ?? true,
+                enableAudioUpload: raw["enableAudioUpload"] ?? false
+            )
+        } else {
+            uiSettings = ServiceUISettings(
+                showQueueStatus: true,
+                secureForms: true
+            )
+        }
+
         // Use .serviceAgent() mode with overrides for logger and navigation.
         let serviceConfig = ServiceAgentConfiguration(
             esDeveloperName: config.esDeveloperName,
             organizationId: config.organizationId,
             serviceApiURL: config.serviceApiURL,
-            serviceUISettings: ServiceUISettings(
-                showQueueStatus: true,
-                secureForms: true
-            ),
+            serviceUISettings: uiSettings,
             forceConfigEndPoint: config.serviceApiURL
         )
         .withLogger(bridgeLogger)
