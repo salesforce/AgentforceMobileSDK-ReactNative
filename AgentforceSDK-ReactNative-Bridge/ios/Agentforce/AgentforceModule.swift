@@ -753,7 +753,24 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         bridgeUIDelegate.forwardingEnabled = enabled
+
+        if !enabled {
+            drainPendingContinuations()
+        }
+
         resolve(true)
+    }
+
+    /// Resume all pending modify-utterance continuations with nil to prevent leaks.
+    private func drainPendingContinuations() {
+        modifyContinuationsLock.lock()
+        let pending = modifyContinuations
+        modifyContinuations.removeAll()
+        modifyContinuationsLock.unlock()
+
+        for (_, continuation) in pending {
+            continuation.resume(returning: nil)
+        }
     }
 
     @objc
@@ -780,15 +797,15 @@ class AgentforceModule: RCTEventEmitter {
     func awaitModifiedUtterance(requestId: String, utteranceText: String, timeout: TimeInterval) async -> String? {
         guard listenerLock.withLock({ _hasListeners }) else { return nil }
 
-        sendEvent(withName: "onModifyUtteranceRequest", body: [
-            "requestId": requestId,
-            "utterance": utteranceText,
-        ])
-
         return await withCheckedContinuation { continuation in
             modifyContinuationsLock.lock()
             modifyContinuations[requestId] = continuation
             modifyContinuationsLock.unlock()
+
+            sendEvent(withName: "onModifyUtteranceRequest", body: [
+                "requestId": requestId,
+                "utterance": utteranceText,
+            ])
 
             Task {
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))

@@ -69,14 +69,11 @@ class BridgeUIDelegate: AgentforceUIDelegate {
     func didSendUtterance(_ utterance: AgentforceUtterance) {
         guard forwardingEnabled else { return }
 
-        var payload: [String: Any] = [
-            "utterance": utterance.utterance
+        let payload: [String: Any] = [
+            "utterance": utterance.utterance,
+            "hasAttachment": utterance.attachment != nil,
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
         ]
-
-        if let attachment = utterance.attachment {
-            payload["hasAttachment"] = true
-            payload["attachment"] = String(describing: attachment)
-        }
 
         module?.emitUtteranceSentEvent(payload)
     }
@@ -85,7 +82,8 @@ class BridgeUIDelegate: AgentforceUIDelegate {
         guard forwardingEnabled else { return }
 
         let payload: [String: Any] = [
-            "conversationId": newConversation.conversationId.uuidString
+            "conversationId": newConversation.conversationId.uuidString,
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
         ]
 
         module?.emitAgentSwitchEvent(payload)

@@ -6,6 +6,7 @@
  */
 package com.salesforce.android.reactagentforce
 
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -15,6 +16,7 @@ import com.salesforce.android.agentforcesdkimpl.AgentforceUIDelegate
 import com.salesforce.android.agentforceservice.AgentforceUtterance
 import com.salesforce.android.agentforceservice.conversationservice.data.AgentforceMessage
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -38,11 +40,13 @@ class BridgeUIDelegate(private val reactContext: ReactContext) : AgentforceUIDel
     /** Pending modify-utterance requests awaiting JS responses. */
     private val pendingModifications = ConcurrentHashMap<String, CompletableDeferred<String>>()
 
-    /** ISO 8601 date formatter. */
-    private val iso8601Formatter: SimpleDateFormat
-        get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+    /** Timeout for awaiting a modified utterance from JavaScript (milliseconds). */
+    private val modifyUtteranceTimeoutMs: Long = 10_000
+
+    private fun isoTimestamp(): String =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
-        }
+        }.format(Date())
 
     /** Returns a conversation ID string from an AgentConversation. */
     private fun getConversationId(conversation: AgentConversation): String {
@@ -72,13 +76,17 @@ class BridgeUIDelegate(private val reactContext: ReactContext) : AgentforceUIDel
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                 .emit("onModifyUtteranceRequest", params)
 
-            val modifiedText = withTimeout(5000) { deferred.await() }
+            val modifiedText = withTimeout(modifyUtteranceTimeoutMs) { deferred.await() }
 
             return AgentforceUtterance(
                 utterance = modifiedText,
                 agentforceAttachment = agentforceUtterance.agentforceAttachment
             )
+        } catch (e: TimeoutCancellationException) {
+            Log.d(TAG, "modifyUtterance timed out for request $requestId, using original")
+            return agentforceUtterance
         } catch (e: Exception) {
+            Log.w(TAG, "modifyUtterance failed for request $requestId", e)
             return agentforceUtterance
         } finally {
             pendingModifications.remove(requestId)
@@ -101,7 +109,7 @@ class BridgeUIDelegate(private val reactContext: ReactContext) : AgentforceUIDel
         val params = Arguments.createMap().apply {
             putString("utterance", agentforceUtterance.utterance)
             putBoolean("hasAttachment", agentforceUtterance.agentforceAttachment != null)
-            putString("timestamp", iso8601Formatter.format(Date()))
+            putString("timestamp", isoTimestamp())
         }
 
         reactContext
@@ -114,7 +122,7 @@ class BridgeUIDelegate(private val reactContext: ReactContext) : AgentforceUIDel
 
         val params = Arguments.createMap().apply {
             putString("conversationId", getConversationId(newConversation))
-            putString("timestamp", iso8601Formatter.format(Date()))
+            putString("timestamp", isoTimestamp())
         }
 
         reactContext
@@ -133,11 +141,20 @@ class BridgeUIDelegate(private val reactContext: ReactContext) : AgentforceUIDel
             putString("message", agentforceMessage.message ?: agentforceMessage.text)
             putString("type", agentforceMessage.type ?: "agent")
             putString("conversationId", getConversationId(conversation))
-            putString("timestamp", iso8601Formatter.format(Date(agentforceMessage.timeStamp)))
+            putString("timestamp", formatTimestamp(agentforceMessage.timeStamp))
         }
 
         reactContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit("onAgentResponse", params)
+    }
+
+    private fun formatTimestamp(epochMillis: Long): String =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(Date(epochMillis))
+
+    companion object {
+        private const val TAG = "BridgeUIDelegate"
     }
 }

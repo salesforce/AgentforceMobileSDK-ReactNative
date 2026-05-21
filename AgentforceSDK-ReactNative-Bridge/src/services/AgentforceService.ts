@@ -410,7 +410,7 @@ class AgentforceService {
 
     this.uiDelegateSubscriptions.push(
       this.eventEmitter.addListener(EVENTS.AGENT_RESPONSE, (event: AgentResponseEvent) => {
-        this.uiDelegate?.onAgentResponse(event);
+        this.uiDelegate?.onAgentResponse?.(event);
       }),
     );
 
@@ -436,7 +436,8 @@ class AgentforceService {
           }
           try {
             const modified = await this.uiDelegate.modifyUtterance(request);
-            AgentforceModule?.provideModifiedUtterance(request.requestId, modified);
+            const result = typeof modified === 'string' ? modified : request.utterance;
+            AgentforceModule?.provideModifiedUtterance(request.requestId, result);
           } catch {
             AgentforceModule?.provideModifiedUtterance(request.requestId, request.utterance);
           }
