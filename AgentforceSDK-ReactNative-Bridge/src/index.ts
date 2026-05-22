@@ -36,6 +36,11 @@ export type {
   ViewProviderDelegate,
   ViewProviderComponentData,
   HiddenPreChatFields,
+  UIDelegate,
+  AgentResponseEvent,
+  UtteranceSentEvent,
+  AgentSwitchEvent,
+  ModifyUtteranceRequest,
 } from './types';
 export { isServiceAgentConfig, isEmployeeAgentConfig, isLegacyConfig } from './types';
 

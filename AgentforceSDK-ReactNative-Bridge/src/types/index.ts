@@ -37,3 +37,12 @@ export { ViewProviderDelegate, ViewProviderComponentData } from './ViewProviderD
 
 // Hidden prechat field types
 export type { HiddenPreChatFields } from './HiddenPreChatFields';
+
+// UI delegate types
+export type {
+  UIDelegate,
+  AgentResponseEvent,
+  UtteranceSentEvent,
+  AgentSwitchEvent,
+  ModifyUtteranceRequest,
+} from './UIDelegate';
