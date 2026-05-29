@@ -8,6 +8,7 @@ import android.app.Activity
 import android.util.Log
 import android.view.MotionEvent
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -41,6 +42,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
@@ -93,6 +95,10 @@ object AgentforceConversationOverlay {
      * require a fresh conversation. Must be called on the main thread.
      */
     fun destroy() {
+        attachedActivity?.let { activity ->
+            WindowCompat.setDecorFitsSystemWindows(activity.window, true)
+            activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED)
+        }
         overlayContainer?.let { container ->
             (container.parent as? ViewGroup)?.removeView(container)
         }
@@ -104,6 +110,10 @@ object AgentforceConversationOverlay {
 
     private fun attachToActivity(activity: ComponentActivity) {
         destroy()
+
+        WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+        @Suppress("DEPRECATION")
+        activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
         val overlayState = isVisible
         val wrapper = object : FrameLayout(activity) {
