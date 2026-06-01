@@ -310,6 +310,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
   const handleLogoutEmployeeAgent = async () => {
     try {
+      await AgentforceService.closeConversation();
+      await AgentforceService.resetSettings();
       await logoutEmployeeAgent();
       setEmployeeLoggedIn(false);
       Alert.alert('Signed Out', 'You have been signed out.');
