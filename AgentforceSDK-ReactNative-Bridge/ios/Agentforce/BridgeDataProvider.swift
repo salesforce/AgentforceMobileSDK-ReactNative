@@ -211,17 +211,19 @@ struct BridgeDataProvider: AgentforceDataProviding {
 
         // Extract fields from UI API format
         var parsedFields: [String: Any] = [:]
+        var displayFields: [AgentforceListDisplayColumn] = []
+
         if let fieldsData = json["fields"] as? [String: Any] {
             for (key, value) in fieldsData {
                 if let fieldValue = value as? [String: Any],
                    let actualValue = fieldValue["value"] {
                     parsedFields[key] = actualValue
+                    if actualValue is String, key != "Id" {
+                        displayFields.append(AgentforceListDisplayColumn(fieldApiName: key, label: key))
+                    }
                 }
             }
         }
-
-        // For now, use empty display fields - SDK may populate these internally
-        let displayFields: [AgentforceListDisplayColumn] = []
 
         return AgentforceRecordRepresentation(
             recordId: recordId,
