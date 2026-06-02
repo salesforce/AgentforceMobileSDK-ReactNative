@@ -209,18 +209,19 @@ struct BridgeDataProvider: AgentforceDataProviding {
             throw DataProviderError.invalidResponse
         }
 
-        // Extract fields from UI API format
+        // Extract fields from UI API format.
+        // Use displayValue (human-readable) when present; fall back to value.
         var parsedFields: [String: Any] = [:]
         var displayFields: [AgentforceListDisplayColumn] = []
 
         if let fieldsData = json["fields"] as? [String: Any] {
-            for (key, value) in fieldsData {
-                if let fieldValue = value as? [String: Any],
-                   let actualValue = fieldValue["value"] {
-                    parsedFields[key] = actualValue
-                    if actualValue is String, key != "Id" {
-                        displayFields.append(AgentforceListDisplayColumn(fieldApiName: key, label: key))
-                    }
+            for key in fieldsData.keys.sorted() {
+                guard let fieldValue = fieldsData[key] as? [String: Any],
+                      let actualValue = fieldValue["value"] else { continue }
+                let displayValue = fieldValue["displayValue"] as? String
+                parsedFields[key] = displayValue ?? actualValue
+                if key != "Id", displayValue != nil || !(actualValue is NSNull) {
+                    displayFields.append(AgentforceListDisplayColumn(fieldApiName: key, label: key))
                 }
             }
         }
