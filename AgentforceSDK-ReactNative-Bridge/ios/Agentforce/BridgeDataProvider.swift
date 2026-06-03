@@ -210,7 +210,7 @@ struct BridgeDataProvider: AgentforceDataProviding {
         }
 
         // Extract fields from UI API format.
-        // Use displayValue (human-readable) when present; fall back to value.
+        // fields holds raw values (IDs, API values) so SDK lookups/navigation work correctly.
         var parsedFields: [String: Any] = [:]
         var displayFields: [AgentforceListDisplayColumn] = []
 
@@ -218,9 +218,8 @@ struct BridgeDataProvider: AgentforceDataProviding {
             for key in fieldsData.keys.sorted() {
                 guard let fieldValue = fieldsData[key] as? [String: Any],
                       let actualValue = fieldValue["value"] else { continue }
-                let displayValue = fieldValue["displayValue"] as? String
-                parsedFields[key] = displayValue ?? actualValue
-                if key != "Id", displayValue != nil || !(actualValue is NSNull) {
+                parsedFields[key] = actualValue
+                if key != "Id", !(actualValue is NSNull) {
                     displayFields.append(AgentforceListDisplayColumn(fieldApiName: key, label: key))
                 }
             }
