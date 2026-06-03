@@ -18,6 +18,13 @@ import SalesforceNetwork
 import SalesforceSDKCore
 #endif
 
+/// Clipboard copier for the Agentforce SDK copy button.
+private struct BridgeCopier: AgentforceCopying {
+    func copyToClipboard(_ text: String) {
+        UIPasteboard.general.string = text
+    }
+}
+
 /// React Native bridge module for Agentforce SDK
 /// Supports both Service Agent (guest) and Employee Agent (authenticated) modes
 @objc(AgentforceModule)
@@ -295,6 +302,7 @@ class AgentforceModule: RCTEventEmitter {
 
         let fullConfiguration = AgentforceConfiguration(
             user: user,
+            agentforceCopier: BridgeCopier(),
             forceConfigEndpoint: config.instanceUrl,
             dataProvider: dataProvider,
             agentforceFeatureFlagSettings: featureFlagSettings,

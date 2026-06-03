@@ -209,19 +209,21 @@ struct BridgeDataProvider: AgentforceDataProviding {
             throw DataProviderError.invalidResponse
         }
 
-        // Extract fields from UI API format
+        // Extract fields from UI API format.
+        // fields holds raw values (IDs, API values) so SDK lookups/navigation work correctly.
         var parsedFields: [String: Any] = [:]
+        var displayFields: [AgentforceListDisplayColumn] = []
+
         if let fieldsData = json["fields"] as? [String: Any] {
-            for (key, value) in fieldsData {
-                if let fieldValue = value as? [String: Any],
-                   let actualValue = fieldValue["value"] {
-                    parsedFields[key] = actualValue
+            for key in fieldsData.keys.sorted() {
+                guard let fieldValue = fieldsData[key] as? [String: Any],
+                      let actualValue = fieldValue["value"] else { continue }
+                parsedFields[key] = actualValue
+                if key != "Id", !(actualValue is NSNull) {
+                    displayFields.append(AgentforceListDisplayColumn(fieldApiName: key, label: key))
                 }
             }
         }
-
-        // For now, use empty display fields - SDK may populate these internally
-        let displayFields: [AgentforceListDisplayColumn] = []
 
         return AgentforceRecordRepresentation(
             recordId: recordId,
