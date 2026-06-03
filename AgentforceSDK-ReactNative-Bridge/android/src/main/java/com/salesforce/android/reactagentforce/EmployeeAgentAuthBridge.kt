@@ -17,6 +17,11 @@ import com.facebook.react.bridge.WritableNativeMap
 import com.salesforce.androidsdk.app.SalesforceSDKManager
 import com.salesforce.androidsdk.rest.ClientManager
 import com.salesforce.androidsdk.rest.RestClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class EmployeeAgentAuthBridge(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -26,6 +31,8 @@ class EmployeeAgentAuthBridge(reactContext: ReactApplicationContext) :
         // Default account type for Salesforce Mobile SDK (matches res/values/strings.xml in SDK)
         private const val DEFAULT_ACCOUNT_TYPE = "com.salesforce.androidsdk"
     }
+
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun getName(): String = "EmployeeAgentAuthBridge"
 
@@ -144,12 +151,24 @@ class EmployeeAgentAuthBridge(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun logout(promise: Promise) {
-        try {
-            SalesforceSDKManager.getInstance()?.logout(currentActivity)
-            promise.resolve(null)
-        } catch (e: Exception) {
-            Log.e(TAG, "logout failed", e)
-            promise.reject("ERROR", e.message)
+        scope.launch {
+            try {
+                // Tear down Agentforce UI and client state before SDK logout to prevent
+                // ClassNotFoundException when the SDK's isDebugBuild() runs on a stale process.
+                AgentforceConversationOverlay.destroy()
+                AgentforceClientHolder.clear()
+
+                SalesforceSDKManager.getInstance()?.logout(currentActivity)
+                promise.resolve(null)
+            } catch (e: Exception) {
+                Log.e(TAG, "logout failed", e)
+                promise.reject("ERROR", e.message)
+            }
         }
+    }
+
+    override fun invalidate() {
+        super.invalidate()
+        scope.cancel()
     }
 }
