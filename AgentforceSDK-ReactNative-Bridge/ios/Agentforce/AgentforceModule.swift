@@ -18,6 +18,13 @@ import SalesforceNetwork
 import SalesforceSDKCore
 #endif
 
+/// Clipboard copier for the Agentforce SDK copy button.
+private struct BridgeCopier: AgentforceCopying {
+    func copyToClipboard(_ text: String) {
+        UIPasteboard.general.string = text
+    }
+}
+
 /// React Native bridge module for Agentforce SDK
 /// Supports both Service Agent (guest) and Employee Agent (authenticated) modes
 @objc(AgentforceModule)
@@ -37,8 +44,6 @@ class AgentforceModule: RCTEventEmitter {
     /// Current mode configuration
     private var currentMode: AgentMode?
 
-    /// Voice delegate for handling voice interactions
-    private var voiceDelegate: AgentforceVoiceDelegate?
 
     private let listenerLock = NSLock()
     private var _hasListeners = false
@@ -75,28 +80,30 @@ class AgentforceModule: RCTEventEmitter {
         return BridgeViewProvider(bridge: self.bridge)
     }()
 
+    // MARK: - UI Delegate
+
+    /// Bridge UI delegate for forwarding SDK UI events to JavaScript.
+    private lazy var bridgeUIDelegate: BridgeUIDelegate = {
+        return BridgeUIDelegate(module: self)
+    }()
+
+    /// Pending modify-utterance continuations keyed by requestId.
+    private var modifyContinuations: [String: CheckedContinuation<String?, Never>] = [:]
+    private let modifyContinuationsLock = NSLock()
+
     // MARK: - Module Setup
 
     override static func requiresMainQueueSetup() -> Bool {
         return true
     }
 
-    /// Stored UI delegate forwarding flag applied to each new voice delegate instance
-    private var _uiDelegateForwardingEnabled = false
-
-    /// Pending modify-utterance continuations keyed by requestId.
-    /// Value is called with the modified text, or nil on timeout.
-    private let modifyContinuationLock = NSLock()
-    private var modifyContinuations: [String: (String?) -> Void] = [:]
-
     override func supportedEvents() -> [String]! {
         return [
             "onLogMessage",
             "onNavigationRequest",
-            "onAgentResponse",
             "onUtteranceSent",
             "onAgentSwitch",
-            "onModifyUtteranceRequest"
+            "onModifyUtteranceRequest",
         ]
     }
 
@@ -157,22 +164,41 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("serviceApiURL must be a valid URL (e.g. https://your-site.salesforce.com)")
         }
 
-        // Only cleanup if switching from Employee mode
-        if case .employee = currentMode {
-            print("[AgentforceModule] ⚠️ Switching from Employee to Service mode - cleaning up")
-            cleanupClient()
-        }
+        // Always close existing conversation and recreate client on reconfigure.
+        // This allows "Save Configuration" to act as a conversation reset.
+        await closeCurrentConversation()
+        cleanupClient()
 
         // Configure unified credential provider for Service Agent mode
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
 
-        // Also update the legacy ServiceAgentManager for backward compatibility
-        await MainActor.run {
-            ServiceAgentManager.shared.configure(
-                orgUrl: config.organizationId,
-                devName: config.esDeveloperName,
-                siteUrl: config.serviceApiURL
+        // Persist trimmed values to UserDefaults for cross-session recall
+        let trimmedSiteUrl = config.serviceApiURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedOrgId = config.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDevName = config.esDeveloperName.trimmingCharacters(in: .whitespacesAndNewlines)
+        UserDefaults.standard.set(trimmedSiteUrl, forKey: "ServiceAgentSiteUrl")
+        UserDefaults.standard.set(trimmedOrgId, forKey: "ServiceAgentOrgUrl")
+        UserDefaults.standard.set(trimmedDevName, forKey: "ServiceAgentDevName")
+
+        // Build ServiceUISettings from JS config (use SDK defaults for omitted keys)
+        let uiSettings: ServiceUISettings
+        if let raw = config.serviceUISettings {
+            uiSettings = ServiceUISettings(
+                downloadTranscript: raw["downloadTranscript"] ?? true,
+                endConversation: raw["endConversation"] ?? true,
+                validationFailureChunkEnabled: raw["validationFailureChunkEnabled"] ?? true,
+                useWelcomeUtterances: raw["useWelcomeUtterances"] ?? false,
+                showQueueStatus: raw["showQueueStatus"] ?? true,
+                enableVideoUpload: raw["enableVideoUpload"] ?? false,
+                enableLightningType: raw["enableLightningType"] ?? false,
+                secureForms: raw["secureForms"] ?? true,
+                enableAudioUpload: raw["enableAudioUpload"] ?? false
+            )
+        } else {
+            uiSettings = ServiceUISettings(
+                showQueueStatus: true,
+                secureForms: true
             )
         }
 
@@ -181,6 +207,7 @@ class AgentforceModule: RCTEventEmitter {
             esDeveloperName: config.esDeveloperName,
             organizationId: config.organizationId,
             serviceApiURL: config.serviceApiURL,
+            serviceUISettings: uiSettings,
             forceConfigEndPoint: config.serviceApiURL
         )
         .withLogger(bridgeLogger)
@@ -275,6 +302,7 @@ class AgentforceModule: RCTEventEmitter {
 
         let fullConfiguration = AgentforceConfiguration(
             user: user,
+            agentforceCopier: BridgeCopier(),
             forceConfigEndpoint: config.instanceUrl,
             dataProvider: dataProvider,
             agentforceFeatureFlagSettings: featureFlagSettings,
@@ -376,59 +404,15 @@ class AgentforceModule: RCTEventEmitter {
     ) {
         Task { @MainActor in
             do {
-                // Try new unified path first
-                if let client = agentforceClient, let mode = currentMode {
-                    let conversation = try getOrCreateConversation(client: client, mode: mode)
-
-                    // Create voice delegate to handle voice button taps
-                    let delegate = AgentforceVoiceDelegate(
-                        agentforceClient: client,
-                        presentingViewController: nil,
-                        module: self
-                    )
-                    delegate.forwardingEnabled = _uiDelegateForwardingEnabled
-                    self.voiceDelegate = delegate
-
-                    let chatView = try client.createAgentforceChatView(
-                        conversation: conversation,
-                        delegate: delegate,
-                        showTopBar: true,
-                        onContainerClose: { [weak self] in
-                            Task { @MainActor in
-                                self?.dismissConversation()
-                            }
-                        }
-                    )
-
-                    presentConversationView(chatView)
-                    resolve(["success": true])
-                    return
+                guard let client = agentforceClient, let mode = currentMode else {
+                    throw AgentConfigError.notConfigured
                 }
 
-                // Fall back to legacy ServiceAgentManager path
-                if !ServiceAgentManager.shared.isInitialized {
-                    guard ServiceAgentManager.shared.isConfigured else {
-                        throw ServiceAgentError.notConfigured
-                    }
-                    try ServiceAgentManager.shared.initializeSDK()
-                }
-
-                guard let client = ServiceAgentManager.shared.getClient() else {
-                    throw ServiceAgentError.sdkNotInitialized
-                }
-
-                let conversation = ServiceAgentManager.shared.startConversation()
-
-                // Create voice delegate to handle voice button taps
-                let delegate = AgentforceVoiceDelegate(
-                    agentforceClient: client,
-                    presentingViewController: nil // Will find topmost VC automatically
-                )
-                self.voiceDelegate = delegate
+                let conversation = try getOrCreateConversation(client: client, mode: mode)
 
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: delegate,
+                    delegate: bridgeUIDelegate,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
@@ -441,8 +425,6 @@ class AgentforceModule: RCTEventEmitter {
                 resolve(["success": true])
             } catch {
                 print("[AgentforceModule] ❌ Launch failed: \(error)")
-                print("[AgentforceModule] ❌ Error details: \((error as NSError).domain) code: \((error as NSError).code)")
-                print("[AgentforceModule] ❌ Full error: \(error)")
                 let desc = (error as NSError).localizedDescription
                 let hint = desc.contains("sessionId")
                     ? " Session start failed (400 = config; 500 = server/org). See docs/TROUBLESHOOTING.md."
@@ -460,62 +442,17 @@ class AgentforceModule: RCTEventEmitter {
     ) {
         Task { @MainActor in
             do {
-                // Close existing conversation
                 await closeCurrentConversation()
 
-                // Try new unified path first
-                if let client = agentforceClient, let mode = currentMode {
-                    let conversation = try getOrCreateConversation(client: client, mode: mode, forceNew: true)
-
-                    // Create voice delegate to handle voice button taps
-                    let delegate = AgentforceVoiceDelegate(
-                        agentforceClient: client,
-                        presentingViewController: nil,
-                        module: self
-                    )
-                    delegate.forwardingEnabled = _uiDelegateForwardingEnabled
-                    self.voiceDelegate = delegate
-
-                    let chatView = try client.createAgentforceChatView(
-                        conversation: conversation,
-                        delegate: delegate,
-                        showTopBar: true,
-                        onContainerClose: { [weak self] in
-                            Task { @MainActor in
-                                self?.dismissConversation()
-                            }
-                        }
-                    )
-
-                    presentConversationView(chatView)
-                    resolve(["success": true])
-                    return
+                guard let client = agentforceClient, let mode = currentMode else {
+                    throw AgentConfigError.notConfigured
                 }
 
-                // Fall back to legacy path
-                if !ServiceAgentManager.shared.isInitialized {
-                    guard ServiceAgentManager.shared.isConfigured else {
-                        throw ServiceAgentError.notConfigured
-                    }
-                    try ServiceAgentManager.shared.initializeSDK()
-                }
-
-                guard let client = ServiceAgentManager.shared.getClient() else {
-                    throw ServiceAgentError.sdkNotInitialized
-                }
-
-                let conversation = await ServiceAgentManager.shared.startNewConversation()
-
-                // Create voice delegate to handle voice button taps
-                let delegate = AgentforceVoiceDelegate(
-                    agentforceClient: client,
-                    presentingViewController: nil // Will find topmost VC automatically
-                )
-                self.voiceDelegate = delegate
+                let conversation = try getOrCreateConversation(client: client, mode: mode, forceNew: true)
 
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
-                    delegate: delegate,
+                    delegate: bridgeUIDelegate,
                     showTopBar: true,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
@@ -597,14 +534,7 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
-            // Check new unified path first
-            if credentialProvider.isConfigured {
-                resolve(true)
-                return
-            }
-            // Fall back to legacy
-            let configured = ServiceAgentManager.shared.isConfigured
-            resolve(configured)
+            resolve(credentialProvider.isConfigured)
         }
     }
 
@@ -733,29 +663,27 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
 
-    /// Get current configuration values (legacy format for backward compatibility)
+    /// Get current service agent configuration values
     @objc
     func getConfiguration(
         _ resolve: @escaping RCTPromiseResolveBlock,
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
-            // Return service agent config format for backward compatibility
             if case .service(let config) = currentMode {
-                let configDict: [String: String] = [
+                resolve([
                     "serviceApiURL": config.serviceApiURL,
                     "organizationId": config.organizationId,
                     "esDeveloperName": config.esDeveloperName
-                ]
-                resolve(configDict)
+                ])
                 return
             }
 
-            // Fall back to legacy ServiceAgentManager
+            // Read persisted values from UserDefaults (survives app restart)
             let config: [String: String] = [
-                "serviceApiURL": ServiceAgentManager.shared.siteUrl,
-                "organizationId": ServiceAgentManager.shared.orgUrl,
-                "esDeveloperName": ServiceAgentManager.shared.devName
+                "serviceApiURL": UserDefaults.standard.string(forKey: "ServiceAgentSiteUrl") ?? "",
+                "organizationId": UserDefaults.standard.string(forKey: "ServiceAgentOrgUrl") ?? "",
+                "esDeveloperName": UserDefaults.standard.string(forKey: "ServiceAgentDevName") ?? ""
             ]
             resolve(config)
         }
@@ -774,12 +702,6 @@ class AgentforceModule: RCTEventEmitter {
                     "mode": credentialProvider.isServiceAgent ? "service" : "employee",
                     "description": credentialProvider.currentConfiguration
                 ])
-            } else if ServiceAgentManager.shared.isConfigured {
-                resolve([
-                    "configured": true,
-                    "mode": "service",
-                    "description": "Service Agent (legacy) - Org: \(ServiceAgentManager.shared.orgUrl)"
-                ])
             } else {
                 resolve([
                     "configured": false,
@@ -796,12 +718,7 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
-            if agentforceClient != nil {
-                resolve(true)
-                return
-            }
-            let initialized = ServiceAgentManager.shared.isInitialized
-            resolve(initialized)
+            resolve(agentforceClient != nil)
         }
     }
 
@@ -853,7 +770,7 @@ class AgentforceModule: RCTEventEmitter {
         sendEvent(withName: "onNavigationRequest", body: payload)
     }
 
-    // MARK: - Agent Response
+    // MARK: - UI Delegate Forwarding
 
     @objc
     func enableUIDelegateForwarding(
@@ -861,14 +778,69 @@ class AgentforceModule: RCTEventEmitter {
         resolver resolve: @escaping RCTPromiseResolveBlock,
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
-        _uiDelegateForwardingEnabled = enabled
-        voiceDelegate?.forwardingEnabled = enabled
+        bridgeUIDelegate.forwardingEnabled = enabled
+
+        if !enabled {
+            drainPendingContinuations()
+        }
+
         resolve(true)
     }
 
-    func emitAgentResponseEvent(_ payload: [String: Any]) {
-        guard listenerLock.withLock({ _hasListeners }) else { return }
-        sendEvent(withName: "onAgentResponse", body: payload)
+    /// Resume all pending modify-utterance continuations with nil to prevent leaks.
+    private func drainPendingContinuations() {
+        modifyContinuationsLock.lock()
+        let pending = modifyContinuations
+        modifyContinuations.removeAll()
+        modifyContinuationsLock.unlock()
+
+        for (_, continuation) in pending {
+            continuation.resume(returning: nil)
+        }
+    }
+
+    @objc
+    func provideModifiedUtterance(
+        _ requestId: String,
+        utterance: String,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        modifyContinuationsLock.lock()
+        let continuation = modifyContinuations.removeValue(forKey: requestId)
+        modifyContinuationsLock.unlock()
+
+        if let continuation = continuation {
+            continuation.resume(returning: utterance)
+            resolve(true)
+        } else {
+            resolve(false)
+        }
+    }
+
+    /// Called by BridgeUIDelegate to emit a modify-utterance request to JS
+    /// and await the response (or timeout).
+    func awaitModifiedUtterance(requestId: String, utteranceText: String, timeout: TimeInterval) async -> String? {
+        guard listenerLock.withLock({ _hasListeners }) else { return nil }
+
+        return await withCheckedContinuation { continuation in
+            modifyContinuationsLock.lock()
+            modifyContinuations[requestId] = continuation
+            modifyContinuationsLock.unlock()
+
+            sendEvent(withName: "onModifyUtteranceRequest", body: [
+                "requestId": requestId,
+                "utterance": utteranceText,
+            ])
+
+            Task {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                self.modifyContinuationsLock.lock()
+                let pending = self.modifyContinuations.removeValue(forKey: requestId)
+                self.modifyContinuationsLock.unlock()
+                pending?.resume(returning: nil)
+            }
+        }
     }
 
     func emitUtteranceSentEvent(_ payload: [String: Any]) {
@@ -879,57 +851,6 @@ class AgentforceModule: RCTEventEmitter {
     func emitAgentSwitchEvent(_ payload: [String: Any]) {
         guard listenerLock.withLock({ _hasListeners }) else { return }
         sendEvent(withName: "onAgentSwitch", body: payload)
-    }
-
-    func emitModifyUtteranceRequest(_ payload: [String: Any]) {
-        guard listenerLock.withLock({ _hasListeners }) else { return }
-        sendEvent(withName: "onModifyUtteranceRequest", body: payload)
-    }
-
-    func awaitModifiedUtterance(requestId: String, utteranceText: String, timeout: TimeInterval) async -> String? {
-        await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
-            // 1. Register continuation before emitting so early responses aren't lost
-            modifyContinuationLock.withLock {
-                modifyContinuations[requestId] = { text in
-                    continuation.resume(returning: text)
-                }
-            }
-
-            // 2. Emit request to JS
-            emitModifyUtteranceRequest([
-                "requestId": requestId,
-                "utterance": utteranceText
-            ])
-
-            // 3. Timeout: complete with nil if JS hasn't responded.
-            // No [weak self] — the continuation MUST be resumed exactly once.
-            // If self were deallocated before the timeout, skipping resume
-            // would leave the CheckedContinuation un-resumed (undefined behavior).
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                let pending: ((String?) -> Void)? = self.modifyContinuationLock.withLock {
-                    self.modifyContinuations.removeValue(forKey: requestId)
-                }
-                pending?(nil)
-            }
-        }
-    }
-
-    @objc
-    func provideModifiedUtterance(
-        _ requestId: String,
-        modifiedUtterance: String,
-        resolver resolve: @escaping RCTPromiseResolveBlock,
-        rejecter reject: @escaping RCTPromiseRejectBlock
-    ) {
-        let completion: ((String?) -> Void)? = modifyContinuationLock.withLock {
-            modifyContinuations.removeValue(forKey: requestId)
-        }
-        if let completion {
-            completion(modifiedUtterance)
-            resolve(true)
-        } else {
-            resolve(false)
-        }
     }
 
     // MARK: - View Provider
@@ -979,7 +900,6 @@ class AgentforceModule: RCTEventEmitter {
     ) {
         Task { @MainActor in
             await closeCurrentConversation()
-            await ServiceAgentManager.shared.closeConversation()
             dismissConversation()
             resolve(["success": true])
         }
@@ -1137,7 +1057,9 @@ class AgentforceModule: RCTEventEmitter {
             currentMode = nil
             credentialProvider.reset()
             bridgeViewProvider.reset()
-            ServiceAgentManager.shared.resetToDefaults()
+            UserDefaults.standard.removeObject(forKey: "ServiceAgentSiteUrl")
+            UserDefaults.standard.removeObject(forKey: "ServiceAgentOrgUrl")
+            UserDefaults.standard.removeObject(forKey: "ServiceAgentDevName")
             UserDefaults.standard.removeObject(forKey: "EmployeeAgentId")
             resolve(["success": true])
         }

@@ -69,7 +69,8 @@ export interface ModifyUtteranceRequest {
  * ```
  */
 export interface UIDelegate {
-  onAgentResponse(event: AgentResponseEvent): void;
+  /** Called when the agent sends a response. Android only — iOS SDK does not expose message fields publicly. */
+  onAgentResponse?(event: AgentResponseEvent): void;
   onUtteranceSent?(event: UtteranceSentEvent): void;
   onAgentSwitch?(event: AgentSwitchEvent): void;
   /** Return the modified utterance text, or the original to leave unchanged. */

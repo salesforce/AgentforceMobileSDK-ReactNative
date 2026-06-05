@@ -6,6 +6,9 @@
  */
 package com.salesforce.android.reactagentforce
 
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -17,6 +20,7 @@ import com.salesforce.android.mobile.interfaces.navigation.destination.ObjectHom
 import com.salesforce.android.mobile.interfaces.navigation.destination.PageReference
 import com.salesforce.android.mobile.interfaces.navigation.destination.QuickAction
 import com.salesforce.android.mobile.interfaces.navigation.destination.Record
+import org.json.JSONObject
 
 /**
  * Implements the Agentforce SDK Navigation interface and forwards navigation requests
@@ -56,6 +60,17 @@ class BridgeNavigation(private val reactContext: ReactContext) : Navigation {
     }
 
     private fun emitDestination(destination: Destination, replace: Boolean) {
+        // Handle toast PageReferences locally instead of forwarding to JS.
+        // The SDK uses navigation.goto(PageReference) with type "native__displayToast"
+        // for feedback confirmation and clipboard copy toasts.
+        if (destination is PageReference) {
+            val ref = destination.pageReference
+            if (ref != null && ref.contains("native__displayToast")) {
+                showNativeToast(ref)
+                return
+            }
+        }
+
         val params = Arguments.createMap()
 
         when (destination) {
@@ -100,5 +115,23 @@ class BridgeNavigation(private val reactContext: ReactContext) : Navigation {
         reactContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit("onNavigationRequest", params)
+    }
+
+    private fun showNativeToast(pageReferenceJson: String) {
+        try {
+            val json = JSONObject(pageReferenceJson)
+            val message = json.optString("message", "")
+            if (message.isNotEmpty()) {
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(
+                        reactContext.applicationContext,
+                        message,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        } catch (_: Exception) {
+            // Malformed toast JSON — silently ignore
+        }
     }
 }

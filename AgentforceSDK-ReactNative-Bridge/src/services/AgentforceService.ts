@@ -139,19 +139,19 @@ class AgentforceService {
   private navigationSubscription: EmitterSubscription | null = null;
 
   /**
-   * UI delegate for receiving agent response events
+   * View provider delegate configuration (registered component types + React component name)
+   */
+  private viewProviderDelegate: ViewProviderDelegate | null = null;
+
+  /**
+   * UI delegate for receiving agent response, utterance, and switch events
    */
   private uiDelegate: UIDelegate | null = null;
 
   /**
-   * Subscriptions for UI delegate events (response, utterance sent, agent switch, modify utterance)
+   * Subscriptions for UI delegate events
    */
   private uiDelegateSubscriptions: EmitterSubscription[] = [];
-
-  /**
-   * View provider delegate configuration (registered component types + React component name)
-   */
-  private viewProviderDelegate: ViewProviderDelegate | null = null;
 
   /**
    * Track if service has been initialized
@@ -289,87 +289,6 @@ class AgentforceService {
   }
 
   /**
-   * Register a UI delegate to receive agent response events from the native Agentforce SDK.
-   *
-   * Can be called before or after launching a conversation. Events are emitted only for
-   * complete (non-streaming) agent responses.
-   *
-   * @param delegate - UI delegate implementation
-   *
-   * @example
-   * ```typescript
-   * AgentforceService.setUIDelegate({
-   *   onAgentResponse(event) {
-   *     console.log(`Agent response: ${event.message}`);
-   *     console.log(`Conversation: ${event.conversationId}`);
-   *   },
-   * });
-   * ```
-   */
-  setUIDelegate(delegate: UIDelegate): void {
-    this.uiDelegate = delegate;
-    this.setupUIDelegateListeners();
-    AgentforceModule?.enableUIDelegateForwarding(true);
-    console.log('[AgentforceService] UI delegate registered');
-  }
-
-  /**
-   * Clear the registered UI delegate and stop receiving agent response events.
-   */
-  clearUIDelegate(): void {
-    this.uiDelegate = null;
-    this.uiDelegateSubscriptions.forEach(s => s.remove());
-    this.uiDelegateSubscriptions = [];
-    AgentforceModule?.enableUIDelegateForwarding(false);
-    console.log('[AgentforceService] UI delegate cleared');
-  }
-
-  /**
-   * Set up listeners for all UI delegate events from native layer
-   */
-  private setupUIDelegateListeners(): void {
-    this.uiDelegateSubscriptions.forEach(s => s.remove());
-    this.uiDelegateSubscriptions = [];
-    if (!this.eventEmitter) {
-      return;
-    }
-
-    this.uiDelegateSubscriptions.push(
-      this.eventEmitter.addListener(EVENTS.AGENT_RESPONSE, (event: AgentResponseEvent) => {
-        this.uiDelegate?.onAgentResponse(event);
-      }),
-    );
-
-    this.uiDelegateSubscriptions.push(
-      this.eventEmitter.addListener(EVENTS.UTTERANCE_SENT, (event: UtteranceSentEvent) => {
-        this.uiDelegate?.onUtteranceSent?.(event);
-      }),
-    );
-
-    this.uiDelegateSubscriptions.push(
-      this.eventEmitter.addListener(EVENTS.AGENT_SWITCH, (event: AgentSwitchEvent) => {
-        this.uiDelegate?.onAgentSwitch?.(event);
-      }),
-    );
-
-    this.uiDelegateSubscriptions.push(
-      this.eventEmitter.addListener(
-        EVENTS.MODIFY_UTTERANCE_REQUEST,
-        async (request: ModifyUtteranceRequest) => {
-          try {
-            const modified = this.uiDelegate?.modifyUtterance
-              ? await Promise.resolve(this.uiDelegate.modifyUtterance(request))
-              : request.utterance;
-            AgentforceModule?.provideModifiedUtterance(request.requestId, modified);
-          } catch {
-            AgentforceModule?.provideModifiedUtterance(request.requestId, request.utterance);
-          }
-        },
-      ),
-    );
-  }
-
-  /**
    * Register a view provider delegate to override native SDK output views
    * with custom React Native components.
    *
@@ -428,6 +347,103 @@ class AgentforceService {
     } catch (error) {
       console.warn('[AgentforceService] Failed to clear view provider:', error);
     }
+  }
+
+  /**
+   * Register a UI delegate to receive agent response, utterance sent,
+   * agent switch, and modify-utterance events from the native Agentforce SDK.
+   *
+   * Can be called before or after launching a conversation.
+   *
+   * @param delegate - UI delegate implementation
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setUIDelegate({
+   *   onAgentResponse(event) {
+   *     console.log(`Agent said: ${event.message}`);
+   *   },
+   *   onUtteranceSent(event) {
+   *     console.log(`User sent: ${event.utterance}`);
+   *   },
+   *   onAgentSwitch(event) {
+   *     console.log(`Switched to conversation: ${event.conversationId}`);
+   *   },
+   *   modifyUtterance(request) {
+   *     return request.utterance.toUpperCase();
+   *   },
+   * });
+   * ```
+   */
+  setUIDelegate(delegate: UIDelegate): void {
+    this.uiDelegate = delegate;
+    this.setupUIDelegateListeners();
+    AgentforceModule?.enableUIDelegateForwarding(true);
+    console.log('[AgentforceService] UI delegate registered');
+  }
+
+  /**
+   * Clear the registered UI delegate and stop receiving UI events.
+   */
+  clearUIDelegate(): void {
+    this.uiDelegate = null;
+    for (const sub of this.uiDelegateSubscriptions) {
+      sub.remove();
+    }
+    this.uiDelegateSubscriptions = [];
+    AgentforceModule?.enableUIDelegateForwarding(false);
+    console.log('[AgentforceService] UI delegate cleared');
+  }
+
+  /**
+   * Set up listeners for UI delegate events from native layer
+   */
+  private setupUIDelegateListeners(): void {
+    for (const sub of this.uiDelegateSubscriptions) {
+      sub.remove();
+    }
+    this.uiDelegateSubscriptions = [];
+
+    if (!this.eventEmitter) {
+      return;
+    }
+
+    this.uiDelegateSubscriptions.push(
+      this.eventEmitter.addListener(EVENTS.AGENT_RESPONSE, (event: AgentResponseEvent) => {
+        this.uiDelegate?.onAgentResponse?.(event);
+      }),
+    );
+
+    this.uiDelegateSubscriptions.push(
+      this.eventEmitter.addListener(EVENTS.UTTERANCE_SENT, (event: UtteranceSentEvent) => {
+        this.uiDelegate?.onUtteranceSent?.(event);
+      }),
+    );
+
+    this.uiDelegateSubscriptions.push(
+      this.eventEmitter.addListener(EVENTS.AGENT_SWITCH, (event: AgentSwitchEvent) => {
+        this.uiDelegate?.onAgentSwitch?.(event);
+      }),
+    );
+
+    this.uiDelegateSubscriptions.push(
+      this.eventEmitter.addListener(
+        EVENTS.MODIFY_UTTERANCE_REQUEST,
+        async (request: ModifyUtteranceRequest) => {
+          if (!this.uiDelegate?.modifyUtterance) {
+            AgentforceModule?.provideModifiedUtterance(request.requestId, request.utterance);
+            return;
+          }
+          try {
+            const modified = await this.uiDelegate.modifyUtterance(request);
+            const result = typeof modified === 'string' ? modified : request.utterance;
+            AgentforceModule?.provideModifiedUtterance(request.requestId, result);
+          } catch {
+            AgentforceModule?.provideModifiedUtterance(request.requestId, request.utterance);
+          }
+        },
+      ),
+    );
   }
 
   /**
@@ -1037,7 +1053,9 @@ class AgentforceService {
     this.navigationSubscription = null;
     this.navigationDelegate = null;
 
-    this.uiDelegateSubscriptions.forEach(s => s.remove());
+    for (const sub of this.uiDelegateSubscriptions) {
+      sub.remove();
+    }
     this.uiDelegateSubscriptions = [];
     this.uiDelegate = null;
 

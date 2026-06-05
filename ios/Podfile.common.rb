@@ -16,7 +16,8 @@ def shared_pods
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  pod 'AgentforceSDK', '15.2.8'
+  pod 'AgentforceSDK', '15.11.7'
+  pod 'AgentforceVoice', '1.1.3'
   pod 'Messaging-InApp-Core', '> 1.10.0'
 
   # JWTKit is required by AgentforceService but not resolved automatically
@@ -44,6 +45,13 @@ def common_pre_install(installer)
       def pod.build_type
         Pod::BuildType.static_library
       end
+    end
+
+    # AgentforceVoice.xcframework links against @rpath/LiveKit.framework/LiveKit,
+    # but CocoaPods builds LiveKitClient as LiveKitClient.framework by default.
+    # Override module_name so it produces LiveKit.framework instead.
+    if pod.name == 'LiveKitClient'
+      pod.root_spec.attributes_hash['module_name'] = 'LiveKit'
     end
   end
 end

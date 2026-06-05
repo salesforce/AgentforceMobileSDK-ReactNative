@@ -28,6 +28,33 @@ interface BaseAgentConfig {
 }
 
 /**
+ * UI-specific settings for Service Agent conversations.
+ *
+ * Controls visibility and behavior of conversation UI features.
+ * All fields are optional — omitted fields use SDK defaults.
+ */
+export interface ServiceUISettings {
+  /** Show the download transcript option (default: true) */
+  downloadTranscript?: boolean;
+  /** Show the end conversation option (default: true) */
+  endConversation?: boolean;
+  /** Enable validation failure chunk display (default: true, iOS only) */
+  validationFailureChunkEnabled?: boolean;
+  /** Use welcome utterances instead of a static welcome message (default: false, iOS only) */
+  useWelcomeUtterances?: boolean;
+  /** Show queue status indicator (default: false, iOS only) */
+  showQueueStatus?: boolean;
+  /** Enable video upload in conversations (default: false, iOS only) */
+  enableVideoUpload?: boolean;
+  /** Enable Lightning Type mapping for experience model types (default: false) */
+  enableLightningType?: boolean;
+  /** Enable secure forms during conversations (default: false, iOS only) */
+  secureForms?: boolean;
+  /** Enable audio upload in conversations (default: false, iOS only) */
+  enableAudioUpload?: boolean;
+}
+
+/**
  * Service Agent configuration (anonymous/guest access)
  *
  * Used for customer-facing support scenarios where no authentication is required.
@@ -40,6 +67,10 @@ interface BaseAgentConfig {
  *   serviceApiURL: 'https://service.salesforce.com',
  *   organizationId: '00Dxx0000001234',
  *   esDeveloperName: 'MyServiceAgent',
+ *   serviceUISettings: {
+ *     downloadTranscript: false,
+ *     enableLightningType: true,
+ *   },
  * };
  * ```
  */
@@ -52,6 +83,9 @@ export interface ServiceAgentConfig extends BaseAgentConfig {
 
   /** The Einstein Service Agent developer name */
   esDeveloperName: string;
+
+  /** Optional UI settings for the service agent conversation */
+  serviceUISettings?: ServiceUISettings;
 }
 
 /**

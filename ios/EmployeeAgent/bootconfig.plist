@@ -10,6 +10,7 @@
 	<array>
 		<string>web</string>
 		<string>api</string>
+		<string>sfap_api</string>
 	</array>
 	<key>shouldAuthenticate</key>
 	<true/>

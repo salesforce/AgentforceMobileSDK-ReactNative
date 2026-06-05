@@ -78,7 +78,8 @@ local.properties
 /packages/react-native/android/*
 !/packages/react-native/android/README.md
 .kotlin/
-/.claude
+/.claude/*
+!/.claude/skills/
 
 # Node
 node_modules

@@ -19,6 +19,7 @@ export type { AuthCredentials } from './services/EmployeeAgentAuth';
 
 export type {
   ServiceAgentConfig,
+  ServiceUISettings,
   EmployeeAgentConfig,
   AgentConfig,
   FeatureFlags,
