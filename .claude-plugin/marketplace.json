@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/refs/heads/main/marketplace/marketplace.schema.json",
+  "name": "agentforce-mobile-sdk-react-native",
+  "version": "0.1.0",
+  "owner": {
+    "name": "Salesforce",
+    "url": "https://github.com/salesforce/AgentforceMobileSDK-ReactNative"
+  },
+  "metadata": {
+    "description": "Tooling for integrating the Agentforce Mobile SDK into React Native apps via the react-native-agentforce bridge."
+  },
+  "plugins": [
+    {
+      "name": "agentforce-mobile-sdk-react-native",
+      "description": "Scaffolds AgentforceSDK integration into an existing React Native app: use-case-driven configuration mode selection (Service Agent vs Employee Agent), bridge package install + native iOS/Android wiring, AgentforceService configuration, logger/navigation/view-provider delegates, and a launch button.",
+      "repository": "https://github.com/salesforce/AgentforceMobileSDK-ReactNative",
+      "version": "0.1.0",
+      "author": {
+        "name": "Salesforce",
+        "url": "https://github.com/salesforce/AgentforceMobileSDK-ReactNative"
+      },
+      "license": "BSD-3-Clause",
+      "category": "development",
+      "keywords": [
+        "salesforce",
+        "agentforce",
+        "react-native",
+        "typescript",
+        "ios",
+        "android",
+        "ai",
+        "agent",
+        "integration"
+      ],
+      "tags": ["salesforce", "agentforce", "react-native", "typescript", "scaffold"],
+      "source": "./"
+    }
+  ]
+}

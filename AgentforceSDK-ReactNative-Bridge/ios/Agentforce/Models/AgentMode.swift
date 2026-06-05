@@ -33,13 +33,16 @@ enum AgentMode {
 struct ServiceAgentModeConfig {
     /// The Service API URL endpoint
     let serviceApiURL: String
-    
+
     /// Salesforce Organization ID
     let organizationId: String
-    
+
     /// The Einstein Service Agent developer name
     let esDeveloperName: String
-    
+
+    /// Optional UI settings parsed from JS config
+    let serviceUISettings: [String: Bool]?
+
     /// Creates a ServiceAgentModeConfig from a dictionary
     /// - Parameter dict: Dictionary containing configuration values
     /// - Returns: ServiceAgentModeConfig if all required fields are present, nil otherwise
@@ -49,11 +52,12 @@ struct ServiceAgentModeConfig {
               let esDeveloperName = dict["esDeveloperName"] as? String else {
             return nil
         }
-        
+
         return ServiceAgentModeConfig(
             serviceApiURL: serviceApiURL,
             organizationId: organizationId,
-            esDeveloperName: esDeveloperName
+            esDeveloperName: esDeveloperName,
+            serviceUISettings: dict["serviceUISettings"] as? [String: Bool]
         )
     }
 }

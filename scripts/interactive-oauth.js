@@ -83,8 +83,8 @@ async function promptOAuthConfig() {
       console.log('   ❌ Must be a valid URL');
     }
 
-    var scopesInput = await prompt(rl, '📝 OAuth Scopes (default: web,api): ');
-    config.scopes = scopesInput.length > 0 ? scopesInput : 'web,api';
+    var scopesInput = await prompt(rl, '📝 OAuth Scopes (default: web,api,sfap_api): ');
+    config.scopes = scopesInput.length > 0 ? scopesInput : 'web,api,sfap_api';
 
     var scopeList = config.scopes
       .split(',')
@@ -93,7 +93,7 @@ async function promptOAuthConfig() {
       })
       .filter(Boolean);
     if (scopeList.length === 0) {
-      config.scopes = 'web,api';
+      config.scopes = 'web,api,sfap_api';
     }
 
     console.log('\n✅ Configuration ready');

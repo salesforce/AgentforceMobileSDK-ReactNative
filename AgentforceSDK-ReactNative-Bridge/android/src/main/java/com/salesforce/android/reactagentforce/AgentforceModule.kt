@@ -9,18 +9,25 @@ package com.salesforce.android.reactagentforce
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
-import com.facebook.react.bridge.*
-import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.ReadableType
 import com.salesforce.android.agentforcesdkimpl.AgentforceClient
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
+import com.salesforce.android.agentforcesdkimpl.configuration.ServiceUISettings
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
+import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceProviderFactory
+import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceUIProvider
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotContextVariable
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotAdditionalContext
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
@@ -31,7 +38,11 @@ import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvide
 import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
 import com.salesforce.android.agentforcesdkimpl.network.AgentforceNetworkImpl
 import com.salesforce.androidsdk.app.SalesforceSDKManager
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * React Native bridge module for Agentforce SDK.
@@ -82,7 +93,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Bridge hidden prechat fields (Service Agent only)
     private val bridgeHiddenPreChat = BridgeHiddenPreChat()
 
-    // Bridge UI delegate for forwarding agent response events to JS
+    // Bridge UI delegate for forwarding SDK UI events to JS
     private val bridgeUIDelegate = BridgeUIDelegate(reactContext)
 
     // Coroutine scope for async operations
@@ -138,10 +149,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Configure unified credential provider
         credentialProvider.configure(serviceConfig)
         currentMode = LocalAgentMode.Service(serviceConfig)
-        
-        // Clear existing client
-        AgentforceClientHolder.clear()
-        
+
         // Also update the legacy ViewModel for backward compatibility
         ensureViewModel()
         viewModel?.updateConfiguration(
@@ -149,9 +157,22 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             organizationId = serviceConfig.organizationId,
             esDeveloperName = serviceConfig.esDeveloperName
         )
-        
-        scope.launch {
+
+        scope.launch(Dispatchers.Main) {
+            // Destroy overlay and clear client on main thread to avoid
+            // "Method recordObserver must be called on the main thread" error
+            AgentforceConversationOverlay.destroy()
+            AgentforceClientHolder.clear()
             try {
+                // Build ServiceUISettings from JS config (use SDK defaults for omitted keys)
+                val uiSettings = serviceConfig.serviceUISettings?.let { raw ->
+                    ServiceUISettings(
+                        downloadTranscript = raw["downloadTranscript"] ?: true,
+                        endConversation = raw["endConversation"] ?: true,
+                        enableLightingType = raw["enableLightningType"] ?: false
+                    )
+                } ?: ServiceUISettings()
+
                 // Create SDK Service Agent configuration
                 val sdkServiceConfig = ServiceAgentConfiguration
                     .builder(
@@ -159,6 +180,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                         organizationId = serviceConfig.organizationId,
                         serviceApiURL = serviceConfig.serviceApiURL
                     )
+                    .setServiceUISettings(uiSettings)
                     .build()
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
@@ -181,11 +203,12 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
-                    .setDelegate(bridgeUIDelegate)
                 agentforceConfigBuilder.setPermission(permissions)
+                agentforceConfigBuilder.setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
+                agentforceConfigBuilder.setDelegate(bridgeUIDelegate)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 val sdkMode = AgentforceMode.ServiceAgent(
@@ -240,15 +263,17 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Persist employee agentId (editable in Settings tab)
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
 
-        // Only clear if switching from Service mode or agentId changed
-        if (AgentforceClientHolder.isServiceAgent || agentIdChanged) {
-            Log.d(TAG, "AgentId changed or switching modes - clearing client and conversation")
-            AgentforceClientHolder.clear()
-        } else {
-            Log.d(TAG, "AgentId unchanged - preserving conversation")
-        }
-        
-        scope.launch {
+        val shouldClear = AgentforceClientHolder.isServiceAgent || agentIdChanged
+
+        scope.launch(Dispatchers.Main) {
+            // Destroy overlay and clear on main thread to avoid Compose observer errors
+            if (shouldClear) {
+                Log.d(TAG, "AgentId changed or switching modes - clearing client and conversation")
+                AgentforceConversationOverlay.destroy()
+                AgentforceClientHolder.clear()
+            } else {
+                Log.d(TAG, "AgentId unchanged - preserving conversation")
+            }
             try {
                 // Create AgentforceConfiguration for FullConfig mode
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
@@ -281,11 +306,12 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                     .setDataProvider(dataProvider)
-                    .setDelegate(bridgeUIDelegate)
                 agentforceConfigBuilder.setPermission(permissions)
+                agentforceConfigBuilder.setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
+                agentforceConfigBuilder.setDelegate(bridgeUIDelegate)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 // Use FullConfig mode for Employee Agent
@@ -364,12 +390,11 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
         // Initialize SDK if needed (legacy path)
         if (!AgentforceClientHolder.isConfigured && isConfiguredLegacy) {
-            scope.launch {
+            scope.launch(Dispatchers.Main) {
                 try {
                     viewModel?.initializeAgentforce()
 
-                    val intent = Intent(activity, AgentforceConversationActivity::class.java)
-                    activity.startActivity(intent)
+                    AgentforceConversationOverlay.show(activity)
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
@@ -381,21 +406,20 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             return
         }
 
-        // Create conversation and launch activity on main thread to avoid
+        // Create conversation and show overlay on main thread to avoid
         // "Method addObserver must be called on the main thread" error
         scope.launch(Dispatchers.Main) {
             try {
-                // Create conversation before launching Activity so setAdditionalContext
+                // Create conversation before showing UI so setAdditionalContext
                 // can find it immediately after the promise resolves (matches iOS behavior).
                 if (AgentforceClientHolder.currentConversation == null) {
                     if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
                 }
 
-                // Launch conversation UI
-                val intent = Intent(activity, AgentforceConversationActivity::class.java)
-                activity.startActivity(intent)
+                // Show conversation as overlay on current Activity (preserves ViewModel across show/hide)
+                AgentforceConversationOverlay.show(activity)
 
-                Log.d(TAG, "Conversation activity launched")
+                Log.d(TAG, "Conversation overlay shown")
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                 })
@@ -428,15 +452,18 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // "Method addObserver must be called on the main thread" error
         scope.launch(Dispatchers.Main) {
             try {
+                // Destroy overlay so a fresh ViewModel is created for the new conversation
+                AgentforceConversationOverlay.destroy()
+
                 AgentforceClientHolder.clearConversation()
                 viewModel?.closeConversation()
 
-                // Create new conversation before launching Activity so setAdditionalContext
+                // Create new conversation before showing UI so setAdditionalContext
                 // can find it immediately after the promise resolves (matches iOS behavior).
                 if (!createConversation(promise, "START_NEW_ERROR")) return@launch
 
-                val intent = Intent(activity, AgentforceConversationActivity::class.java)
-                activity.startActivity(intent)
+                // Show conversation as overlay on current Activity
+                AgentforceConversationOverlay.show(activity)
 
                 Log.d(TAG, "New conversation started")
                 promise.resolve(Arguments.createMap().apply {
@@ -615,7 +642,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // endregion
 
-    // region Agent Response Forwarding
+    // region UI Delegate Forwarding
 
     @ReactMethod
     fun enableUIDelegateForwarding(enabled: Boolean, promise: Promise) {
@@ -625,9 +652,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun provideModifiedUtterance(requestId: String, modifiedUtterance: String, promise: Promise) {
-        val applied = bridgeUIDelegate.completeModification(requestId, modifiedUtterance)
-        promise.resolve(applied)
+    fun provideModifiedUtterance(requestId: String, utterance: String, promise: Promise) {
+        val completed = bridgeUIDelegate.completeModification(requestId, utterance)
+        promise.resolve(completed)
     }
 
     // endregion
@@ -679,25 +706,31 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun closeConversation(promise: Promise) {
-        AgentforceClientHolder.clearConversation()
-        viewModel?.closeConversation()
-        promise.resolve(Arguments.createMap().apply {
-            putBoolean("success", true)
-        })
+        scope.launch(Dispatchers.Main) {
+            AgentforceConversationOverlay.destroy()
+            AgentforceClientHolder.clearConversation()
+            viewModel?.closeConversation()
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", true)
+            })
+        }
     }
 
     @ReactMethod
     fun resetSettings(promise: Promise) {
-        AgentforceClientHolder.clear()
-        viewModel?.resetConfiguration()
-        currentMode = null
-        credentialProvider.reset()
-        bridgeViewProvider.reset()
-        bridgeHiddenPreChat.setFields(emptyMap())
-        employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
-        promise.resolve(Arguments.createMap().apply {
-            putBoolean("success", true)
-        })
+        scope.launch(Dispatchers.Main) {
+            AgentforceConversationOverlay.destroy()
+            AgentforceClientHolder.clear()
+            viewModel?.resetConfiguration()
+            currentMode = null
+            credentialProvider.reset()
+            bridgeViewProvider.reset()
+            bridgeHiddenPreChat.setFields(emptyMap())
+            employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", true)
+            })
+        }
     }
 
     // endregion
@@ -818,13 +851,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     }
 
                     conversation.setAdditionalContext(additionalContext)
-                    Log.d(TAG, "✓ Additional context set: ${contextVariables.size} variables")
+                    Log.d(TAG, "Additional context set: ${contextVariables.size} variables")
 
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
                 } catch (e: Exception) {
-                    Log.e(TAG, "❌ Failed to set additional context", e)
+                    Log.e(TAG, "Failed to set additional context", e)
                     promise.reject("CONTEXT_ERROR", e.message, e)
                 }
             }

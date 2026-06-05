@@ -42,7 +42,9 @@ data class ServiceAgentModeConfig(
     /** Salesforce Organization ID */
     val organizationId: String,
     /** The Einstein Service Agent developer name */
-    val esDeveloperName: String
+    val esDeveloperName: String,
+    /** Optional UI settings parsed from JS config */
+    val serviceUISettings: Map<String, Boolean>? = null
 ) {
     companion object {
         /**
@@ -54,11 +56,26 @@ data class ServiceAgentModeConfig(
             val serviceApiURL = map.getString("serviceApiURL") ?: return null
             val organizationId = map.getString("organizationId") ?: return null
             val esDeveloperName = map.getString("esDeveloperName") ?: return null
-            
+
+            val uiSettings: Map<String, Boolean>? = if (map.hasKey("serviceUISettings")) {
+                map.getMap("serviceUISettings")?.let { settingsMap ->
+                    val result = mutableMapOf<String, Boolean>()
+                    val iterator = settingsMap.keySetIterator()
+                    while (iterator.hasNextKey()) {
+                        val key = iterator.nextKey()
+                        result[key] = settingsMap.getBoolean(key)
+                    }
+                    result.ifEmpty { null }
+                }
+            } else {
+                null
+            }
+
             return ServiceAgentModeConfig(
                 serviceApiURL = serviceApiURL,
                 organizationId = organizationId,
-                esDeveloperName = esDeveloperName
+                esDeveloperName = esDeveloperName,
+                serviceUISettings = uiSettings
             )
         }
     }

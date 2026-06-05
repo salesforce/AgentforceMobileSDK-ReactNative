@@ -83,6 +83,34 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 - **Screens**: Home, Settings, About
 - **No app-specific code**: Same JavaScript for both apps
 
+## Integrate with Claude Code (`integrate-agentforce-react-native` skill)
+
+If you're using [Claude Code](https://www.anthropic.com/claude-code) (or other agentic tooling that supports the skill format), this repo ships an `integrate-agentforce-react-native` skill that walks you through SDK integration end-to-end:
+
+- **Use-case-driven configuration** — answer "what kind of agent?" and the skill picks the right `AgentforceService.configure(...)` mode (Service Agent vs Employee Agent) instead of asking you to choose between configuration shapes upfront.
+- **Bridge + native wiring** — adds the `react-native-agentforce` bridge package, runs the iOS/Android install scripts (Boost, XcodeGen, CocoaPods, Gradle), and surfaces the Mobile SDK requirements for Employee Agent.
+- **Scaffolds the integration files** — generates `agentforceConfig.ts`, `agentforceLogger.ts`, `agentforceNavigation.ts`, optional `employeeAuth.ts`, and a launch button (prominent home button, header icon, or auto-launch wrapper).
+- **MIAW deployment guidance** — for Service Agent, points you at the [Messaging for In-App and Web mobile deployment docs](https://help.salesforce.com/s/articleView?id=service.miaw_deployment_mobile.htm&type=5) before you try to build.
+
+### Install the skill
+
+The skill is shipped as a Claude Code plugin in this repository. From your consuming React Native project:
+
+```
+/plugin marketplace add salesforce/AgentforceMobileSDK-ReactNative
+/plugin install agentforce-mobile-sdk-react-native@agentforce-mobile-sdk-react-native
+```
+
+Then run the skill:
+
+```
+/integrate-agentforce-react-native
+```
+
+The skill is self-contained at `skills/integrate-agentforce-react-native/` (with reference docs and TypeScript snippet templates under `references/`), and the plugin/marketplace metadata lives at `.claude-plugin/`. The skill is also installable via the standard skills.sh-style `npx skills add` workflow since it lives at the root `skills/` directory. You can also clone this repo and reference the skill directory directly from your project's Claude Code configuration if you prefer not to use the marketplace.
+
+If you'd rather integrate manually, the steps below cover the same ground.
+
 ## 📋 Prerequisites
 
 ### General

@@ -202,12 +202,59 @@ if (!boostPath && platform === 'linux') {
   }
 }
 
+// Try Windows installation (BOOST_ROOT, vcpkg, or common install paths)
+if (!boostPath && platform === 'win32') {
+  var winBoostCandidates = [];
+
+  // 1. BOOST_ROOT env var (de-facto standard override)
+  if (process.env.BOOST_ROOT) {
+    winBoostCandidates.push(process.env.BOOST_ROOT);
+  }
+
+  // 2. vcpkg installations (env var, then common roots), across common triplets
+  var vcpkgTriplets = ['x64-windows', 'x86-windows', 'x64-windows-static', 'arm64-windows'];
+  var vcpkgRoots = [];
+  if (process.env.VCPKG_ROOT) {
+    vcpkgRoots.push(process.env.VCPKG_ROOT);
+  }
+  vcpkgRoots.push('C:\\vcpkg');
+  vcpkgRoots.push('C:\\src\\vcpkg');
+  if (process.env.USERPROFILE) {
+    vcpkgRoots.push(path.join(process.env.USERPROFILE, 'vcpkg'));
+  }
+  vcpkgRoots.forEach(function (root) {
+    vcpkgTriplets.forEach(function (triplet) {
+      winBoostCandidates.push(path.join(root, 'installed', triplet));
+    });
+  });
+
+  // 3. Common manual / Chocolatey install locations
+  winBoostCandidates.push('C:\\boost');
+  winBoostCandidates.push('C:\\Boost');
+  winBoostCandidates.push('C:\\local\\boost');
+
+  for (var j = 0; j < winBoostCandidates.length; j++) {
+    var winCandidate = winBoostCandidates[j];
+    if (!winCandidate) continue;
+    var winBoostInclude = path.join(winCandidate, 'include', 'boost');
+    if (fs.existsSync(winBoostInclude)) {
+      boostPath = winCandidate;
+      console.log('   ✅ Boost found at ' + boostPath + ' (Windows)');
+      break;
+    }
+  }
+}
+
 // Validation: error if still not found
 if (!boostPath) {
   if (platform === 'darwin') {
     console.error('❌ Boost not found. Install: brew install boost');
   } else if (platform === 'linux') {
     console.error('❌ Boost not found. Install: sudo apt-get install libboost-all-dev');
+  } else if (platform === 'win32') {
+    console.error('❌ Boost not found.');
+    console.error('   Install via vcpkg: vcpkg install boost');
+    console.error('   Or set BOOST_ROOT to a directory containing include\\boost.');
   } else {
     console.error('❌ Boost not found. Platform: ' + platform);
   }

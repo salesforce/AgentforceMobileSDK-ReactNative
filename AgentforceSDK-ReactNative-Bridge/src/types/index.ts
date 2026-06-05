@@ -7,6 +7,7 @@
 // Agent configuration types
 export {
   ServiceAgentConfig,
+  ServiceUISettings,
   EmployeeAgentConfig,
   AgentConfig,
   FeatureFlags,
