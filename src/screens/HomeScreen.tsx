@@ -229,11 +229,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             organizationId: creds.organizationId,
             userId: creds.userId,
             agentId: agentId, // undefined triggers multi-agent mode
-            agentLabel: '', // TEMP: hardcoded to test agentLabel override
+            agentLabel: '', // optional: set a custom name to display in the chat header (overrides the server agent label)
             accessToken: creds.accessToken,
             featureFlags,
           }
-        : { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId, agentLabel: '', featureFlags };
+        : // optional: set agentLabel to a custom name to display in the chat header (overrides the server agent label)
+          { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId, agentLabel: '', featureFlags };
       await AgentforceService.configure(config);
 
       await AgentforceService.launchConversation();
