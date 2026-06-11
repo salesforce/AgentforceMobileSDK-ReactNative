@@ -20,6 +20,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.ReadableType
+import com.salesforce.android.agentforcesdk.components.models.DefaultTopAppBarBuilder
 import com.salesforce.android.agentforcesdkimpl.AgentforceClient
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
@@ -312,6 +313,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
                 agentforceConfigBuilder.setDelegate(bridgeUIDelegate)
+                // Override the header title with the client-supplied agentLabel when
+                // present (client wins); otherwise use the SDK default bar, which falls
+                // back to the server-provided agent label. Mirrors the iOS bridge.
+                val agentLabel = employeeConfig.agentLabel?.trim()
+                if (!agentLabel.isNullOrEmpty()) {
+                    agentforceConfigBuilder.setTopAppBarBuilder(BridgeTopAppBarBuilder(agentLabel))
+                } else {
+                    agentforceConfigBuilder.setTopAppBarBuilder(DefaultTopAppBarBuilder)
+                }
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 // Use FullConfig mode for Employee Agent

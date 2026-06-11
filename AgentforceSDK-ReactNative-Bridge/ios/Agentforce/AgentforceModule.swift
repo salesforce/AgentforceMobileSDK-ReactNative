@@ -44,6 +44,12 @@ class AgentforceModule: RCTEventEmitter {
     /// Current mode configuration
     private var currentMode: AgentMode?
 
+    /// Navigation bar builder used to override the conversation header title with a
+    /// client-supplied Employee Agent label. Strongly retained here because
+    /// `NavigationBarManager` holds it as a weak reference. `nil` when no label is
+    /// supplied, so the SDK falls back to the server-provided agent label.
+    private var navigationBarBuilder: BridgeNavigationBarBuilder?
+
 
     private let listenerLock = NSLock()
     private var _hasListeners = false
@@ -173,6 +179,10 @@ class AgentforceModule: RCTEventEmitter {
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
 
+        // Service Agent has no client-supplied label override; clear any builder
+        // left over from a prior Employee Agent session.
+        navigationBarBuilder = nil
+
         // Persist trimmed values to UserDefaults for cross-session recall
         let trimmedSiteUrl = config.serviceApiURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOrgId = config.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -258,6 +268,15 @@ class AgentforceModule: RCTEventEmitter {
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
         credentialProvider.configure(employeeAgent: config)
         currentMode = .employee(config: config)
+
+        // Install a navigation bar builder to override the header title when the
+        // client supplies a non-empty agentLabel. When absent, leave it nil so the
+        // SDK falls back to the server-provided agent label / default.
+        if let label = config.agentLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+            navigationBarBuilder = BridgeNavigationBarBuilder(agentLabel: label)
+        } else {
+            navigationBarBuilder = nil
+        }
 
         // Persist employee agentId (editable in Settings tab)
         UserDefaults.standard.set(config.agentId ?? "", forKey: "EmployeeAgentId")
@@ -418,7 +437,8 @@ class AgentforceModule: RCTEventEmitter {
                         Task { @MainActor in
                             self?.dismissConversation()
                         }
-                    }
+                    },
+                    navigationBarBuilder: navigationBarBuilder
                 )
 
                 presentConversationView(chatView)
@@ -458,7 +478,8 @@ class AgentforceModule: RCTEventEmitter {
                         Task { @MainActor in
                             self?.dismissConversation()
                         }
-                    }
+                    },
+                    navigationBarBuilder: navigationBarBuilder
                 )
 
                 presentConversationView(chatView)

@@ -17,36 +17,23 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.salesforce.android.reactagentforce.models.AgentMode
 
 /**
  * Manages the Agentforce conversation UI as an overlay on the current Activity.
@@ -179,58 +166,25 @@ private fun ConversationOverlayContent(onClose: () -> Unit) {
         val client = AgentforceClientHolder.agentforceClient
         val conversation = AgentforceClientHolder.currentConversation
 
-        val title = when (AgentforceClientHolder.currentMode) {
-            is AgentMode.Employee -> AgentforceClientHolder.agentLabel ?: "Employee Agent"
-            is AgentMode.Service -> "Service Agent"
-            null -> "Agentforce"
-        }
-
         if (conversation != null && client != null) {
+            // Render the SDK container directly — no bridge-owned top bar. The SDK
+            // draws its own header (showTopBar defaults to true), and the agent label
+            // override is applied via BridgeTopAppBarBuilder wired into the SDK config
+            // in AgentforceModule.configureEmployeeAgent. Wrapping it in our own
+            // Scaffold/TopAppBar previously produced a duplicate, redundant header.
             MaterialTheme {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    title,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            },
-                            navigationIcon = {
-                                IconButton(onClick = onClose) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Back",
-                                        tint = Color.White
-                                    )
-                                }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = Color(0xFF0176D3),
-                                titleContentColor = Color.White,
-                                navigationIconContentColor = Color.White
-                            ),
-                            windowInsets = WindowInsets(top = 50.dp, bottom = 0.dp),
-                            modifier = Modifier.heightIn(max = 95.dp)
-                        )
-                    },
-                    contentWindowInsets = WindowInsets(0.dp)
-                ) { paddingValues ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
-                            .navigationBarsPadding()
-                            .imePadding()
-                    ) {
-                        client.AgentforceConversationContainer(
-                            conversation = conversation,
-                            onClose = onClose
-                        )
-                    }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .padding(top = 12.dp)
+                        .navigationBarsPadding()
+                        .imePadding()
+                ) {
+                    client.AgentforceConversationContainer(
+                        conversation = conversation,
+                        onClose = onClose
+                    )
                 }
             }
         }
