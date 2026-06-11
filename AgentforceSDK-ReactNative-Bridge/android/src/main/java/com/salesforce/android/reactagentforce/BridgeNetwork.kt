@@ -24,6 +24,13 @@ import kotlin.coroutines.suspendCoroutine
  */
 class BridgeNetwork(private val restClient: RestClient) : Network {
 
+    companion object {
+        private const val TAG = "BridgeNetwork"
+        // Cap how much of an error body we log so a large HTML/JSON error page
+        // doesn't flood Logcat or the JS log channel.
+        private const val MAX_ERROR_BODY = 2048
+    }
+
     override suspend fun perform(request: NetworkRequest): NetworkResponse {
         return suspendCoroutine { continuation ->
             restClient.sendAsync(
@@ -34,6 +41,14 @@ class BridgeNetwork(private val restClient: RestClient) : Network {
                     }
 
                     override fun onError(exception: Exception?) {
+                        // Surface the failure: every Agentforce API call (session-create,
+                        // messaging, record fetch) flows through here, and an opaque
+                        // STATUS_CODE_UNKNOWN is what the SDK renders as "Something went wrong".
+                        BridgeDiagnostics.e(
+                            TAG,
+                            "Request FAILED (transport error) ${request.method} ${request.path}",
+                            exception
+                        )
                         // Return unknown status code on error - preserves error type information
                         // SDK will handle gracefully regardless of status code
                         continuation.resume(NetworkResponse(request, NetworkResponse.STATUS_CODE_UNKNOWN))
@@ -44,11 +59,27 @@ class BridgeNetwork(private val restClient: RestClient) : Network {
     }
 
     private fun processResponse(resp: RestResponse?, request: NetworkRequest): NetworkResponse {
+        val statusCode = resp?.statusCode ?: NetworkResponse.STATUS_CODE_UNKNOWN
+        val bytes = resp?.asBytes()
+
+        if (statusCode !in 200..299) {
+            // Non-2xx: log status + a bounded slice of the response body. This is what
+            // turns an opaque "Something went wrong" into an actionable cause
+            // (403 = agent not assigned, 404 = wrong agentId, 401 = token/org mismatch).
+            val body = bytes?.let { String(it, Charsets.UTF_8) }?.take(MAX_ERROR_BODY) ?: "<no body>"
+            BridgeDiagnostics.e(
+                TAG,
+                "Request NON-2XX status=$statusCode ${request.method} ${request.path} | body: $body"
+            )
+        } else {
+            BridgeDiagnostics.d(TAG, "Request OK status=$statusCode ${request.method} ${request.path}")
+        }
+
         return NetworkResponse(
             request,
-            resp?.statusCode ?: NetworkResponse.STATUS_CODE_UNKNOWN,
+            statusCode,
             resp?.allHeaders ?: emptyMap(),
-            resp?.asBytes()
+            bytes
         )
     }
 

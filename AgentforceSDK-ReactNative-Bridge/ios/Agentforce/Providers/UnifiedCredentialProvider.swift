@@ -81,20 +81,39 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
                let accessToken = currentUser.credentials.accessToken,
                let orgId = currentUser.credentials.organizationId,
                let userId = currentUser.credentials.userId {
+                // Identity actually sent to Agentforce. A token whose org/user doesn't match
+                // the requested agent surfaces as "Something went wrong"; logging the source +
+                // identity here makes that mismatch visible.
+                BridgeDiagnostics.debug(
+                    "UnifiedCredentialProvider",
+                    "Credentials → source: live-MobileSDK-user, orgId: \(orgId), userId: \(userId), " +
+                        "token: \(BridgeDiagnostics.redact(accessToken))"
+                )
                 return .OAuth(
                     authToken: accessToken,
                     orgId: orgId,
                     userId: userId
                 )
             }
+            BridgeDiagnostics.warn(
+                "UnifiedCredentialProvider",
+                "No usable live Mobile SDK user; falling back to cached token"
+            )
             #endif
 
             // Fallback to cached token if Mobile SDK not available
             if let token = directToken {
+                let fallbackOrg = directOrgId ?? config.organizationId
+                let fallbackUser = directUserId ?? config.userId
+                BridgeDiagnostics.debug(
+                    "UnifiedCredentialProvider",
+                    "Credentials → source: cached-fallback, orgId: \(fallbackOrg), userId: \(fallbackUser), " +
+                        "token: \(BridgeDiagnostics.redact(token))"
+                )
                 return .OAuth(
                     authToken: token,
-                    orgId: directOrgId ?? config.organizationId,
-                    userId: directUserId ?? config.userId
+                    orgId: fallbackOrg,
+                    userId: fallbackUser
                 )
             } else {
                 fatalError("Employee Agent mode requires either Mobile SDK or cached token")

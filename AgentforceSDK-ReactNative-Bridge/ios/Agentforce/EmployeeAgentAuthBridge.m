@@ -7,6 +7,7 @@
  */
 
 #import <React/RCTBridgeModule.h>
+#import <os/log.h>
 
 #if __has_include(<SalesforceSDKCore/SFUserAccountManager.h>)
 #import <SalesforceSDKCore/SFUserAccountManager.h>
@@ -27,6 +28,28 @@ RCT_EXPORT_MODULE(EmployeeAgentAuthBridge);
 }
 
 #if HAS_SALESFORCE_SDK
+
+/// Log the full OAuth error to the unified system log. The visible failures
+/// ("invalid client credentials" / `invalid_client_id`) are connected-app/bootconfig
+/// mismatches; NSError.userInfo carries the exact server error + description that the
+/// generic localizedDescription drops. Visible in Console.app / Xcode under category
+/// "bridge-diagnostics".
+- (void)logAuthError:(NSString *)phase error:(NSError *)error {
+  os_log_t log = os_log_create("com.salesforce.reactagentforce", "bridge-diagnostics");
+  os_log_error(log, "[EmployeeAgentAuthBridge] %{public}@ FAILED → domain: %{public}@, code: %ld, desc: %{public}@, userInfo: %{public}@",
+               phase,
+               error.domain ?: @"<none>",
+               (long)error.code,
+               error.localizedDescription ?: @"<none>",
+               error.userInfo ?: @{});
+}
+
+/// Build a richer rejection message that includes the underlying OAuth error so the
+/// JS catch handler (and the customer's logs) sees the real cause, not just a generic line.
+- (NSString *)detailedAuthMessage:(NSString *)fallback error:(NSError *)error {
+  NSString *desc = error.localizedDescription ?: fallback;
+  return [NSString stringWithFormat:@"%@ (domain=%@ code=%ld)", desc, error.domain ?: @"?", (long)error.code];
+}
 
 - (NSDictionary *)credentialsDictionaryFromUserAccount:(SFUserAccount *)userAccount {
   SFOAuthCredentials *creds = userAccount.credentials;
@@ -74,7 +97,8 @@ RCT_EXPORT_METHOD(refreshAuthCredentials:(RCTPromiseResolveBlock)resolve
     }
   }
                                                    failure:^(SFOAuthInfo *authInfo, NSError *error) {
-    reject(@"REFRESH_FAILED", error.localizedDescription ?: @"Token refresh failed.", error);
+    [self logAuthError:@"refresh" error:error];
+    reject(@"REFRESH_FAILED", [self detailedAuthMessage:@"Token refresh failed." error:error], error);
   }];
 }
 
@@ -90,7 +114,8 @@ RCT_EXPORT_METHOD(login:(RCTPromiseResolveBlock)resolve
         reject(@"LOGIN_FAILED", @"Could not read credentials after login.", nil);
       }
     } failure:^(SFOAuthInfo *authInfo, NSError *error) {
-      reject(@"LOGIN_FAILED", error.localizedDescription ?: @"Login failed.", error);
+      [self logAuthError:@"login" error:error];
+      reject(@"LOGIN_FAILED", [self detailedAuthMessage:@"Login failed." error:error], error);
     }];
   });
 }

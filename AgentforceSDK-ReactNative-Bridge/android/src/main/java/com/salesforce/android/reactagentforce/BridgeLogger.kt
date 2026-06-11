@@ -42,4 +42,13 @@ class BridgeLogger(private val reactContext: ReactContext) : Logger {
     override fun i(message: String, exception: Throwable) = emit("info", message, exception.toString())
     override fun w(message: String) = emit("warn", message)
     override fun w(message: String, exception: Throwable) = emit("warn", message, exception.toString())
+
+    /**
+     * Forward a bridge-originated diagnostic (not an SDK log) to JS. Used by
+     * [BridgeDiagnostics] so OAuth/network/credential diagnostics reach a registered
+     * JS LoggerDelegate. Gated on the same [forwardingEnabled] flag as SDK logs.
+     */
+    fun forwardDiagnostic(level: String, message: String, error: String?) {
+        emit(level, message, error)
+    }
 }

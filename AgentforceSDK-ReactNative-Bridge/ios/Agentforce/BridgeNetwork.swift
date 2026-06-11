@@ -24,19 +24,50 @@ struct BridgeNetwork: SalesforceNetwork.Network {
         self.restClient = restClient
     }
 
+    /// Cap how much of an error body we log so a large HTML/JSON error page
+    /// doesn't flood the system log or the JS log channel.
+    private static let maxErrorBody = 2048
+
     func data(for request: SalesforceNetwork.NetworkRequest) async throws -> (Data, URLResponse) {
         let restRequest = try createRestRequest(from: request)
+        let method = request.baseRequest.httpMethod ?? "GET"
+        let path = request.baseRequest.url?.absoluteString ?? "<no url>"
 
         return try await withCheckedThrowingContinuation { continuation in
             restClient.send(request: restRequest) { result in
                 switch result {
                 case let .success(response):
-                    if let data = try? response.asData() {
+                    let statusCode = (response.urlResponse as? HTTPURLResponse)?.statusCode ?? -1
+                    let data = try? response.asData()
+                    if statusCode < 200 || statusCode >= 300 {
+                        // Non-2xx: log status + a bounded slice of the body. This is what turns
+                        // an opaque "Something went wrong" into an actionable cause
+                        // (403 = agent not assigned, 404 = wrong agentId, 401 = token/org mismatch).
+                        let body = data.flatMap { String(data: $0, encoding: .utf8) }?
+                            .prefix(BridgeNetwork.maxErrorBody).description ?? "<no body>"
+                        BridgeDiagnostics.error(
+                            "BridgeNetwork",
+                            "Request NON-2XX status=\(statusCode) \(method) \(path) | body: \(body)"
+                        )
+                    } else {
+                        BridgeDiagnostics.debug(
+                            "BridgeNetwork",
+                            "Request OK status=\(statusCode) \(method) \(path)"
+                        )
+                    }
+                    if let data = data {
                         continuation.resume(returning: (data, response.urlResponse))
                     } else {
+                        BridgeDiagnostics.error("BridgeNetwork", "Request had no data \(method) \(path)")
                         continuation.resume(throwing: NetworkError.noData)
                     }
                 case let .failure(error):
+                    // Every Agentforce API call flows through here; a swallowed transport
+                    // error is what the SDK renders as "Something went wrong".
+                    BridgeDiagnostics.error(
+                        "BridgeNetwork",
+                        "Request FAILED (transport error) \(method) \(path) | error: \(error)"
+                    )
                     continuation.resume(throwing: error)
                 }
             }

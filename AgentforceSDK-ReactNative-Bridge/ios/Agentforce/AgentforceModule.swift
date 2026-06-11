@@ -115,10 +115,13 @@ class AgentforceModule: RCTEventEmitter {
 
     override func startObserving() {
         listenerLock.withLock { _hasListeners = true }
+        // Route bridge diagnostics to JS through this module's onLogMessage channel.
+        BridgeDiagnostics.setSink(self)
     }
 
     override func stopObserving() {
         listenerLock.withLock { _hasListeners = false }
+        BridgeDiagnostics.setSink(nil)
     }
 
     // MARK: - Unified Configuration Method
@@ -240,6 +243,11 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
         }
 
+        BridgeDiagnostics.debug("AgentforceModule", "Configuring Employee Agent - Org: \(config.organizationId), " +
+            "User: \(config.userId), agentId: \(config.agentId ?? "<null/multi-agent>"), " +
+            "instanceUrl: \(config.instanceUrl), agentLabel: \(config.agentLabel ?? "<none>")")
+        logBootConfigIdentity()
+
         // Check if agentId changed or we're switching modes
         var agentIdChanged = false
         var switchingModes = false
@@ -343,6 +351,29 @@ class AgentforceModule: RCTEventEmitter {
         } else {
             print("[AgentforceModule] Reusing existing AgentforceClient - credentials will be refreshed automatically")
         }
+    }
+
+    // MARK: - Diagnostics
+
+    /// Log the resolved OAuth identity the Mobile SDK will actually use (from
+    /// bootconfig.plist) plus the configured login host. This is the highest-signal
+    /// diagnostic for `invalid_client_id` failures: it confirms what the app is sending
+    /// (consumer key prefix/length, redirect URI, scopes) against which org it logs into,
+    /// independent of what the developer believes is configured. The consumer key is
+    /// redacted — only prefix + last 4 + length are logged.
+    private func logBootConfigIdentity() {
+        #if canImport(SalesforceSDKCore)
+        let appConfig = SalesforceManager.shared.bootConfig
+        let scopes = appConfig?.oauthScopes.sorted().joined(separator: ",") ?? "<none>"
+        let loginHost = UserAccountManager.shared.loginHost ?? "<unknown>"
+        BridgeDiagnostics.debug(
+            "AgentforceModule",
+            "BootConfig identity → consumerKey: \(BridgeDiagnostics.redact(appConfig?.remoteAccessConsumerKey)), " +
+                "redirectURI: \(appConfig?.oauthRedirectURI ?? "<none>"), scopes: [\(scopes)], loginHost: \(loginHost)"
+        )
+        #else
+        BridgeDiagnostics.debug("AgentforceModule", "BootConfig identity unavailable (SalesforceSDKCore not present)")
+        #endif
     }
 
     // MARK: - Network Configuration Helpers
@@ -512,10 +543,12 @@ class AgentforceModule: RCTEventEmitter {
             // For Employee Agent, check if agentId is provided
             if let agentId = config.agentId, !agentId.isEmpty {
                 // Specific agent ID provided - always use it
+                BridgeDiagnostics.debug("AgentforceModule", "Creating conversation (agentId=\(agentId))")
                 conversation = client.startAgentforceConversation(
                     forAgentId: agentId
                 )
             } else {
+                BridgeDiagnostics.debug("AgentforceModule", "Creating conversation (agentId=nil/multi-agent)")
                 // No agentId provided - check if multi-agent is enabled
                 let multiAgentEnabled = UserDefaults.standard.object(forKey: Self.featureFlagKeys.enableMultiAgent) == nil ? true : UserDefaults.standard.bool(forKey: Self.featureFlagKeys.enableMultiAgent)
 

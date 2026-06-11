@@ -7,6 +7,7 @@ package com.salesforce.android.reactagentforce.providers
 import android.util.Log
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentialProvider
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentials
+import com.salesforce.android.reactagentforce.BridgeDiagnostics
 import com.salesforce.android.reactagentforce.models.AgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
@@ -85,6 +86,14 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
                         val userId = currentUser.userId
 
                         if (authToken != null && orgId != null && userId != null) {
+                            // Identity actually sent to Agentforce. A token whose org/user
+                            // doesn't match the requested agent surfaces as "Something went wrong";
+                            // logging the source + identity here makes that mismatch visible.
+                            BridgeDiagnostics.d(
+                                TAG,
+                                "Credentials → source: live-MobileSDK-user, orgId: $orgId, userId: $userId, " +
+                                    "token: ${BridgeDiagnostics.redact(authToken)}"
+                            )
                             return AgentforceAuthCredentials.OAuth(
                                 authToken = authToken,
                                 orgId = orgId,
@@ -92,17 +101,29 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
                             )
                         }
                     }
+                    BridgeDiagnostics.w(
+                        TAG,
+                        "No usable live Mobile SDK user (currentUser=${currentUser != null}); falling back to cached token"
+                    )
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to get fresh credentials from Mobile SDK, falling back to cached", e)
+                    BridgeDiagnostics.w(TAG, "Failed to get fresh credentials from Mobile SDK, falling back to cached", e)
                 }
 
                 // Fallback to cached token if Mobile SDK not available
                 val token = directToken
                     ?: throw IllegalStateException("Employee Agent mode requires either Mobile SDK or cached token")
+                val fallbackOrg = directOrgId ?: currentMode.config.organizationId
+                val fallbackUser = directUserId ?: currentMode.config.userId
+                BridgeDiagnostics.d(
+                    TAG,
+                    "Credentials → source: cached-fallback, orgId: $fallbackOrg, userId: $fallbackUser, " +
+                        "token: ${BridgeDiagnostics.redact(token)}"
+                )
                 AgentforceAuthCredentials.OAuth(
                     authToken = token,
-                    orgId = directOrgId ?: currentMode.config.organizationId,
-                    userId = directUserId ?: currentMode.config.userId
+                    orgId = fallbackOrg,
+                    userId = fallbackUser
                 )
             }
         }

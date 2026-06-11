@@ -105,17 +105,21 @@ class EmployeeAgentAuthBridge(reactContext: ReactApplicationContext) :
                 promise.reject("NOT_AVAILABLE", "Salesforce SDK not initialized")
                 return
             }
+            BridgeDiagnostics.d(TAG, "refreshAuthCredentials() requesting session refresh")
             mgr.getRestClient(activity, object : ClientManager.RestClientCallback {
                 override fun authenticatedRestClient(client: RestClient?) {
                     if (client != null && client.authToken != null) {
+                        BridgeDiagnostics.d(TAG, "refreshAuthCredentials() succeeded")
                         promise.resolve(credentialsFromRestClient(client))
                     } else {
+                        BridgeDiagnostics.e(TAG, "refreshAuthCredentials() returned no credentials")
                         promise.reject("REFRESH_FAILED", "No credentials after refresh")
                     }
                 }
             })
         } catch (e: Exception) {
             Log.e(TAG, "refreshAuthCredentials failed", e)
+            BridgeDiagnostics.e(TAG, "refreshAuthCredentials() threw", e)
             promise.reject("ERROR", e.message)
         }
     }
@@ -133,18 +137,42 @@ class EmployeeAgentAuthBridge(reactContext: ReactApplicationContext) :
                 promise.reject("NOT_AVAILABLE", "Salesforce SDK not initialized")
                 return
             }
+            BridgeDiagnostics.d(TAG, "login() starting Mobile SDK auth flow")
             // getRestClient kicks off login flow if no account; callback runs when RestClient is ready
             mgr.getRestClient(activity, object : ClientManager.RestClientCallback {
                 override fun authenticatedRestClient(client: RestClient?) {
                     if (client != null && client.authToken != null) {
+                        val info = client.clientInfo
+                        BridgeDiagnostics.d(
+                            TAG,
+                            "login() succeeded → org: ${info?.orgId}, user: ${info?.userId}, " +
+                                "instance: ${info?.instanceUrl}"
+                        )
                         promise.resolve(credentialsFromRestClient(client))
                     } else {
-                        promise.reject("LOGIN_FAILED", "No credentials after login")
+                        // The SDK delivers no usable client. The actual OAuth cause (e.g.
+                        // `invalid_client:invalid client credentials` — a bootconfig/connected-app
+                        // mismatch) is emitted by the SDK's LoginViewModel to Logcat
+                        // (tag: LoginViewModel) and is NOT passed to this callback. Surface a
+                        // pointer so the JS side knows where to look instead of a bare message.
+                        BridgeDiagnostics.e(
+                            TAG,
+                            "login() returned no credentials. If you saw 'Token Request Error', the " +
+                                "underlying OAuth failure is in Logcat under tag 'LoginViewModel' " +
+                                "(commonly invalid_client → verify consumer key/redirect URI/scopes in " +
+                                "bootconfig.xml against the login host)."
+                        )
+                        promise.reject(
+                            "LOGIN_FAILED",
+                            "No credentials after login. Check Logcat tag 'LoginViewModel' for the OAuth error " +
+                                "(e.g. invalid_client → connected-app/bootconfig mismatch)."
+                        )
                     }
                 }
             })
         } catch (e: Exception) {
             Log.e(TAG, "login failed", e)
+            BridgeDiagnostics.e(TAG, "login() threw before completing", e)
             promise.reject("ERROR", e.message)
         }
     }

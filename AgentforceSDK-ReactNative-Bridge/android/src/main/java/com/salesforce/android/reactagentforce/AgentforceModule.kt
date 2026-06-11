@@ -39,6 +39,7 @@ import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvide
 import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
 import com.salesforce.android.agentforcesdkimpl.network.AgentforceNetworkImpl
 import com.salesforce.androidsdk.app.SalesforceSDKManager
+import com.salesforce.androidsdk.config.BootConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -83,7 +84,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     private var currentMode: LocalAgentMode? = null
 
     // Bridge logger for forwarding SDK logs to JS
-    private val bridgeLogger = BridgeLogger(reactContext)
+    private val bridgeLogger = BridgeLogger(reactContext).also {
+        // Route bridge diagnostics through the same JS log channel as SDK logs.
+        BridgeDiagnostics.sink = it
+    }
 
     // Bridge navigation for forwarding SDK navigation requests to JS
     private val bridgeNavigation = BridgeNavigation(reactContext)
@@ -251,6 +255,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         }
 
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
+        BridgeDiagnostics.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, " +
+            "User: ${employeeConfig.userId}, agentId: ${employeeConfig.agentId ?: "<null/multi-agent>"}, " +
+            "instanceUrl: ${employeeConfig.instanceUrl}, agentLabel: ${employeeConfig.agentLabel ?: "<none>"}")
+        logBootConfigIdentity()
 
         // Check if agentId changed - only clear if it did
         val currentEmployeeMode = currentMode as? LocalAgentMode.Employee
@@ -905,14 +913,45 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val client = AgentforceClientHolder.agentforceClient ?: return true
         return try {
             val agentIdParam = AgentforceClientHolder.agentId?.takeIf { it.isNotBlank() }
+            BridgeDiagnostics.d(TAG, "Creating conversation (agentId=${agentIdParam ?: "null/multi-agent"})")
             val conversation = client.startAgentforceConversation(agentId = agentIdParam)
             AgentforceClientHolder.setConversation(conversation)
             Log.d(TAG, "Conversation created in module (agentId=${agentIdParam ?: "null/multi-agent"})")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create conversation", e)
+            BridgeDiagnostics.e(TAG, "Failed to create conversation (agentId=" +
+                "${AgentforceClientHolder.agentId ?: "null/multi-agent"})", e)
             promise.reject(errorCode, "Failed to start conversation: ${e.message}", e)
             false
+        }
+    }
+
+    /**
+     * Log the resolved OAuth identity the Mobile SDK will actually use (from
+     * res/values/bootconfig.xml) plus the selected login host. This is the highest-signal
+     * diagnostic for `invalid_client` failures: it confirms what the app is sending
+     * (consumer key prefix/length, redirect URI, scopes) against which org it logs into,
+     * independent of what the developer believes is configured. The consumer key is
+     * redacted — only prefix + last 4 + length are logged.
+     */
+    private fun logBootConfigIdentity() {
+        try {
+            val boot = BootConfig.getBootConfig(reactApplicationContext)
+            val scopes = boot.oauthScopes?.joinToString(",") ?: "<none>"
+            val loginHost = try {
+                SalesforceSDKManager.getInstance().loginServerManager
+                    ?.selectedLoginServer?.url ?: "<unknown>"
+            } catch (e: Exception) {
+                "<unavailable: ${e.message}>"
+            }
+            BridgeDiagnostics.d(
+                TAG,
+                "BootConfig identity → consumerKey: ${BridgeDiagnostics.redact(boot.remoteAccessConsumerKey)}, " +
+                    "redirectURI: ${boot.oauthRedirectURI}, scopes: [$scopes], loginHost: $loginHost"
+            )
+        } catch (e: Exception) {
+            BridgeDiagnostics.w(TAG, "Unable to read BootConfig for diagnostics", e)
         }
     }
 
