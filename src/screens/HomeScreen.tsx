@@ -229,10 +229,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             organizationId: creds.organizationId,
             userId: creds.userId,
             agentId: agentId, // undefined triggers multi-agent mode
+            agentLabel: '', // TEMP: hardcoded to test agentLabel override
             accessToken: creds.accessToken,
             featureFlags,
           }
-        : { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId, featureFlags };
+        : { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId, agentLabel: '', featureFlags };
       await AgentforceService.configure(config);
 
       await AgentforceService.launchConversation();
