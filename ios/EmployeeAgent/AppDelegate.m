@@ -27,6 +27,7 @@
 #import <React/RCTBridge.h>
 #import <React/RCTRootView.h>
 #import <SalesforceReact/SalesforceReactSDKManager.h>
+#import <SalesforceSDKCore/SalesforceSDKManager.h>
 
 @interface AppDelegate ()
 @property (nonatomic, strong) RCTBridge *bridge;
@@ -39,6 +40,16 @@
 {
   // Initialize Salesforce Mobile SDK (required for Employee Agent OAuth)
   [SalesforceReactSDKManager initializeSDK];
+
+  // Force the OAuth user-agent flow instead of the SDK-default web-server flow.
+  // The web-server (authorization_code) flow sends response_type=code and, when the
+  // connected app has "Require Secret for Web Server Flow" enabled, requires a client
+  // secret at the token exchange. Mobile apps can't ship a secret, so login fails with
+  // "invalid client credentials". The user-agent flow (response_type=token/hybrid_token)
+  // does not require a secret. Setting this to NO routes SFOAuthCoordinator down the
+  // SFOAuthTypeUserAgent path. useHybridAuthentication remains YES, so response_type is
+  // hybrid_token — matching the flow Syngenta's own host app uses successfully.
+  [SalesforceSDKManager sharedManager].useWebServerAuthentication = NO;
 
   self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
   self.launchOptions = launchOptions;

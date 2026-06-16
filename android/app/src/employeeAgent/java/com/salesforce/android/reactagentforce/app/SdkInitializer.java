@@ -37,5 +37,14 @@ import com.salesforce.androidsdk.app.SalesforceSDKManager;
 public class SdkInitializer {
     public static void initialize(Context context, Class<? extends Activity> mainActivityClass) {
         SalesforceSDKManager.initNative(context, mainActivityClass);
+
+        // Force the OAuth user-agent flow instead of the SDK-default web-server flow.
+        // The web-server (authorization_code) flow sends response_type=code and, when the
+        // connected app has "Require Secret for Web Server Flow" enabled, requires a client
+        // secret at the token exchange. Mobile apps can't ship a secret, so login fails with
+        // "invalid client credentials". The user-agent flow (response_type=token/hybrid_token)
+        // does not require a secret. Mirrors the iOS EmployeeAgent AppDelegate setting
+        // (useWebServerAuthentication = NO) and the flow Syngenta's own host app uses.
+        SalesforceSDKManager.getInstance().setUseWebServerAuthentication(false);
     }
 }
