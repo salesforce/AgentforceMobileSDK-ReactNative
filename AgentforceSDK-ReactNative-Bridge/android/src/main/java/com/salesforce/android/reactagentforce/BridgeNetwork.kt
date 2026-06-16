@@ -96,9 +96,12 @@ class BridgeNetwork(private val restClient: RestClient) : Network {
         // Append query params to the path as a query string.
         // RestRequest(RestMethod, String, Map) treats the Map as additionalHttpHeaders,
         // NOT query parameters, so we must encode them into the URL path ourselves.
-        val fullPath = if (queryParams.isNotEmpty()) {
+        // queryParams is a platform type and may be null on some requests (e.g. the
+        // session-create/send path), so guard against null — matching AgentforceNetworkImpl.
+        val safeQueryParams = queryParams ?: emptyMap()
+        val fullPath = if (safeQueryParams.isNotEmpty()) {
             val separator = if (path.contains("?")) "&" else "?"
-            val queryString = queryParams.entries.joinToString("&") { (k, v) ->
+            val queryString = safeQueryParams.entries.joinToString("&") { (k, v) ->
                 "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v.toString(), "UTF-8")}"
             }
             "$path$separator$queryString"
@@ -106,18 +109,21 @@ class BridgeNetwork(private val restClient: RestClient) : Network {
             path
         }
 
+        // Custom headers must be passed into the RestRequest constructor: RestRequest's
+        // additionalHttpHeaders field is `private final` and is left null by the
+        // method/path and method/path/body constructors, so mutating it post-construction
+        // throws NPE ("getAdditionalHttpHeaders(...) must not be null"). Pass the map in
+        // instead. additionalHttpHeaders is a platform type that may be null (e.g. the
+        // session-create/send path), so coerce to an empty map.
+        val headers = additionalHttpHeaders ?: emptyMap()
+
         // Create RestRequest - use body constructor if body exists, else path-only constructor
         val restRequest = if (body != null && body!!.isNotEmpty()) {
             val mediaType = contentType?.toMediaType()
             val requestBody = body!!.toRequestBody(mediaType)
-            RestRequest(restMethod, fullPath, requestBody)
+            RestRequest(restMethod, fullPath, requestBody, headers)
         } else {
-            RestRequest(restMethod, fullPath)
-        }
-
-        // Add custom headers
-        additionalHttpHeaders.forEach { (key, value) ->
-            restRequest.additionalHttpHeaders[key] = value
+            RestRequest(restMethod, fullPath, headers)
         }
 
         return restRequest

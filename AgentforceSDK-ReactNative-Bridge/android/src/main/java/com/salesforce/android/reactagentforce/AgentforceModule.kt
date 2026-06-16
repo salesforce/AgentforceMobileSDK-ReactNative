@@ -38,6 +38,8 @@ import com.salesforce.android.reactagentforce.providers.BridgeViewProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
 import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
 import com.salesforce.android.agentforcesdkimpl.network.AgentforceNetworkImpl
+import com.salesforce.android.mobile.interfaces.user.Org
+import com.salesforce.android.mobile.interfaces.user.User
 import com.salesforce.androidsdk.app.SalesforceSDKManager
 import com.salesforce.androidsdk.config.BootConfig
 import kotlinx.coroutines.CoroutineScope
@@ -314,7 +316,25 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
+                    // Route bootstrap (BotsAPI connect calls) through the authenticated
+                    // RestClient-backed network, matching the iOS bridge (which passes
+                    // salesforceNetwork). Without this, the SDK falls back to a default
+                    // AgentforceNetworkImpl() with no salesforceDomain, so the bootstrap
+                    // connect call 404s and the client never gets connectionInfo.
+                    .setNetwork(network)
                     .setDataProvider(dataProvider)
+                    // Set the User/Org so the SDK knows the orgId. The SDK derives the
+                    // runtime connection info from user.org.id when the internal-core
+                    // discovery endpoints are unavailable (the external-app case), via
+                    // AgentforceConnectionInfo(orgId=...). The iOS bridge sets this too;
+                    // without it, orgId is null and that fallback can't resolve a host.
+                    .setUser(
+                        User(
+                            org = Org(id = employeeConfig.organizationId, community = null),
+                            userName = employeeConfig.userId,
+                            displayName = employeeConfig.userId
+                        )
+                    )
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
                 // Always attach bridgeViewProvider so late registrations take effect.
