@@ -254,9 +254,25 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
 
-        // Check if agentId changed - only clear if it did
+        // Decide whether we need to build a fresh AgentforceClient, mirroring the iOS bridge
+        // (configureEmployeeAgent -> needsNewClient). A new client is required only when we are
+        // switching from Service mode, when the agentId changed, or when no client exists yet.
+        //
+        // This guard is what makes agent dismiss + re-launch (same agentId) work. The internal-core
+        // discovery endpoints (connect/agentforce-agent-info etc.) 404 for external OAuth apps by
+        // design; the SDK only recovers from that 404 (forcedBootstrap -> INITIALIZE -> session
+        // create) for a conversation that lives on the SAME client that bootstrapped it. If we
+        // always rebuilt the client (the old Android behavior) while preserving the previous
+        // conversation, the new client's ConversationProvider would start with an empty map and the
+        // preserved conversation would be orphaned on the OLD client — launchConversation() then
+        // skips createConversation() (currentConversation != null), no fresh conversation is
+        // registered on the new client, and re-launch dies on "Network error: 404". Reusing the
+        // existing client keeps the conversation (and its history) paired with its bootstrapping
+        // client, exactly like iOS. See [[project_rn_android_bootstrap_fix]].
         val currentEmployeeMode = currentMode as? LocalAgentMode.Employee
+        val switchingModes = AgentforceClientHolder.isServiceAgent
         val agentIdChanged = currentEmployeeMode?.config?.agentId != employeeConfig.agentId
+        val needsNewClient = switchingModes || agentIdChanged || AgentforceClientHolder.agentforceClient == null
 
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
@@ -266,17 +282,24 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Persist employee agentId (editable in Settings tab)
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
 
-        val shouldClear = AgentforceClientHolder.isServiceAgent || agentIdChanged
-
         scope.launch(Dispatchers.Main) {
-            // Destroy overlay and clear on main thread to avoid Compose observer errors
-            if (shouldClear) {
-                Log.d(TAG, "AgentId changed or switching modes - clearing client and conversation")
-                AgentforceConversationOverlay.destroy()
-                AgentforceClientHolder.clear()
-            } else {
-                Log.d(TAG, "AgentId unchanged - preserving conversation")
+            if (!needsNewClient) {
+                // Reuse the existing client and its conversation (credentials refresh automatically
+                // via UnifiedCredentialProvider). Preserves conversation history across re-launch.
+                Log.d(TAG, "AgentId unchanged - reusing existing client and conversation")
+                AgentforceClientHolder.setMode(LocalAgentMode.Employee(employeeConfig))
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                    putString("mode", "employee")
+                })
+                return@launch
             }
+
+            // Tear down the previous overlay/client/conversation before building a fresh one, so
+            // launchConversation() recreates a conversation paired with the new client.
+            Log.d(TAG, "Switching modes or agentId changed - clearing client and conversation")
+            AgentforceConversationOverlay.destroy()
+            AgentforceClientHolder.clear()
             try {
                 // Create AgentforceConfiguration for FullConfig mode
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
