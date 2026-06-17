@@ -12,10 +12,8 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -26,8 +24,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -150,43 +153,60 @@ object AgentforceConversationOverlay {
 private fun ConversationOverlayContent(onClose: () -> Unit) {
     val visible by AgentforceConversationOverlay.isVisible
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = slideInVertically(
-            initialOffsetY = { fullHeight -> fullHeight },
-            animationSpec = tween(durationMillis = 250)
-        ),
-        exit = slideOutVertically(
-            targetOffsetY = { fullHeight -> fullHeight },
-            animationSpec = tween(durationMillis = 250)
-        )
-    ) {
+    val client = AgentforceClientHolder.agentforceClient
+    val conversation = AgentforceClientHolder.currentConversation
+
+    if (conversation == null || client == null) return
+
+    // IMPORTANT: do NOT wrap the SDK container in AnimatedVisibility (or any other
+    // composable that removes it from the composition when hidden). The SDK's
+    // AgentforceConversationContainer runs bootstrap in a one-shot LaunchedEffect(Unit);
+    // disposing it on hide and recomposing it on the next show re-fires that bootstrap.
+    // For external OAuth apps the discovery endpoints (connect/agentforce-agent-info,
+    // conversation-runtime-proxy) 404 by design, so isGlobalBootstrapComplete never flips
+    // true and every re-show re-bootstraps. On a fresh conversation the SDK recovers from
+    // that 404 (forcedBootstrap -> INITIALIZE -> session create), but on a REUSED
+    // conversation that already has a session the re-fired bootstrap can't recover and the
+    // chat is stuck on "Network error: 404". iOS never re-bootstraps on re-launch (its
+    // container goes straight to containerState=ready) because the conversation stays alive.
+    // We mirror that by keeping the container permanently composed and animating visibility
+    // via a vertical translation only (it slides off-screen when hidden, never leaves the
+    // composition), so the SDK's ViewModel and bootstrap state survive hide/show exactly like
+    // iOS. Touches while hidden are already gated by the wrapper's dispatchTouchEvent, and
+    // destroy() (agentId change / mode switch) still tears the whole container down for the
+    // fresh-conversation path. See [[project_rn_android_bootstrap_fix]].
+    if (visible) {
         BackHandler { onClose() }
+    }
 
-        val client = AgentforceClientHolder.agentforceClient
-        val conversation = AgentforceClientHolder.currentConversation
+    var heightPx by remember { mutableIntStateOf(0) }
+    // Slide fully off-screen (downward) when hidden; rest at 0 (fully shown) when visible.
+    val translationY by animateFloatAsState(
+        targetValue = if (visible) 0f else heightPx.toFloat(),
+        animationSpec = tween(durationMillis = 250),
+        label = "overlaySlide"
+    )
 
-        if (conversation != null && client != null) {
-            // Render the SDK container directly — no bridge-owned top bar. The SDK
-            // draws its own header (showTopBar defaults to true), and the agent label
-            // override is applied via BridgeTopAppBarBuilder wired into the SDK config
-            // in AgentforceModule.configureEmployeeAgent. Wrapping it in our own
-            // Scaffold/TopAppBar previously produced a duplicate, redundant header.
-            MaterialTheme {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(top = 12.dp)
-                        .navigationBarsPadding()
-                        .imePadding()
-                ) {
-                    client.AgentforceConversationContainer(
-                        conversation = conversation,
-                        onClose = onClose
-                    )
-                }
-            }
+    // Render the SDK container directly — no bridge-owned top bar. The SDK
+    // draws its own header (showTopBar defaults to true), and the agent label
+    // override is applied via BridgeTopAppBarBuilder wired into the SDK config
+    // in AgentforceModule.configureEmployeeAgent. Wrapping it in our own
+    // Scaffold/TopAppBar previously produced a duplicate, redundant header.
+    MaterialTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { heightPx = it.height }
+                .graphicsLayer { this.translationY = translationY }
+                .statusBarsPadding()
+                .padding(top = 12.dp)
+                .navigationBarsPadding()
+                .imePadding()
+        ) {
+            client.AgentforceConversationContainer(
+                conversation = conversation,
+                onClose = onClose
+            )
         }
     }
 }
