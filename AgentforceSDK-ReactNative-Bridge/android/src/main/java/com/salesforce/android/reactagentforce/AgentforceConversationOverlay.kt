@@ -158,23 +158,10 @@ private fun ConversationOverlayContent(onClose: () -> Unit) {
 
     if (conversation == null || client == null) return
 
-    // IMPORTANT: do NOT wrap the SDK container in AnimatedVisibility (or any other
-    // composable that removes it from the composition when hidden). The SDK's
-    // AgentforceConversationContainer runs bootstrap in a one-shot LaunchedEffect(Unit);
-    // disposing it on hide and recomposing it on the next show re-fires that bootstrap.
-    // For external OAuth apps the discovery endpoints (connect/agentforce-agent-info,
-    // conversation-runtime-proxy) 404 by design, so isGlobalBootstrapComplete never flips
-    // true and every re-show re-bootstraps. On a fresh conversation the SDK recovers from
-    // that 404 (forcedBootstrap -> INITIALIZE -> session create), but on a REUSED
-    // conversation that already has a session the re-fired bootstrap can't recover and the
-    // chat is stuck on "Network error: 404". iOS never re-bootstraps on re-launch (its
-    // container goes straight to containerState=ready) because the conversation stays alive.
-    // We mirror that by keeping the container permanently composed and animating visibility
-    // via a vertical translation only (it slides off-screen when hidden, never leaves the
-    // composition), so the SDK's ViewModel and bootstrap state survive hide/show exactly like
-    // iOS. Touches while hidden are already gated by the wrapper's dispatchTouchEvent, and
-    // destroy() (agentId change / mode switch) still tears the whole container down for the
-    // fresh-conversation path. See [[project_rn_android_bootstrap_fix]].
+    // Keep the container permanently composed and animate visibility via translationY only.
+    // AnimatedVisibility would remove it from the composition on hide and re-run the SDK's
+    // one-shot bootstrap on the next show, which 404s on a reused conversation. See
+    // [[project_rn_android_bootstrap_fix]].
     if (visible) {
         BackHandler { onClose() }
     }
