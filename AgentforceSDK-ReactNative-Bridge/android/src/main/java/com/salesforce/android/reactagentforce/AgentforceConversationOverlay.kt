@@ -12,10 +12,8 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -26,8 +24,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -150,43 +153,47 @@ object AgentforceConversationOverlay {
 private fun ConversationOverlayContent(onClose: () -> Unit) {
     val visible by AgentforceConversationOverlay.isVisible
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = slideInVertically(
-            initialOffsetY = { fullHeight -> fullHeight },
-            animationSpec = tween(durationMillis = 250)
-        ),
-        exit = slideOutVertically(
-            targetOffsetY = { fullHeight -> fullHeight },
-            animationSpec = tween(durationMillis = 250)
-        )
-    ) {
+    val client = AgentforceClientHolder.agentforceClient
+    val conversation = AgentforceClientHolder.currentConversation
+
+    if (conversation == null || client == null) return
+
+    // Keep the container permanently composed and animate visibility via translationY only.
+    // AnimatedVisibility would remove it from the composition on hide and re-run the SDK's
+    // one-shot bootstrap on the next show, which 404s on a reused conversation. See
+    // [[project_rn_android_bootstrap_fix]].
+    if (visible) {
         BackHandler { onClose() }
+    }
 
-        val client = AgentforceClientHolder.agentforceClient
-        val conversation = AgentforceClientHolder.currentConversation
+    var heightPx by remember { mutableIntStateOf(0) }
+    // Slide fully off-screen (downward) when hidden; rest at 0 (fully shown) when visible.
+    val translationY by animateFloatAsState(
+        targetValue = if (visible) 0f else heightPx.toFloat(),
+        animationSpec = tween(durationMillis = 250),
+        label = "overlaySlide"
+    )
 
-        if (conversation != null && client != null) {
-            // Render the SDK container directly — no bridge-owned top bar. The SDK
-            // draws its own header (showTopBar defaults to true), and the agent label
-            // override is applied via BridgeTopAppBarBuilder wired into the SDK config
-            // in AgentforceModule.configureEmployeeAgent. Wrapping it in our own
-            // Scaffold/TopAppBar previously produced a duplicate, redundant header.
-            MaterialTheme {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(top = 12.dp)
-                        .navigationBarsPadding()
-                        .imePadding()
-                ) {
-                    client.AgentforceConversationContainer(
-                        conversation = conversation,
-                        onClose = onClose
-                    )
-                }
-            }
+    // Render the SDK container directly — no bridge-owned top bar. The SDK
+    // draws its own header (showTopBar defaults to true), and the agent label
+    // override is applied via BridgeTopAppBarBuilder wired into the SDK config
+    // in AgentforceModule.configureEmployeeAgent. Wrapping it in our own
+    // Scaffold/TopAppBar previously produced a duplicate, redundant header.
+    MaterialTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { heightPx = it.height }
+                .graphicsLayer { this.translationY = translationY }
+                .statusBarsPadding()
+                .padding(top = 12.dp)
+                .navigationBarsPadding()
+                .imePadding()
+        ) {
+            client.AgentforceConversationContainer(
+                conversation = conversation,
+                onClose = onClose
+            )
         }
     }
 }

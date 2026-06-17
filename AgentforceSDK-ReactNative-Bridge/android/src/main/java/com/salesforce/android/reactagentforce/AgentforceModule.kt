@@ -254,9 +254,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
 
-        // Check if agentId changed - only clear if it did
+        // Rebuild the client only when switching from Service mode, the agentId changed, or no
+        // client exists yet (mirrors iOS's needsNewClient). Otherwise reuse it: rebuilding while
+        // preserving the conversation orphans that conversation on the old client and breaks
+        // re-launch with a 404. See [[project_rn_android_bootstrap_fix]].
         val currentEmployeeMode = currentMode as? LocalAgentMode.Employee
+        val switchingModes = AgentforceClientHolder.isServiceAgent
         val agentIdChanged = currentEmployeeMode?.config?.agentId != employeeConfig.agentId
+        val needsNewClient = switchingModes || agentIdChanged || AgentforceClientHolder.agentforceClient == null
 
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
@@ -266,17 +271,24 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Persist employee agentId (editable in Settings tab)
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
 
-        val shouldClear = AgentforceClientHolder.isServiceAgent || agentIdChanged
-
         scope.launch(Dispatchers.Main) {
-            // Destroy overlay and clear on main thread to avoid Compose observer errors
-            if (shouldClear) {
-                Log.d(TAG, "AgentId changed or switching modes - clearing client and conversation")
-                AgentforceConversationOverlay.destroy()
-                AgentforceClientHolder.clear()
-            } else {
-                Log.d(TAG, "AgentId unchanged - preserving conversation")
+            if (!needsNewClient) {
+                // Reuse the existing client and its conversation (credentials refresh automatically
+                // via UnifiedCredentialProvider). Preserves conversation history across re-launch.
+                Log.d(TAG, "AgentId unchanged - reusing existing client and conversation")
+                AgentforceClientHolder.setMode(LocalAgentMode.Employee(employeeConfig))
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                    putString("mode", "employee")
+                })
+                return@launch
             }
+
+            // Tear down the previous overlay/client/conversation before building a fresh one, so
+            // launchConversation() recreates a conversation paired with the new client.
+            Log.d(TAG, "Switching modes or agentId changed - clearing client and conversation")
+            AgentforceConversationOverlay.destroy()
+            AgentforceClientHolder.clear()
             try {
                 // Create AgentforceConfiguration for FullConfig mode
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
