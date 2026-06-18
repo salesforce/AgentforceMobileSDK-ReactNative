@@ -77,7 +77,135 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  # Job 3: Build validation matrix (parallel builds)
+  # Job 3a: Android native unit tests (bridge library module, JVM — no emulator)
+  android-unit-tests:
+    name: Android Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: lint-and-typecheck
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Boost
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --ignore-scripts
+
+      - name: Generate app config
+        run: node scripts/generate-app-config.js employee
+
+      - name: Run Android setup
+        run: node installandroid.js employee
+
+      - name: Run bridge unit tests
+        run: cd android && ./gradlew :react-native-agentforce:testDebugUnitTest --console=plain
+
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-report
+          path: AgentforceSDK-ReactNative-Bridge/android/build/reports/tests/**
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Job 3b: iOS native unit tests (bridge AgentMode logic — standalone XCTest bundle)
+  ios-unit-tests:
+    name: iOS Unit Tests
+    runs-on: macos-26
+    timeout-minutes: 30
+    needs: lint-and-typecheck
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: false
+
+      - name: Install CocoaPods
+        run: gem install cocoapods -v 1.15.2
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Install Boost
+        run: brew install boost
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.*.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --ignore-scripts
+
+      - name: Generate app config
+        run: node scripts/generate-app-config.js employee
+
+      - name: Run iOS setup (xcodegen + pod install)
+        run: node installios.js employee
+
+      - name: Run bridge unit tests
+        run: |
+          # Pick an available iPhone simulator by UDID. The `test` action requires a
+          # concrete device (generic/by-name destinations are brittle across runner
+          # image updates — model availability changes), so discover one at runtime.
+          DEVICE_ID=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; ids=[dev['udid'] for rt in sorted(d) for dev in d[rt] if dev.get('isAvailable') and dev['name'].startswith('iPhone')]; print(ids[-1] if ids else '')")
+          if [ -z "$DEVICE_ID" ]; then
+            echo "::error::No available iPhone simulator found on the runner"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using simulator UDID: $DEVICE_ID"
+          xcodebuild test \
+            -workspace ios/ReactAgentforce.xcworkspace \
+            -scheme BridgeUnitTests \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID"
+
+  # Job 4: Build validation matrix (parallel builds)
   build-validation:
     name: Build ${{ matrix.platform }} - ${{ matrix.variant }}
     runs-on: ${{ matrix.os }}
@@ -230,7 +358,7 @@ jobs:
   all-checks-passed:
     name: All Checks Passed ✓
     runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, unit-tests, build-validation]
+    needs: [lint-and-typecheck, unit-tests, android-unit-tests, ios-unit-tests, build-validation]
     if: always()
 
     steps:
@@ -238,6 +366,8 @@ jobs:
         run: |
           if [[ "${{ needs.lint-and-typecheck.result }}" != "success" ]] || \
              [[ "${{ needs.unit-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.android-unit-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.ios-unit-tests.result }}" != "success" ]] || \
              [[ "${{ needs.build-validation.result }}" != "success" ]]; then
             echo "❌ One or more checks failed"
             exit 1
