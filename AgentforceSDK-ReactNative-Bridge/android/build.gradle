@@ -35,6 +35,12 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+
+    testOptions {
+        // Let JVM unit tests run without an emulator: android.* stubs (e.g. android.util.Log
+        // used by BridgeDiagnostics) return default values instead of throwing "not mocked".
+        unitTests.returnDefaultValues = true
+    }
 }
 
 repositories {
@@ -66,4 +72,13 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:2.2.0"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0"
+
+    // JVM unit tests (no emulator). MockK mocks RN ReadableMap and the Mobile SDK
+    // SalesforceSDKManager singleton; coroutines-test for suspend logic if needed.
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "io.mockk:mockk:1.13.11"
+    testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3"
+    // SalesforceSDKManager is compileOnly in main (host provides it); tests that mock it
+    // need it on the test classpath.
+    testImplementation "com.salesforce.mobilesdk:SalesforceReact:13.1.1"
 }
