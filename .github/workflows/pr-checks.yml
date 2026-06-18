@@ -188,11 +188,22 @@ jobs:
 
       - name: Run bridge unit tests
         run: |
+          # Pick an available iPhone simulator by UDID. The `test` action requires a
+          # concrete device (generic/by-name destinations are brittle across runner
+          # image updates — model availability changes), so discover one at runtime.
+          DEVICE_ID=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; ids=[dev['udid'] for rt in sorted(d) for dev in d[rt] if dev.get('isAvailable') and dev['name'].startswith('iPhone')]; print(ids[-1] if ids else '')")
+          if [ -z "$DEVICE_ID" ]; then
+            echo "::error::No available iPhone simulator found on the runner"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using simulator UDID: $DEVICE_ID"
           xcodebuild test \
             -workspace ios/ReactAgentforce.xcworkspace \
             -scheme BridgeUnitTests \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16'
+            -destination "platform=iOS Simulator,id=$DEVICE_ID"
 
   # Job 4: Build validation matrix (parallel builds)
   build-validation:
