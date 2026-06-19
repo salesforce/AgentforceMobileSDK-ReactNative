@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -37,6 +38,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.salesforce.android.agentforcesdk.components.theme.LocalAgentforceTheme
 
 /**
  * Manages the Agentforce conversation UI as an overlay on the current Activity.
@@ -192,12 +194,18 @@ private fun ConversationOverlayContent(onClose: () -> Unit) {
     // override is applied via BridgeTopAppBarBuilder wired into the SDK config
     // in AgentforceModule.configureEmployeeAgent. Wrapping it in our own
     // Scaffold/TopAppBar previously produced a duplicate, redundant header.
+    // Fill the system-bar insets with the SDK's chat surface (surface1) so they match.
+    val surfaceColor = LocalAgentforceTheme.current.colors().surface1
+
     MaterialTheme {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { heightPx = it.height }
                 .graphicsLayer { this.translationY = translationY }
+                // Background before the insets, so the padded strips aren't transparent
+                // (host screen bleed-through); after graphicsLayer so it slides on hide.
+                .background(surfaceColor)
                 .statusBarsPadding()
                 .padding(top = 12.dp)
                 .navigationBarsPadding()
