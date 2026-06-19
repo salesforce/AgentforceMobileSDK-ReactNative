@@ -8,5 +8,21 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <application />
+    <application>
+        <!--
+         Dedicated host for the Agentforce conversation UI. singleTask + a distinct
+         taskAffinity keep it a single, stable instance independent of the host app's
+         Activity stack, so the SDK's activity-scoped conversation ViewModel and its
+         one-shot bootstrap survive dismiss/re-launch (dismiss backgrounds, it is not
+         finished). configChanges avoids recreation on rotation/keyboard/etc., which
+         would also drop the SDK ViewModel. See [[project_rn_android_bootstrap_fix]].
+        -->
+        <activity
+            android:name=".AgentforceConversationActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}.agentforce.conversation"
+            android:theme="@style/AppTheme"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode" />
+    </application>
 </manifest>
