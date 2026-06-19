@@ -261,7 +261,28 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val currentEmployeeMode = currentMode as? LocalAgentMode.Employee
         val switchingModes = AgentforceClientHolder.isServiceAgent
         val agentIdChanged = currentEmployeeMode?.config?.agentId != employeeConfig.agentId
-        val needsNewClient = switchingModes || agentIdChanged || AgentforceClientHolder.agentforceClient == null
+
+        // Cross-activity re-launch: reuse is only safe while the overlay is still attached to the
+        // SAME host Activity, because the SDK scopes its conversation ViewModel + one-shot bootstrap
+        // to that Activity (getActivityScopedViewModelStoreOwner). If the host app handed us a
+        // different Activity (multi-activity nav, recreated host, etc.), reusing the conversation
+        // re-fires bootstrap on a fresh activity-scoped ViewModel, hits the by-design discovery 404
+        // it can't recover from, and the chat hangs on "I'm on my way…". Force a fresh client+
+        // conversation in that case so the recoverable fresh-bootstrap path runs instead.
+        // Trade-off: conversation history is lost on an activity swap, but the chat never hangs.
+        // The sample app is single-Activity so this never triggers there; some customer host apps
+        // are not. See [[project_rn_android_bootstrap_fix]].
+        val activity = currentActivity
+        val activityChanged = AgentforceClientHolder.agentforceClient != null &&
+            activity != null &&
+            !AgentforceConversationOverlay.isAttachedTo(activity)
+
+        val needsNewClient = switchingModes || agentIdChanged ||
+            AgentforceClientHolder.agentforceClient == null || activityChanged
+
+        if (activityChanged) {
+            Log.d(TAG, "Host Activity changed since last attach - forcing fresh client to avoid re-launch hang")
+        }
 
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically

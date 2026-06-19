@@ -55,6 +55,19 @@ object AgentforceConversationOverlay {
     private var attachedActivity: ComponentActivity? = null
 
     /**
+     * Whether the overlay is currently attached to [activity].
+     *
+     * Returns false when nothing is attached yet, or when the overlay is attached to a
+     * DIFFERENT Activity instance than the one given. The SDK scopes its conversation
+     * ViewModel (and its one-shot bootstrap) to the host Activity, so a re-launch onto a
+     * new Activity instance can't reuse the existing conversation — see
+     * [[project_rn_android_bootstrap_fix]]. Callers use this to decide whether reuse is
+     * safe before showing.
+     */
+    fun isAttachedTo(activity: Activity): Boolean =
+        overlayContainer != null && attachedActivity === activity
+
+    /**
      * Show the conversation overlay on the given Activity.
      * Creates the ComposeView on first call, then toggles visibility.
      */
