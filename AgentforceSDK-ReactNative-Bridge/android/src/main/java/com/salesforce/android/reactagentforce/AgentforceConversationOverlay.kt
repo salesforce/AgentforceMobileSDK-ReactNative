@@ -5,97 +5,208 @@
 package com.salesforce.android.reactagentforce
 
 import android.app.Activity
-import android.content.Intent
 import android.util.Log
+import android.view.MotionEvent
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.widget.FrameLayout
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /**
- * Drives the Agentforce conversation UI hosted in the dedicated, bridge-owned
- * [AgentforceConversationActivity].
+ * Manages the Agentforce conversation UI as an overlay on the current Activity.
  *
- * Previously the conversation was an overlay ComposeView attached to the host app's
- * current Activity. That made the SDK's activity-scoped conversation ViewModel (and its
- * one-shot bootstrap) depend on the host handing back the SAME Activity instance across
- * dismiss/re-launch — which some host apps don't, causing a re-bootstrap 404 hang on
- * re-launch. See [[project_rn_android_bootstrap_fix]].
- *
- * Now the conversation lives in its own `singleTask` Activity with a stable instance.
- * - [show]   starts (or brings forward) the conversation Activity.
- * - [hide]   sends it to the background WITHOUT finishing it, so its ViewModelStore and
- *            completed bootstrap survive — re-launch reuses the same instance, no
- *            re-bootstrap, conversation history preserved.
- * - [destroy] actually finishes the Activity; call when a fresh conversation is required
- *            (logout, reset, mode/agent switch).
- *
- * The public API (show/hide/destroy/isVisible) is unchanged so existing AgentforceModule
- * call-sites keep working.
+ * This matches the SDK test harness pattern: the AgentforceConversationContainer
+ * composable lives in the same Activity's composition tree, so the SDK's internal
+ * ViewModel persists across show/hide cycles. This prevents stale state issues
+ * (like secure forms reappearing) that occur when using a separate Activity.
  */
 object AgentforceConversationOverlay {
 
     private const val TAG = "AgentforceConvOverlay"
 
+    internal var isVisible = mutableStateOf(false)
+    private var overlayContainer: ViewGroup? = null
+    private var attachedActivity: ComponentActivity? = null
+
     /**
-     * Whether the conversation is currently presented. Kept as a plain flag (not Compose
-     * state) for parity with the previous API; the Activity owns its own composition now.
+     * Whether the overlay is currently attached to [activity].
+     *
+     * Returns false when nothing is attached yet, or when the overlay is attached to a
+     * DIFFERENT Activity instance than the one given. The SDK scopes its conversation
+     * ViewModel (and its one-shot bootstrap) to the host Activity, so a re-launch onto a
+     * new Activity instance can't reuse the existing conversation — see
+     * [[project_rn_android_bootstrap_fix]]. Callers use this to decide whether reuse is
+     * safe before showing.
      */
-    @Volatile
-    internal var isVisible: Boolean = false
-        private set
-
-    /** The live conversation Activity instance, set from its own lifecycle callbacks. */
-    @Volatile
-    private var activityRef: AgentforceConversationActivity? = null
-
-    /** Called by [AgentforceConversationActivity.onCreate]/onDestroy to track the instance. */
-    internal fun registerActivity(activity: AgentforceConversationActivity) {
-        activityRef = activity
-    }
-
-    internal fun unregisterActivity(activity: AgentforceConversationActivity) {
-        if (activityRef === activity) {
-            activityRef = null
-        }
-    }
+    fun isAttachedTo(activity: Activity): Boolean =
+        overlayContainer != null && attachedActivity === activity
 
     /**
-     * Present the conversation. Launches [AgentforceConversationActivity] if not already
-     * running, or brings the existing (backgrounded) instance forward — which does NOT
-     * recreate it, so the SDK bootstrap state is preserved.
+     * Show the conversation overlay on the given Activity.
+     * Creates the ComposeView on first call, then toggles visibility.
      */
     fun show(activity: Activity) {
-        val intent = Intent(activity, AgentforceConversationActivity::class.java).apply {
-            // Reuse the existing single task instance instead of creating a new one.
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (activity !is ComponentActivity) {
+            Log.e(TAG, "Activity must be a ComponentActivity")
+            return
         }
-        activity.startActivity(intent)
-        isVisible = true
-        Log.d(TAG, "Conversation activity shown")
+
+        if (overlayContainer == null || attachedActivity !== activity) {
+            attachToActivity(activity)
+        }
+
+        isVisible.value = true
+        Log.d(TAG, "Conversation overlay shown")
     }
 
     /**
-     * Dismiss the conversation WITHOUT finishing the Activity, so its ViewModelStore and
-     * the SDK's completed bootstrap survive for the next [show]. Backgrounds the task.
+     * Hide the conversation overlay (preserves state).
      */
     fun hide() {
-        isVisible = false
-        activityRef?.let { activity ->
-            activity.runOnUiThread {
-                // moveTaskToBack keeps the Activity instance (and its ViewModelStore) alive.
-                activity.moveTaskToBack(true)
-            }
-        }
-        Log.d(TAG, "Conversation activity hidden (backgrounded, state preserved)")
+        isVisible.value = false
+        Log.d(TAG, "Conversation overlay hidden")
     }
 
     /**
-     * Finish the conversation Activity entirely. Call when a fresh conversation is
-     * required (logout, reset, mode/agent switch) — the next [show] starts clean.
+     * Detach and destroy the overlay. Call when configuration changes
+     * require a fresh conversation. Must be called on the main thread.
      */
     fun destroy() {
-        isVisible = false
-        activityRef?.let { activity ->
-            activity.runOnUiThread { activity.finish() }
+        attachedActivity?.let { activity ->
+            WindowCompat.setDecorFitsSystemWindows(activity.window, true)
+            activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED)
         }
-        activityRef = null
-        Log.d(TAG, "Conversation activity destroyed")
+        overlayContainer?.let { container ->
+            (container.parent as? ViewGroup)?.removeView(container)
+        }
+        overlayContainer = null
+        attachedActivity = null
+        isVisible.value = false
+        Log.d(TAG, "Conversation overlay destroyed")
+    }
+
+    private fun attachToActivity(activity: ComponentActivity) {
+        destroy()
+
+        WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+        @Suppress("DEPRECATION")
+        activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+
+        val overlayState = isVisible
+        val wrapper = object : FrameLayout(activity) {
+            override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+                if (!overlayState.value) return false
+                return super.dispatchTouchEvent(ev)
+            }
+        }
+
+        val overlay = ComposeView(activity).apply {
+            setViewTreeLifecycleOwner(activity)
+            setViewTreeViewModelStoreOwner(activity)
+            setViewTreeSavedStateRegistryOwner(activity)
+
+            setContent {
+                ConversationOverlayContent(
+                    onClose = { hide() }
+                )
+            }
+        }
+
+        wrapper.addView(
+            overlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        val contentView = activity.findViewById<ViewGroup>(android.R.id.content)
+        contentView.addView(
+            wrapper,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        overlayContainer = wrapper
+        attachedActivity = activity
+        Log.d(TAG, "Overlay attached to activity: ${activity.javaClass.simpleName}")
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConversationOverlayContent(onClose: () -> Unit) {
+    val visible by AgentforceConversationOverlay.isVisible
+
+    val client = AgentforceClientHolder.agentforceClient
+    val conversation = AgentforceClientHolder.currentConversation
+
+    if (conversation == null || client == null) return
+
+    // Keep the container permanently composed and animate visibility via translationY only.
+    // AnimatedVisibility would remove it from the composition on hide and re-run the SDK's
+    // one-shot bootstrap on the next show, which 404s on a reused conversation. See
+    // [[project_rn_android_bootstrap_fix]].
+    if (visible) {
+        BackHandler { onClose() }
+    }
+
+    var heightPx by remember { mutableIntStateOf(0) }
+    // Slide fully off-screen (downward) when hidden; rest at 0 (fully shown) when visible.
+    val translationY by animateFloatAsState(
+        targetValue = if (visible) 0f else heightPx.toFloat(),
+        animationSpec = tween(durationMillis = 250),
+        label = "overlaySlide"
+    )
+
+    // Render the SDK container directly — no bridge-owned top bar. The SDK
+    // draws its own header (showTopBar defaults to true), and the agent label
+    // override is applied via BridgeTopAppBarBuilder wired into the SDK config
+    // in AgentforceModule.configureEmployeeAgent. Wrapping it in our own
+    // Scaffold/TopAppBar previously produced a duplicate, redundant header.
+    MaterialTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { heightPx = it.height }
+                .graphicsLayer { this.translationY = translationY }
+                .statusBarsPadding()
+                .padding(top = 12.dp)
+                .navigationBarsPadding()
+                .imePadding()
+        ) {
+            client.AgentforceConversationContainer(
+                conversation = conversation,
+                onClose = onClose
+            )
+        }
     }
 }
