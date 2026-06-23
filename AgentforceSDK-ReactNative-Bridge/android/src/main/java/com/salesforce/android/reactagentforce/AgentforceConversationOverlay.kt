@@ -16,11 +16,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -208,8 +211,15 @@ private fun ConversationOverlayContent(onClose: () -> Unit) {
                 .background(surfaceColor)
                 .statusBarsPadding()
                 .padding(top = 12.dp)
-                .navigationBarsPadding()
-                .imePadding()
+                // Pad the bottom by the UNION (max) of the nav-bar and IME insets, not
+                // their sum. Chaining .navigationBarsPadding().imePadding() is additive:
+                // when the keyboard is up, the IME inset already reaches the screen bottom
+                // (subsuming the nav-bar region), so stacking both pushed content up by
+                // navBar + ime while the keyboard top sat only ime above the bottom —
+                // leaving a nav-bar-height gap between the input box and the keyboard.
+                // The union resolves to ime while the keyboard is visible and to navBar
+                // when it's hidden (ime == 0), eliminating the gap.
+                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
         ) {
             client.AgentforceConversationContainer(
                 conversation = conversation,
