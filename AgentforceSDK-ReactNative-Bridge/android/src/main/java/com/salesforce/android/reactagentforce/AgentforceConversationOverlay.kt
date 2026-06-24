@@ -207,7 +207,6 @@ private fun ConversationOverlayContent(onClose: () -> Unit) {
                 // (host screen bleed-through); after graphicsLayer so it slides on hide.
                 .background(surfaceColor)
                 .statusBarsPadding()
-                .padding(top = 12.dp)
                 .navigationBarsPadding()
                 .imePadding()
         ) {

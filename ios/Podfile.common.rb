@@ -16,12 +16,19 @@ def shared_pods
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  pod 'AgentforceSDK', '15.11.7'
-  pod 'AgentforceVoice', '1.1.3'
+  pod 'AgentforceSDK', '15.33.3'
+  pod 'AgentforceVoice', '2.1.7'
   pod 'Messaging-InApp-Core', '> 1.10.0'
 
   # JWTKit is required by AgentforceService but not resolved automatically
   pod 'JWTKit'
+
+  # SharedUI provides the design-system module (Colors/Fonts/Dimensions) that
+  # AgentforceSDK 15.33.3 (262.0) publicly imports but does not declare in its
+  # podspec. Pin to the flat spec the iOS SDK ships with; SLDSIcons is held at
+  # 1.2.2 to avoid the "Multiple commands produce SLDSIcons.framework" collision.
+  pod 'SharedUI', '1.3.1'
+  pod 'SLDSIcons', '1.2.2'
 
   # LiveKit is needed for both Service and Employee agents
   pod 'LiveKitClient' # Required so CocoaPods looks in the correct source location
