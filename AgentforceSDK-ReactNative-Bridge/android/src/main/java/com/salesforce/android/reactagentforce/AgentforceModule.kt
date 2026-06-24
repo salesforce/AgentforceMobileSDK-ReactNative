@@ -172,7 +172,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     ServiceUISettings(
                         downloadTranscript = raw["downloadTranscript"] ?: true,
                         endConversation = raw["endConversation"] ?: true,
-                        enableLightingType = raw["enableLightningType"] ?: false
+                        clearChat = raw["clearChat"] ?: false
                     )
                 } ?: ServiceUISettings()
 

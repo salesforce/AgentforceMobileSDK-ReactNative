@@ -100,7 +100,7 @@ private fun ClientLabelTopBar(label: String, state: TopAppBarState) {
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
-                .background(colors.chatHeaderBackground)
+                .background(colors.titleBarBackground)
                 .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween

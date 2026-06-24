@@ -201,7 +201,6 @@ class AgentforceModule: RCTEventEmitter {
                 useWelcomeUtterances: raw["useWelcomeUtterances"] ?? false,
                 showQueueStatus: raw["showQueueStatus"] ?? true,
                 enableVideoUpload: raw["enableVideoUpload"] ?? false,
-                enableLightningType: raw["enableLightningType"] ?? false,
                 secureForms: raw["secureForms"] ?? true,
                 enableAudioUpload: raw["enableAudioUpload"] ?? false
             )

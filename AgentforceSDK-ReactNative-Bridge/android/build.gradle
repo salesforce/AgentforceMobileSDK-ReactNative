@@ -8,7 +8,7 @@ android {
     compileSdk 36
 
     defaultConfig {
-        minSdkVersion 29
+        minSdkVersion 30
         targetSdkVersion 36
         versionCode 1
         versionName "1.0"
@@ -48,6 +48,11 @@ repositories {
     mavenCentral()
     maven { url 'https://jitpack.io' }
     maven { url 'https://opensource.salesforce.com/AgentforceMobileSDK-Android/agentforce-sdk-repository' }
+    // SharedUI design-system library: agentforce-sdk 15.66.2 (262.0) pulls in
+    // com.salesforce.android.sharedui:shared-ui transitively from this repo.
+    maven { url 'https://opensource.salesforce.com/SharedUI-Android/shared-ui-repository' }
+    // SLDSIcons: shared-ui depends transitively on com.salesforce.android.sldsicons:slds-icons.
+    maven { url 'https://opensource.salesforce.com/SLDSIcons-Android/slds-icons-repository' }
     maven { url 'https://s3.amazonaws.com/inapp.salesforce.com/public/android' }
     maven { url 'https://s3.amazonaws.com/salesforce-async-messaging-experimental/public/android' }
 }
@@ -55,8 +60,12 @@ repositories {
 dependencies {
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
     implementation "com.facebook.react:react-android"
-    api "com.salesforce.android.agentforcesdk:agentforce-sdk:15.20.3"
-    api "com.salesforce.android.agentforcesdk:agentforce-sdk-voice:15.20.3"
+    api "com.salesforce.android.agentforcesdk:agentforce-sdk:15.66.2"
+    api "com.salesforce.android.agentforcesdk:agentforce-sdk-voice:15.66.2"
+    // shared-ui 2.0.21 pins slds-icons 0.1.0, which was never published to the
+    // public SLDSIcons Maven repo (only 0.1.7 is). Pin the available version so
+    // the transitive request resolves. Remove once shared-ui repins to a published tag.
+    api "com.salesforce.android.sldsicons:slds-icons:0.1.7"
     // compileOnly: host app adds this for Employee Agent. Bridge compiles; host provides at runtime.
     compileOnly "com.salesforce.mobilesdk:SalesforceReact:13.1.1"
 
