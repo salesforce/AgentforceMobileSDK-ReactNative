@@ -992,8 +992,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         employeeAgentFactory = AgentforceVoiceProviderFactory(),
         serviceAgentConfig = ServiceAgentVoiceConfig(
             extension = MultimediaExtension,
+            // 3rd ctor arg (instrumentationHandler) defaults to null; omit it.
             factory = MiawVoiceProviderFactory { _, conversationClientProvider, multimediaClient ->
-                MiawVoiceProvider(conversationClientProvider, multimediaClient, null)
+                MiawVoiceProvider(conversationClientProvider, multimediaClient)
             }
         )
     )

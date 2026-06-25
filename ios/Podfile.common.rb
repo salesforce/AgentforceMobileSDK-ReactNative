@@ -30,8 +30,13 @@ def shared_pods
   # that the iOS SDK uses), so this transitive multimedia dep isn't pulled in and
   # the framework is never embedded — surfacing as a dyld "Library not loaded"
   # crash once Service Agent voice is enabled. Declare it explicitly so it's
-  # installed and embedded. Same > 1.10.0 constraint as the sibling pods (→ 1.11.2).
-  pod 'Messaging-Multimedia-Core', '> 1.10.0'
+  # installed and embedded.
+  # Constrained to ~> 1.11 (not the looser '> 1.10.0' the siblings use): every
+  # 1.11.x pins LiveKitWebRTC 137.7151.10, the exact version the LiveKitClient
+  # '2.11.0' pin below targets. A future 1.12+/2.x could pull a different
+  # LiveKitWebRTC and reintroduce the collision the LiveKit pin exists to prevent,
+  # so the two coupled pods are kept moving together deliberately.
+  pod 'Messaging-Multimedia-Core', '~> 1.11'
 
   # JWTKit is required by AgentforceService but not resolved automatically
   pod 'JWTKit'
