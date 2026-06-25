@@ -31,12 +31,14 @@ def shared_pods
   # the framework is never embedded — surfacing as a dyld "Library not loaded"
   # crash once Service Agent voice is enabled. Declare it explicitly so it's
   # installed and embedded.
-  # Constrained to ~> 1.11 (not the looser '> 1.10.0' the siblings use): every
-  # 1.11.x pins LiveKitWebRTC 137.7151.10, the exact version the LiveKitClient
-  # '2.11.0' pin below targets. A future 1.12+/2.x could pull a different
+  # Constrained to ~> 1.11.0 (i.e. >= 1.11.0, < 1.12.0 — not the looser
+  # '> 1.10.0' the siblings use, nor '~> 1.11' which would still admit 1.12+):
+  # every 1.11.x pins LiveKitWebRTC 137.7151.10, the exact version the
+  # LiveKitClient '2.11.0' pin below targets. A 1.12+/2.x could pull a different
   # LiveKitWebRTC and reintroduce the collision the LiveKit pin exists to prevent,
-  # so the two coupled pods are kept moving together deliberately.
-  pod 'Messaging-Multimedia-Core', '~> 1.11'
+  # so the two coupled pods are kept on the same minor line deliberately; bumping
+  # past 1.11.x should be a conscious act made alongside the LiveKit pin.
+  pod 'Messaging-Multimedia-Core', '~> 1.11.0'
 
   # JWTKit is required by AgentforceService but not resolved automatically
   pod 'JWTKit'
