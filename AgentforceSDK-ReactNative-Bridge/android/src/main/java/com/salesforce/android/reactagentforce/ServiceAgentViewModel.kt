@@ -15,9 +15,15 @@ import com.salesforce.android.agentforcesdkimpl.AgentforceConversation
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
+import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentVoiceConfig
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
+import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceProviderFactory
+import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceUIProvider
+import com.salesforce.android.agentforcesdkvoice.miaw.MiawVoiceProvider
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentialProvider
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentials
+import com.salesforce.android.agentforceservice.voice.MiawVoiceProviderFactory
+import com.salesforce.android.smi.multimedia.core.MultimediaExtension
 import com.salesforce.android.mobile.interfaces.user.Org
 import com.salesforce.android.mobile.interfaces.user.User
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -181,7 +187,8 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
                     .enableMultiAgent(featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true))
                     .enableMultiModalInput(featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false))
                     .enablePDFUpload(featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
-                    .enableVoice(false) // Voice off for Service Agent
+                    // Voice shipped for Service Agents in 262.0 (MIAW); honor the flag.
+                    .enableVoice(featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false))
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(getApplication())
@@ -209,6 +216,18 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
                         .setApplication(getApplication())
                         .setFeatureFlagSettings(featureFlagSettings)
                         .setCameraUriProvider(cameraUriProvider)
+                        // Register Employee (LiveKit) + Service (MIAW) voice providers so
+                        // service voice works when enableVoice is on. New in 262.0.
+                        .setVoiceModule(
+                            uiProvider = AgentforceVoiceUIProvider(),
+                            employeeAgentFactory = AgentforceVoiceProviderFactory(),
+                            serviceAgentConfig = ServiceAgentVoiceConfig(
+                                extension = MultimediaExtension,
+                                factory = MiawVoiceProviderFactory { _, conversationClientProvider, multimediaClient ->
+                                    MiawVoiceProvider(conversationClientProvider, multimediaClient, null)
+                                }
+                            )
+                        )
                         .build()
                 )
 
