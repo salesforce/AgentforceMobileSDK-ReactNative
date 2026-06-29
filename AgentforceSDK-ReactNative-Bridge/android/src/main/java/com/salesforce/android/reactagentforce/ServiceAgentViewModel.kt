@@ -15,15 +15,9 @@ import com.salesforce.android.agentforcesdkimpl.AgentforceConversation
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
-import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentVoiceConfig
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
-import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceProviderFactory
-import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceUIProvider
-import com.salesforce.android.agentforcesdkvoice.miaw.MiawVoiceProvider
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentialProvider
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentials
-import com.salesforce.android.agentforceservice.voice.MiawVoiceProviderFactory
-import com.salesforce.android.smi.multimedia.core.MultimediaExtension
 import com.salesforce.android.mobile.interfaces.user.Org
 import com.salesforce.android.mobile.interfaces.user.User
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -218,17 +212,9 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
                         .setCameraUriProvider(cameraUriProvider)
                         // Register Employee (LiveKit) + Service (MIAW) voice providers so
                         // service voice works when enableVoice is on. New in 262.0.
-                        .setVoiceModule(
-                            uiProvider = AgentforceVoiceUIProvider(),
-                            employeeAgentFactory = AgentforceVoiceProviderFactory(),
-                            serviceAgentConfig = ServiceAgentVoiceConfig(
-                                extension = MultimediaExtension,
-                                // 3rd ctor arg (instrumentationHandler) defaults to null; omit it.
-                                factory = MiawVoiceProviderFactory { _, conversationClientProvider, multimediaClient ->
-                                    MiawVoiceProvider(conversationClientProvider, multimediaClient)
-                                }
-                            )
-                        )
+                        // Shared with AgentforceModule via setBridgeVoiceModule() so the
+                        // two paths can't drift.
+                        .setBridgeVoiceModule()
                         .build()
                 )
 
