@@ -25,10 +25,14 @@ import com.salesforce.android.agentforcesdkimpl.AgentforceClient
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
+import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentVoiceConfig
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceUISettings
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
 import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceProviderFactory
 import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceUIProvider
+import com.salesforce.android.agentforcesdkvoice.miaw.MiawVoiceProvider
+import com.salesforce.android.agentforceservice.voice.MiawVoiceProviderFactory
+import com.salesforce.android.smi.multimedia.core.MultimediaExtension
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotContextVariable
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotAdditionalContext
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
@@ -185,12 +189,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     )
                     .setServiceUISettings(uiSettings)
                     .build()
+                // Voice shipped for Service Agents in 262.0 (MIAW). Honor the
+                // enableVoice flag like the Employee path; the MIAW voice provider is
+                // registered below via setBridgeVoiceModule().
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
-                    .enableVoice(false)
+                    .enableVoice(flags.enableVoice)
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
@@ -207,7 +214,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
                 agentforceConfigBuilder.setPermission(permissions)
-                agentforceConfigBuilder.setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
+                agentforceConfigBuilder.setBridgeVoiceModule()
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
@@ -361,7 +368,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                         )
                     )
                 agentforceConfigBuilder.setPermission(permissions)
-                agentforceConfigBuilder.setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
+                agentforceConfigBuilder.setBridgeVoiceModule()
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
@@ -991,3 +998,30 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // endregion
 }
+
+/**
+ * Registers voice with the SDK config builder using the non-deprecated
+ * [AgentforceConfiguration.Builder.setVoiceModule] entry point. Wires both:
+ *  - Employee Agent voice (LiveKit) via [AgentforceVoiceProviderFactory]
+ *  - Service Agent voice (MIAW) via [ServiceAgentVoiceConfig] — new in 262.0.
+ *
+ * Both modes share the same [AgentforceVoiceUIProvider]. The MIAW multimedia
+ * stack ([MultimediaExtension]) is provided transitively by `agentforce-sdk-voice`.
+ * Whether voice actually surfaces is still gated by the `enableVoice` feature flag
+ * and the backend advertising voice support for the conversation.
+ *
+ * Top-level `internal` (not a private member) so both [AgentforceModule] and the
+ * legacy [ServiceAgentViewModel] path register voice identically — one definition,
+ * no drift when the SDK `setVoiceModule` signature next changes.
+ */
+internal fun AgentforceConfiguration.Builder.setBridgeVoiceModule() = setVoiceModule(
+    uiProvider = AgentforceVoiceUIProvider(),
+    employeeAgentFactory = AgentforceVoiceProviderFactory(),
+    serviceAgentConfig = ServiceAgentVoiceConfig(
+        extension = MultimediaExtension,
+        // 3rd ctor arg (instrumentationHandler) defaults to null; omit it.
+        factory = MiawVoiceProviderFactory { _, conversationClientProvider, multimediaClient ->
+            MiawVoiceProvider(conversationClientProvider, multimediaClient)
+        }
+    )
+)

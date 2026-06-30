@@ -181,7 +181,8 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
                     .enableMultiAgent(featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_AGENT, true))
                     .enableMultiModalInput(featureFlagsPrefs.getBoolean(KEY_ENABLE_MULTI_MODAL_INPUT, false))
                     .enablePDFUpload(featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
-                    .enableVoice(false) // Voice off for Service Agent
+                    // Voice shipped for Service Agents in 262.0 (MIAW); honor the flag.
+                    .enableVoice(featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false))
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(getApplication())
@@ -209,6 +210,11 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
                         .setApplication(getApplication())
                         .setFeatureFlagSettings(featureFlagSettings)
                         .setCameraUriProvider(cameraUriProvider)
+                        // Register Employee (LiveKit) + Service (MIAW) voice providers so
+                        // service voice works when enableVoice is on. New in 262.0.
+                        // Shared with AgentforceModule via setBridgeVoiceModule() so the
+                        // two paths can't drift.
+                        .setBridgeVoiceModule()
                         .build()
                 )
 

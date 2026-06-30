@@ -7,6 +7,10 @@ require File.join(File.dirname(`node --print "require.resolve('react-native/pack
 def shared_pods
   source 'https://github.com/forcedotcom/SalesforceMobileSDK-iOS-Specs.git'
   source 'https://github.com/livekit/podspecs.git'
+  # Hosts the Messaging-Multimedia-Core podspec (vends SMIMultimediaCore.framework).
+  # Not mirrored on the CDN, so the source must be declared explicitly for the
+  # AgentforceVoice service-voice multimedia dependency to resolve.
+  source 'https://github.com/Salesforce-Async-Messaging/podspecs.git'
   source 'https://cdn.cocoapods.org/'
 
   $config = use_native_modules!
@@ -19,6 +23,22 @@ def shared_pods
   pod 'AgentforceSDK', '15.33.3'
   pod 'AgentforceVoice', '2.1.7'
   pod 'Messaging-InApp-Core', '> 1.10.0'
+  # Messaging-Multimedia-Core vends SMIMultimediaCore.framework, which
+  # AgentforceVoice 2.1.7 links at runtime (@rpath/SMIMultimediaCore.framework).
+  # The AgentforceVoice podspec resolved from this Specs source declares only
+  # AgentforceService/SalesforceLogging/SalesforceNetwork (not the Binary subspec
+  # that the iOS SDK uses), so this transitive multimedia dep isn't pulled in and
+  # the framework is never embedded — surfacing as a dyld "Library not loaded"
+  # crash once Service Agent voice is enabled. Declare it explicitly so it's
+  # installed and embedded.
+  # Constrained to ~> 1.11.0 (i.e. >= 1.11.0, < 1.12.0 — not the looser
+  # '> 1.10.0' the siblings use, nor '~> 1.11' which would still admit 1.12+):
+  # every 1.11.x pins LiveKitWebRTC 137.7151.10, the exact version the
+  # LiveKitClient '2.11.0' pin below targets. A 1.12+/2.x could pull a different
+  # LiveKitWebRTC and reintroduce the collision the LiveKit pin exists to prevent,
+  # so the two coupled pods are kept on the same minor line deliberately; bumping
+  # past 1.11.x should be a conscious act made alongside the LiveKit pin.
+  pod 'Messaging-Multimedia-Core', '~> 1.11.0'
 
   # JWTKit is required by AgentforceService but not resolved automatically
   pod 'JWTKit'
@@ -30,8 +50,12 @@ def shared_pods
   pod 'SharedUI', '1.3.1'
   pod 'SLDSIcons', '1.2.2'
 
-  # LiveKit is needed for both Service and Employee agents
-  pod 'LiveKitClient' # Required so CocoaPods looks in the correct source location
+  # LiveKit is needed for both Service and Employee agents.
+  # Pin to 2.11.0 (matches the iOS SDK lock): it pins LiveKitWebRTC 137.7151.10,
+  # which is the same version Messaging-Multimedia-Core 1.11.2 requires. Leaving
+  # it unpinned floats to 2.14.1 (WebRTC 144.x) and collides with the multimedia
+  # pod added for Service Agent voice.
+  pod 'LiveKitClient', '2.11.0' # Required so CocoaPods looks in the correct source location
 
   # AgentforceService links to Crypto.framework at runtime; SwiftCrypto provides it (avoids dyld "Library not loaded: Crypto.framework").
   pod 'SwiftCrypto', '~> 3.15'

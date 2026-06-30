@@ -211,6 +211,21 @@ class AgentforceModule: RCTEventEmitter {
             )
         }
 
+        // Voice shipped for Service Agents in 262.0. Mirror the Employee path and
+        // thread the enableVoice flag through; the SDK wires the voice stack
+        // (LiveKit/MIAW) internally once the flag is on. shouldBlockMicrophone stays
+        // false so the mic isn't gated; other public flags carry through too.
+        let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        let featureFlagSettings = AgentforceFeatureFlagSettings(
+            enableMultiModalInput: flags.enableMultiModalInput,
+            enablePDFFileUpload: flags.enablePDFUpload,
+            multiAgent: flags.enableMultiAgent,
+            shouldBlockMicrophone: false,
+            enableVoice: flags.enableVoice,
+            enableOnboarding: false,
+            internalFlags: [:]
+        )
+
         // Use .serviceAgent() mode with overrides for logger and navigation.
         let serviceConfig = ServiceAgentConfiguration(
             esDeveloperName: config.esDeveloperName,
@@ -219,6 +234,7 @@ class AgentforceModule: RCTEventEmitter {
             serviceUISettings: uiSettings,
             forceConfigEndPoint: config.serviceApiURL
         )
+        .withFeatureFlags(featureFlagSettings)
         .withLogger(bridgeLogger)
         .withNavigation(bridgeNavigation)
 
