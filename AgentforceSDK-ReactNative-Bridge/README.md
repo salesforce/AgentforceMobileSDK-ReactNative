@@ -4,12 +4,20 @@ This directory contains the Agentforce bridge module: JavaScript API layer, samp
 
 ## Installation
 
+Install the package from npm:
+
+```sh
+npm install @salesforce/react-native-agentforce
+```
+
+The native module autolinks via the shipped `ReactNativeAgentforce` podspec (iOS) and Gradle library (Android). The npm package name is `@salesforce/react-native-agentforce`; the native module names (`ReactNativeAgentforce` pod, `react-native-agentforce` Gradle module) are unchanged.
+
 ### iOS (CocoaPods)
 
 In your app’s `Podfile`:
 
 ```ruby
-pod 'ReactNativeAgentforce', :path => '../node_modules/react-native-agentforce/ios'
+pod 'ReactNativeAgentforce', :path => '../node_modules/@salesforce/react-native-agentforce/ios'
 ```
 
 Your app must also include the Agentforce iOS SDK in the Podfile so the bridge can link. For **Employee Agent**, the host app must additionally include the Salesforce Mobile SDK and perform bootconfig + SDK initialization.
@@ -24,7 +32,7 @@ Your app must also include the Agentforce iOS SDK in the Podfile so the bridge c
 Import the API from this package when the native module is linked:
 
 ```ts
-import { AgentforceService } from 'react-native-agentforce';
+import { AgentforceService } from '@salesforce/react-native-agentforce';
 ```
 
 Use the sample app in `app/` as reference or replace with your own UI.
@@ -58,7 +66,7 @@ Include the Salesforce Mobile SDK pods in your Podfile and perform **bootconfig*
 **Configure and launch:**
 
 ```typescript
-import { AgentforceService } from ‘react-native-agentforce’;
+import { AgentforceService } from '@salesforce/react-native-agentforce';
 
 await AgentforceService.configure(config);
 await AgentforceService.launchConversation();

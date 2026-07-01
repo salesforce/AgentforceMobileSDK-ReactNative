@@ -44,13 +44,13 @@ import {
   hasEmployeeAgentSession,
   loginForEmployeeAgent,
   logoutEmployeeAgent,
-} from 'react-native-agentforce';
+} from '@salesforce/react-native-agentforce';
 import type {
   FeatureFlags,
   HiddenPreChatFields,
   AgentforceContextVariable,
   AgentforceContextVariableType,
-} from 'react-native-agentforce';
+} from '@salesforce/react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
 import { getContextVariables, setContextVariables } from '../store/ContextVariablesStore';
 

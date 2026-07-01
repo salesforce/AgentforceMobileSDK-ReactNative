@@ -1,6 +1,8 @@
 module.exports = {
   root: true,
   extends: '@react-native',
+  // Generated build output of the published bridge package — never hand-edited.
+  ignorePatterns: ['AgentforceSDK-ReactNative-Bridge/lib/'],
   parser: '@typescript-eslint/parser',
   plugins: ['@typescript-eslint'],
   overrides: [

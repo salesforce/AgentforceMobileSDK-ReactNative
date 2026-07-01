@@ -44,6 +44,15 @@ jobs:
       - name: Run TypeScript type check
         run: npm run typecheck
 
+      # Verify the bridge is still a publishable package: it must build (tsc ->
+      # lib/) and produce a clean tarball. Catches packaging regressions on dev
+      # PRs before they can reach a release tag on main (see publish-npm-package.yml).
+      - name: Verify bridge package builds & packs
+        working-directory: AgentforceSDK-ReactNative-Bridge
+        run: |
+          npm run build
+          npm pack --dry-run
+
   # Job 2: Unit tests
   unit-tests:
     name: Unit Tests

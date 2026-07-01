@@ -6,6 +6,7 @@ node_modules/
 ios/build/
 android/build/
 AgentforceSDK-ReactNative-Bridge/android/build/
+AgentforceSDK-ReactNative-Bridge/lib/
 android/.gradle/
 *.log
 

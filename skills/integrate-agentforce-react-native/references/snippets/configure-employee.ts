@@ -12,7 +12,7 @@ import {
   hasEmployeeAgentSession,
   loginForEmployeeAgent,
   getEmployeeAgentCredentials,
-} from 'react-native-agentforce';
+} from '@salesforce/react-native-agentforce';
 import { agentforceLogger } from './agentforceLogger';
 import { agentforceNavigation } from './agentforceNavigation';
 

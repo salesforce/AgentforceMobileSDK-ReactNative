@@ -12,7 +12,7 @@ import {
   logoutEmployeeAgent,
   getEmployeeAgentCredentials,
   refreshEmployeeAgentCredentials,
-} from 'react-native-agentforce';
+} from '@salesforce/react-native-agentforce';
 
 export async function ensureEmployeeAgentLogin(): Promise<void> {
   if (!(await isEmployeeAgentAuthSupported())) {

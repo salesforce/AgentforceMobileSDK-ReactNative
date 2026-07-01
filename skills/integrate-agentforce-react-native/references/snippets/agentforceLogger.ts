@@ -2,7 +2,7 @@
 //
 // If you have a logging service (Sentry, Datadog, etc.), wire it up here.
 
-import type { LoggerDelegate, LogLevel } from 'react-native-agentforce';
+import type { LoggerDelegate, LogLevel } from '@salesforce/react-native-agentforce';
 
 export const agentforceLogger: LoggerDelegate = {
   onLog(level: LogLevel, message: string, error?: string) {

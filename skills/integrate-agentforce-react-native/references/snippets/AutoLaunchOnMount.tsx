@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { AgentforceService } from 'react-native-agentforce';
+import { AgentforceService } from '@salesforce/react-native-agentforce';
 import { configureAgentforce } from './agentforceConfig';
 
 export function AutoLaunchOnMount({ children }: { children: React.ReactNode }) {

@@ -44,7 +44,7 @@ import {
   LogLevel,
   NavigationDelegate,
   NavigationRequest,
-} from 'react-native-agentforce';
+} from '@salesforce/react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
 import { getContextVariables } from '../store/ContextVariablesStore';
 
