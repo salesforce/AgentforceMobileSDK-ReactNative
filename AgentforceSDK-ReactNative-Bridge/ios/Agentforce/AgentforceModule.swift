@@ -97,6 +97,21 @@ class AgentforceModule: RCTEventEmitter {
     private var modifyContinuations: [String: CheckedContinuation<String?, Never>] = [:]
     private let modifyContinuationsLock = NSLock()
 
+    // MARK: - Teardown State
+
+    /// Set once the RN bridge tears this module down (hot reload or app teardown).
+    /// Guarded by `invalidationLock`. Once true, in-flight async work must not touch
+    /// the (deallocating) client or call promise resolvers back into a dead JS runtime.
+    /// Mirrors the Android bridge, which cancels its coroutine scope in `invalidate()`.
+    private var _isInvalidated = false
+    private let invalidationLock = NSLock()
+
+    /// True after `invalidate()` has begun. Async task bodies check this before
+    /// resolving/rejecting promises or accessing `agentforceClient`.
+    private var isInvalidated: Bool {
+        invalidationLock.withLock { _isInvalidated }
+    }
+
     // MARK: - Module Setup
 
     override static func requiresMainQueueSetup() -> Bool {
@@ -139,6 +154,9 @@ class AgentforceModule: RCTEventEmitter {
         }
 
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             do {
                 switch type {
                 case "service":
@@ -437,6 +455,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             do {
                 guard let client = agentforceClient, let mode = currentMode else {
                     throw AgentConfigError.notConfigured
@@ -476,6 +497,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             do {
                 await closeCurrentConversation()
 
@@ -570,6 +594,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             resolve(credentialProvider.isConfigured)
         }
     }
@@ -592,6 +619,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             let oldAgentId = UserDefaults.standard.string(forKey: "EmployeeAgentId") ?? ""
             let newAgentId = agentId.trimmingCharacters(in: .whitespaces)
 
@@ -675,6 +705,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             guard let dict = flags as? [String: Any] else {
                 resolve(nil)
                 return
@@ -706,6 +739,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             if case .service(let config) = currentMode {
                 resolve([
                     "serviceApiURL": config.serviceApiURL,
@@ -732,6 +768,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             if credentialProvider.isConfigured {
                 resolve([
                     "configured": true,
@@ -754,6 +793,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             resolve(agentforceClient != nil)
         }
     }
@@ -869,8 +911,18 @@ class AgentforceModule: RCTEventEmitter {
                 "utterance": utteranceText,
             ])
 
-            Task {
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            // Timeout task: weak self so a hot-reload teardown between scheduling and
+            // firing can't reach through a deallocated module (W-23231222). If the
+            // sleep is cancelled or the module is gone, `invalidate()` has already
+            // drained this continuation via `drainPendingContinuations()`, so we do
+            // nothing. `removeValue` under the lock guarantees a single resume.
+            Task { [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                } catch {
+                    return
+                }
+                guard let self else { return }
                 self.modifyContinuationsLock.lock()
                 let pending = self.modifyContinuations.removeValue(forKey: requestId)
                 self.modifyContinuationsLock.unlock()
@@ -920,6 +972,44 @@ class AgentforceModule: RCTEventEmitter {
         resolve(["success": true])
     }
 
+    // MARK: - Teardown
+
+    /// Called by the RN bridge when it tears this module down — the exact
+    /// `-[RCTCxxBridge invalidate]` path seen in the hot-reload crash (W-23231222).
+    /// Marks the module invalidated (so guarded async bodies bail out before touching
+    /// the client or resolving into a dead JS runtime), resumes any pending
+    /// continuations, and releases the client so no in-flight async completion touches
+    /// a deallocating object.
+    ///
+    /// Mirrors the Android bridge's `invalidate()` (`scope.cancel()` + client release).
+    /// `RCTEventEmitter` already conforms to `RCTInvalidating` and declares
+    /// `invalidate` as `NS_REQUIRES_SUPER`, so this overrides and calls `super`.
+    override func invalidate() {
+        invalidationLock.withLock { _isInvalidated = true }
+
+        // Resume any awaiting modify-utterance continuations so nothing leaks or
+        // resumes into a torn-down JS runtime. Thread-safe (locks internally).
+        drainPendingContinuations()
+
+        // Release the client/conversation on the main actor (they were created there).
+        // The `isInvalidated` guard on every bridge task prevents new work from racing
+        // this teardown.
+        Task { @MainActor [weak self] in
+            self?.cleanupClient()
+        }
+
+        super.invalidate()
+    }
+
+    /// Belt-and-suspenders: in the standard RN lifecycle the bridge always calls
+    /// `invalidate()` before releasing this module, which drains continuations. This
+    /// `deinit` covers any non-standard dealloc path that skips `invalidate()` so a
+    /// suspended `withCheckedContinuation` awaiter can never be orphaned/leaked.
+    /// Safe from `deinit`: only touches `modifyContinuations` and its lock.
+    deinit {
+        drainPendingContinuations()
+    }
+
     // MARK: - Cleanup
 
     private func cleanupClient() {
@@ -935,6 +1025,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             await closeCurrentConversation()
             dismissConversation()
             resolve(["success": true])
@@ -1017,6 +1110,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             do {
                 // Validate context structure
                 guard let variables = contextDict["variables"] as? [[String: Any]] else {
@@ -1088,6 +1184,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             await closeCurrentConversation()
             cleanupClient()
             currentMode = nil
