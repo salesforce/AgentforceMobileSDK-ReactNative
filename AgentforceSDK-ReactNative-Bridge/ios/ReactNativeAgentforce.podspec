@@ -35,7 +35,7 @@ Pod::Spec.new do |s|
     core.dependency "React-Core"
     core.dependency "AgentforceSDK"
     core.dependency "AgentforceVoice", "2.1.7"
-    # AgentforceSDK 15.33.3 (262.0) publicly imports the SharedUI module but
+    # AgentforceSDK 15.33.5 (262.0) publicly imports the SharedUI module but
     # omits it from its podspec; declare it so this target can resolve it.
     core.dependency "SharedUI", "1.3.1"
   end
