@@ -210,3 +210,7 @@ fix_*.patch
 
 # Generated app configuration
 /src/config/AppConfig.generated.ts
+
+# Bridge npm package build output (compiled by `prepare`/`prepublishOnly`, not committed)
+/AgentforceSDK-ReactNative-Bridge/lib/
+/AgentforceSDK-ReactNative-Bridge/*.tgz

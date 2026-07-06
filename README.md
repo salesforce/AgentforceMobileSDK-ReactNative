@@ -70,7 +70,7 @@ This repository uses a **multi-target/multi-flavor** approach to build two separ
 
 This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `AgentforceSDK-ReactNative-Bridge/`) for all Agentforce functionality. The bridge provides:
 
-- **JS API**: `AgentforceService` from `react-native-agentforce`
+- **JS API**: `AgentforceService` from `@salesforce/react-native-agentforce`
 - **Native modules**: Android (auto-linked) and iOS (CocoaPods)
 - **Runtime detection**: Automatically detects Mobile SDK availability
 - **Subspecs/Variants**: Core (Service Agent) and WithMobileSDK (Employee Agent)
@@ -79,7 +79,7 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 
 - **Framework**: React Native + TypeScript
 - **Navigation**: React Navigation
-- **Agentforce API**: `AgentforceService` from `react-native-agentforce` (bridge package)
+- **Agentforce API**: `AgentforceService` from `@salesforce/react-native-agentforce` (bridge package)
 - **Screens**: Home, Settings, About
 - **No app-specific code**: Same JavaScript for both apps
 
@@ -88,7 +88,7 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 If you're using [Claude Code](https://www.anthropic.com/claude-code) (or other agentic tooling that supports the skill format), this repo ships an `integrate-agentforce-react-native` skill that walks you through SDK integration end-to-end:
 
 - **Use-case-driven configuration** — answer "what kind of agent?" and the skill picks the right `AgentforceService.configure(...)` mode (Service Agent vs Employee Agent) instead of asking you to choose between configuration shapes upfront.
-- **Bridge + native wiring** — adds the `react-native-agentforce` bridge package, runs the iOS/Android install scripts (Boost, XcodeGen, CocoaPods, Gradle), and surfaces the Mobile SDK requirements for Employee Agent.
+- **Bridge + native wiring** — adds the `@salesforce/react-native-agentforce` bridge package, runs the iOS/Android install scripts (Boost, XcodeGen, CocoaPods, Gradle), and surfaces the Mobile SDK requirements for Employee Agent.
 - **Scaffolds the integration files** — generates `agentforceConfig.ts`, `agentforceLogger.ts`, `agentforceNavigation.ts`, optional `employeeAuth.ts`, and a launch button (prominent home button, header icon, or auto-launch wrapper).
 - **MIAW deployment guidance** — for Service Agent, points you at the [Messaging for In-App and Web mobile deployment docs](https://help.salesforce.com/s/articleView?id=service.miaw_deployment_mobile.htm&type=5) before you try to build.
 

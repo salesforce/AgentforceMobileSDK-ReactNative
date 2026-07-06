@@ -11,7 +11,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import type { ViewProviderComponentData } from 'react-native-agentforce';
+import type { ViewProviderComponentData } from '@salesforce/react-native-agentforce';
 
 interface ComplexAgentforceDataViewProps {
   definition?: string;

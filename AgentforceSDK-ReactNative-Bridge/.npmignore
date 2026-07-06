@@ -1,0 +1,20 @@
+# Native build artifacts — never ship compiled/generated output
+android/build/
+android/.gradle/
+android/.cxx/
+android/local.properties
+ios/build/
+ios/Pods/
+
+# Tests and fixtures
+**/__tests__/
+**/*.test.ts
+**/*.test.tsx
+# Native unit-test sources (not part of the shipped library)
+android/src/test/
+android/src/androidTest/
+
+# Tooling / local
+*.log
+.DS_Store
+tsconfig.build.tsbuildinfo

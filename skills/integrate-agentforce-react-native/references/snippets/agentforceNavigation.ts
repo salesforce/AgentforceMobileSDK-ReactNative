@@ -5,7 +5,7 @@
 // own React Navigation stack, deep linking, or in-app browser.
 
 import { Alert, Linking } from 'react-native';
-import type { NavigationDelegate, NavigationRequest } from 'react-native-agentforce';
+import type { NavigationDelegate, NavigationRequest } from '@salesforce/react-native-agentforce';
 
 export const agentforceNavigation: NavigationDelegate = {
   onNavigate(request: NavigationRequest) {

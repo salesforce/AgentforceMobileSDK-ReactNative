@@ -7,7 +7,7 @@
     "url": "https://github.com/salesforce/AgentforceMobileSDK-ReactNative"
   },
   "metadata": {
-    "description": "Tooling for integrating the Agentforce Mobile SDK into React Native apps via the react-native-agentforce bridge."
+    "description": "Tooling for integrating the Agentforce Mobile SDK into React Native apps via the @salesforce/react-native-agentforce bridge."
   },
   "plugins": [
     {
