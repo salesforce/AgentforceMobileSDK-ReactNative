@@ -52,6 +52,16 @@ interface HomeScreenProps {
   navigation: any;
 }
 
+// Preset utterances the user can pick from and fire via sendUtterance.
+// A real host app would source these from suggested-prompt chips, deep links,
+// or its own UI — this list just demonstrates the API.
+const SAMPLE_UTTERANCES = [
+  'What can you help me with?',
+  'Summarize my open cases',
+  'What is the status of my latest order?',
+  'Show me my account details',
+];
+
 // Sample logger delegate — forwards Agentforce SDK logs to console
 const agentforceLogger: LoggerDelegate = {
   onLog(level: LogLevel, message: string, error?: string) {
@@ -84,6 +94,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [isEmployeeAgentConfigured, setIsEmployeeAgentConfigured] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [currentMode, setCurrentMode] = useState<'none' | 'service' | 'employee'>('none');
+  const [selectedUtterance, setSelectedUtterance] = useState(SAMPLE_UTTERANCES[0]);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     // Register logger delegate so SDK logs are forwarded to JS
@@ -256,6 +268,35 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
   };
 
+  // Send the selected utterance to the ACTIVE conversation. sendUtterance is
+  // agent-mode-agnostic: it delivers to whichever agent (Service or Employee)
+  // is currently launched, so we require an active conversation rather than
+  // assuming a mode. The native layer rejects with NO_CONVERSATION otherwise.
+  const handleSendUtterance = async () => {
+    if (currentMode === 'none') {
+      Alert.alert(
+        'No Active Conversation',
+        'Launch a Service or Employee Agent first, then send an utterance to it.',
+      );
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      // The conversation is already active (currentMode is 'service' or
+      // 'employee'), so send straight to it — no reconfigure, no relaunch.
+      const sent = await AgentforceService.sendUtterance(selectedUtterance);
+      console.log(
+        `[HomeScreen] sendUtterance("${selectedUtterance}") -> ${sent} (mode: ${currentMode})`,
+      );
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to send the utterance to the agent.');
+      console.error('Send utterance error:', error);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -329,6 +370,41 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               {isEmployeeAgentConfigured && <Text style={styles.launchButtonArrow}>›</Text>}
             </TouchableOpacity>
           )}
+        </View>
+
+        <View style={styles.utteranceContainer}>
+          <Text style={styles.utteranceHeader}>Send an utterance</Text>
+          <Text style={styles.utteranceSubheader}>
+            {currentMode === 'none'
+              ? 'Launch a Service or Employee Agent above first — sendUtterance delivers to whichever agent is active.'
+              : `Pick a prompt, then Send. Delivered programmatically to the active ${currentMode} agent via sendUtterance.`}
+          </Text>
+
+          {SAMPLE_UTTERANCES.map(utterance => {
+            const selected = utterance === selectedUtterance;
+            return (
+              <TouchableOpacity
+                key={utterance}
+                style={styles.radioRow}
+                onPress={() => setSelectedUtterance(utterance)}
+                disabled={isSending}>
+                <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
+                  {selected && <View style={styles.radioInner} />}
+                </View>
+                <Text style={styles.radioLabel}>{utterance}</Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              (currentMode === 'none' || isSending) && styles.launchButtonDisabled,
+            ]}
+            onPress={handleSendUtterance}
+            disabled={isChecking || isSending || currentMode === 'none'}>
+            <Text style={styles.sendButtonText}>{isSending ? 'Sending…' : 'Send Utterance'}</Text>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
@@ -456,6 +532,72 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#7B1FA2',
     fontWeight: '300',
+  },
+  utteranceContainer: {
+    width: '100%',
+    padding: 20,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderLeftWidth: 4,
+    borderLeftColor: '#7B1FA2',
+  },
+  utteranceHeader: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#212529',
+    marginBottom: 4,
+  },
+  utteranceSubheader: {
+    fontSize: 13,
+    color: '#6c757d',
+    marginBottom: 16,
+  },
+  radioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#adb5bd',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  radioOuterSelected: {
+    borderColor: '#7B1FA2',
+  },
+  radioInner: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: '#7B1FA2',
+  },
+  radioLabel: {
+    flex: 1,
+    fontSize: 15,
+    color: '#212529',
+  },
+  sendButton: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 8,
+    backgroundColor: '#7B1FA2',
+    alignItems: 'center',
+  },
+  sendButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   settingsButton: {
     padding: 16,

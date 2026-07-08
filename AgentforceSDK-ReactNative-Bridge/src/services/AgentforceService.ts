@@ -869,6 +869,50 @@ class AgentforceService {
   }
 
   /**
+   * Send an utterance (a text message) to the active conversation.
+   *
+   * Programmatically sends the given text to the agent, as if the user had typed
+   * and submitted it. Works for both Service Agent and Employee Agent modes.
+   *
+   * **Must be called after launching a conversation** — if no conversation is
+   * active, the native module rejects and this method throws.
+   *
+   * @param utterance - The non-empty text to send to the agent.
+   * @returns Promise<boolean> indicating success
+   * @throws Error if the utterance is empty/invalid, or if no conversation is active
+   *
+   * @example
+   * ```typescript
+   * await AgentforceService.launchConversation();
+   * await AgentforceService.sendUtterance('What is the status of my order?');
+   * ```
+   */
+  async sendUtterance(utterance: string): Promise<boolean> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      console.warn('Agentforce only supported on Android and iOS');
+      return false;
+    }
+
+    if (!AgentforceModule) {
+      console.error('AgentforceModule native module not found');
+      return false;
+    }
+
+    if (typeof utterance !== 'string' || utterance.trim().length === 0) {
+      throw new Error('Invalid utterance: must be a non-empty string');
+    }
+
+    try {
+      const result = await AgentforceModule.sendUtterance(utterance);
+      console.log('[AgentforceService] Utterance sent');
+      return result?.success ?? true;
+    } catch (error) {
+      console.error('[AgentforceService] Failed to send utterance:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Set additional context for the conversation.
    *
    * Provides contextual information to the Agentforce conversation,

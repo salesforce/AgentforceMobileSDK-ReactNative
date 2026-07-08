@@ -71,6 +71,10 @@ RCT_EXTERN_METHOD(closeConversation:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(startNewConversation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(sendUtterance:(NSString *)utterance
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 // MARK: - Hidden PreChat Fields
 
 RCT_EXTERN_METHOD(registerHiddenPreChatFields:(NSDictionary *)fields

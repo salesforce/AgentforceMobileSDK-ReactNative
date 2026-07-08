@@ -26,6 +26,7 @@ jest.mock('react-native', () => {
     launchConversation: jest.fn().mockResolvedValue({ success: true }),
     startNewConversation: jest.fn().mockResolvedValue({ success: true }),
     closeConversation: jest.fn().mockResolvedValue({ success: true }),
+    sendUtterance: jest.fn().mockResolvedValue({ success: true }),
     isConfigured: jest.fn(),
     getConfiguration: jest.fn(),
     getConfigurationInfo: jest.fn(),
@@ -372,5 +373,53 @@ describe('AgentforceService passthrough + normalization', () => {
   it('clearHiddenPreChatFields registers an empty map', async () => {
     await AgentforceService.clearHiddenPreChatFields();
     expect(nativeModule.registerHiddenPreChatFields).toHaveBeenCalledWith({});
+  });
+});
+
+describe('AgentforceService.sendUtterance', () => {
+  beforeEach(() => {
+    setPlatform('ios');
+    nativeModule.sendUtterance.mockClear();
+    nativeModule.sendUtterance.mockResolvedValue({ success: true });
+  });
+
+  // SC1: happy path — forwards the utterance and resolves the native success flag.
+  it('sends the utterance to the native module and resolves true', async () => {
+    await expect(AgentforceService.sendUtterance('hello')).resolves.toBe(true);
+    expect(nativeModule.sendUtterance).toHaveBeenCalledWith('hello');
+  });
+
+  // SC2: normalization — default to true when native omits success, honor explicit false.
+  it('defaults to true when the native result omits success', async () => {
+    nativeModule.sendUtterance.mockResolvedValueOnce({});
+    await expect(AgentforceService.sendUtterance('hi')).resolves.toBe(true);
+  });
+
+  it('resolves false when the native result reports success: false', async () => {
+    nativeModule.sendUtterance.mockResolvedValueOnce({ success: false });
+    await expect(AgentforceService.sendUtterance('hi')).resolves.toBe(false);
+  });
+
+  // SC3: platform guard — unsupported platforms return false without touching native.
+  it('returns false and skips the native call on unsupported platforms', async () => {
+    setPlatform('web');
+    await expect(AgentforceService.sendUtterance('hi')).resolves.toBe(false);
+    expect(nativeModule.sendUtterance).not.toHaveBeenCalled();
+  });
+
+  // SC4: validation — empty / whitespace / non-string throw and never reach native.
+  it('rejects an empty or whitespace-only utterance without calling native', async () => {
+    await expect(AgentforceService.sendUtterance('')).rejects.toThrow('Invalid utterance');
+    await expect(AgentforceService.sendUtterance('   ')).rejects.toThrow('Invalid utterance');
+    await expect(AgentforceService.sendUtterance(undefined as unknown as string)).rejects.toThrow(
+      'Invalid utterance',
+    );
+    expect(nativeModule.sendUtterance).not.toHaveBeenCalled();
+  });
+
+  // SC5: error propagation — a native rejection surfaces to the caller.
+  it('propagates native errors', async () => {
+    nativeModule.sendUtterance.mockRejectedValueOnce(new Error('NO_CONVERSATION'));
+    await expect(AgentforceService.sendUtterance('hi')).rejects.toThrow('NO_CONVERSATION');
   });
 });
