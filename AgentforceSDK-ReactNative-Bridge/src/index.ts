@@ -36,6 +36,8 @@ export type {
   AgentforceContextVariableType,
   ViewProviderDelegate,
   ViewProviderComponentData,
+  SplashScreenDelegate,
+  SplashScreenComponentProps,
   HiddenPreChatFields,
   UIDelegate,
   AgentResponseEvent,

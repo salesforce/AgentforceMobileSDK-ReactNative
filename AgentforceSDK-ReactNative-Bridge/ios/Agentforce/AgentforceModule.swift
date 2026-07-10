@@ -86,11 +86,21 @@ class AgentforceModule: RCTEventEmitter {
         return BridgeViewProvider(bridge: self.bridge)
     }()
 
+    // MARK: - Splash Screen Provider
+
+    /// Bridge splash screen provider for hosting a React Native welcome screen on
+    /// top of the conversation. Initialized lazily so the RCT bridge is available.
+    private lazy var bridgeSplashScreenProvider: BridgeSplashScreenProvider = {
+        return BridgeSplashScreenProvider(bridge: self.bridge)
+    }()
+
     // MARK: - UI Delegate
 
     /// Bridge UI delegate for forwarding SDK UI events to JavaScript.
+    /// Wired to the splash screen provider so the SDK's splash-screen request is
+    /// satisfied by a registered React Native component.
     private lazy var bridgeUIDelegate: BridgeUIDelegate = {
-        return BridgeUIDelegate(module: self)
+        return BridgeUIDelegate(module: self, splashScreenProvider: bridgeSplashScreenProvider)
     }()
 
     /// Pending modify-utterance continuations keyed by requestId.
@@ -1098,6 +1108,55 @@ class AgentforceModule: RCTEventEmitter {
         resolve(["success": true])
     }
 
+    // MARK: - Splash Screen Provider
+
+    /// Register a React Native component as the splash (welcome) screen for one or
+    /// more agents. Can be called before or after configure() — the provider is
+    /// always attached via the UI delegate and checks the map dynamically.
+    @objc
+    func registerSplashScreenProvider(
+        _ config: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let dict = config as? [String: Any],
+              let componentMap = dict["componentMap"] as? [String: String],
+              !componentMap.isEmpty else {
+            reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary", nil)
+            return
+        }
+        bridgeSplashScreenProvider.register(componentMap: componentMap)
+        resolve(["success": true, "registeredAgents": Array(componentMap.keys)])
+    }
+
+    /// Clear the splash screen registration.
+    @objc
+    func clearSplashScreenProvider(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            bridgeSplashScreenProvider.reset()
+            resolve(["success": true])
+        }
+    }
+
+    /// Report that the user chose a starter utterance on a React Native splash
+    /// screen. Routes the utterance back into the SDK's splash utterance delegate,
+    /// which animates the splash away and sends the utterance into the conversation.
+    @objc
+    func selectSplashScreenUtterance(
+        _ agentId: String,
+        utterance: String,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            bridgeSplashScreenProvider.selectUtterance(agentId: agentId, utterance: utterance)
+            resolve(true)
+        }
+    }
+
     // MARK: - Teardown
 
     /// Called by the RN bridge when it tears this module down — the exact
@@ -1372,6 +1431,7 @@ class AgentforceModule: RCTEventEmitter {
             currentMode = nil
             credentialProvider.reset()
             bridgeViewProvider.reset()
+            bridgeSplashScreenProvider.reset()
             UserDefaults.standard.removeObject(forKey: "ServiceAgentSiteUrl")
             UserDefaults.standard.removeObject(forKey: "ServiceAgentOrgUrl")
             UserDefaults.standard.removeObject(forKey: "ServiceAgentDevName")

@@ -40,6 +40,7 @@ import kotlin.time.Duration.Companion.seconds
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
+import com.salesforce.android.reactagentforce.providers.BridgeSplashScreenBuilder
 import com.salesforce.android.reactagentforce.providers.BridgeViewProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
 import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
@@ -109,6 +110,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // Bridge view provider for delegating native SDK views to React Native components
     private val bridgeViewProvider = BridgeViewProvider(reactContext)
+
+    // Bridge splash screen builder for hosting a React Native welcome screen
+    private val bridgeSplashScreenBuilder = BridgeSplashScreenBuilder(reactContext)
 
     // Bridge hidden prechat fields (Service Agent only)
     private val bridgeHiddenPreChat = BridgeHiddenPreChat()
@@ -250,6 +254,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
                 agentforceConfigBuilder.setDelegate(bridgeUIDelegate)
+                // Always attach the splash screen builder so late registrations take
+                // effect. hasSplashScreen() returns false when the map is empty,
+                // matching no-splash behavior.
+                agentforceConfigBuilder.setSplashScreenBuilder(bridgeSplashScreenBuilder)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 val sdkMode = AgentforceMode.ServiceAgent(
@@ -415,6 +423,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 } else {
                     agentforceConfigBuilder.setTopAppBarBuilder(DefaultTopAppBarBuilder)
                 }
+                // Always attach the splash screen builder so late registrations take
+                // effect. hasSplashScreen() returns false when the map is empty,
+                // matching no-splash behavior.
+                agentforceConfigBuilder.setSplashScreenBuilder(bridgeSplashScreenBuilder)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 // Use FullConfig mode for Employee Agent
@@ -944,6 +956,58 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // endregion
 
+    // region Splash Screen Provider
+
+    @ReactMethod
+    fun registerSplashScreenProvider(config: ReadableMap, promise: Promise) {
+        val mapData = config.getMap("componentMap")
+
+        if (mapData == null) {
+            promise.reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary")
+            return
+        }
+
+        val componentMap = mutableMapOf<String, String>()
+        val iterator = mapData.keySetIterator()
+        while (iterator.hasNextKey()) {
+            val key = iterator.nextKey()
+            mapData.getString(key)?.let { componentMap[key] = it }
+        }
+
+        if (componentMap.isEmpty()) {
+            promise.reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary")
+            return
+        }
+
+        bridgeSplashScreenBuilder.register(componentMap)
+        val keysArray = Arguments.createArray().apply {
+            componentMap.keys.forEach { pushString(it) }
+        }
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+            putArray("registeredAgents", keysArray)
+        })
+    }
+
+    @ReactMethod
+    fun clearSplashScreenProvider(promise: Promise) {
+        bridgeSplashScreenBuilder.reset()
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+        })
+    }
+
+    @ReactMethod
+    fun selectSplashScreenUtterance(agentId: String, utterance: String, promise: Promise) {
+        // onSelectUtterance updates Compose state, so invoke it on the main thread.
+        scope.launch(Dispatchers.Main) {
+            val handled = bridgeSplashScreenBuilder.selectUtterance(agentId, utterance)
+            promise.resolve(handled)
+        }
+    }
+
+    // endregion
+
     // region Cleanup
 
     @ReactMethod
@@ -988,6 +1052,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             currentMode = null
             credentialProvider.reset()
             bridgeViewProvider.reset()
+            bridgeSplashScreenBuilder.reset()
             bridgeHiddenPreChat.setFields(emptyMap())
             employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
             promise.resolve(Arguments.createMap().apply {

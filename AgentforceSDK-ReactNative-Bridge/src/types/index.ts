@@ -36,6 +36,9 @@ export {
 // View provider delegate types
 export { ViewProviderDelegate, ViewProviderComponentData } from './ViewProviderDelegate';
 
+// Splash screen delegate types
+export type { SplashScreenDelegate, SplashScreenComponentProps } from './SplashScreenDelegate';
+
 // Hidden prechat field types
 export type { HiddenPreChatFields } from './HiddenPreChatFields';
 
