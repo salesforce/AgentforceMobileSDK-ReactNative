@@ -546,6 +546,41 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    /**
+     * Send an utterance (text message) to the current conversation.
+     * Must be called after launching a conversation.
+     *
+     * @param utterance The text to send to the agent
+     * @param promise Promise to resolve/reject
+     */
+    @ReactMethod
+    fun sendUtterance(utterance: String, promise: Promise) {
+        Log.d(TAG, "sendUtterance() called")
+
+        scope.launch(Dispatchers.Main) {
+            val conversation = AgentforceClientHolder.currentConversation
+            if (conversation == null) {
+                Log.w(TAG, "No active conversation for sendUtterance")
+                promise.reject(
+                    "NO_CONVERSATION",
+                    "No active conversation. Launch conversation first, then send an utterance."
+                )
+                return@launch
+            }
+
+            try {
+                conversation.sendUtterance(utterance)
+                Log.d(TAG, "Utterance sent")
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                })
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send utterance", e)
+                promise.reject("SEND_UTTERANCE_ERROR", e.message, e)
+            }
+        }
+    }
+
     // endregion
 
     // region Configuration Query Methods
