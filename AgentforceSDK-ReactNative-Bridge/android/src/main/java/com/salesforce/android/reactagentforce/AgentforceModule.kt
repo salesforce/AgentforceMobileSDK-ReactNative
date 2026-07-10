@@ -35,6 +35,8 @@ import com.salesforce.android.agentforceservice.voice.MiawVoiceProviderFactory
 import com.salesforce.android.smi.multimedia.core.MultimediaExtension
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotContextVariable
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotAdditionalContext
+import com.salesforce.android.agentforceservice.voice.AgentforceVoiceSessionOptions
+import kotlin.time.Duration.Companion.seconds
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
@@ -103,6 +105,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Bridge UI delegate for forwarding SDK UI events to JS
     private val bridgeUIDelegate = BridgeUIDelegate(reactContext)
 
+    // Behavioral options applied to the next voice session.
+    // Populated from `voiceOptions` on the JS-side configuration map and
+    // forwarded into [AgentforceConfiguration.Builder.setVoiceSessionOptions]
+    // so the SDK's voice UI ViewModel reads them via the conversation's
+    // configuration when starting a session.
+    // Defaults to all-off (`AgentforceVoiceSessionOptions()`).
+    private var voiceSessionOptions: AgentforceVoiceSessionOptions = AgentforceVoiceSessionOptions()
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -117,9 +127,17 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun configure(config: ReadableMap, promise: Promise) {
         val type = config.getString("type")
-        
+
         Log.d(TAG, "configure() called with type: $type")
-        
+
+        // Parse voice options once, before dispatching to the per-mode configurator.
+        // Stored on the module so they apply to the next voice session created by
+        // either path; both per-mode configurators forward this value to
+        // `AgentforceConfiguration.Builder.setVoiceSessionOptions(...)` so the
+        // SDK's voice UI ViewModel honors the option when the user launches voice
+        // from the chat UI.
+        voiceSessionOptions = parseVoiceSessionOptions(config)
+
         when (type) {
             "service" -> configureServiceAgent(config, promise)
             "employee" -> configureEmployeeAgent(config, promise)
@@ -213,6 +231,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
+                    .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
                 // Always attach bridgeViewProvider so late registrations take effect.
@@ -367,6 +386,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                             displayName = employeeConfig.userId
                         )
                     )
+                    .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
                 // Always attach bridgeViewProvider so late registrations take effect.
@@ -597,6 +617,32 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun setEmployeeAgentId(agentId: String, promise: Promise) {
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, agentId ?: "").apply()
         promise.resolve(null)
+    }
+
+    /**
+     * Parse `voiceOptions` from the JS-side config map into an [AgentforceVoiceSessionOptions].
+     *
+     * Returns the all-off default when the field is missing or empty. A
+     * `userSilenceTimeoutSeconds` of zero or negative is forwarded to the
+     * native layer, which already coerces non-positive durations to disabled
+     * and emits a warning. Non-finite values (NaN, +/-infinity) are dropped to
+     * avoid passing them to `Duration` arithmetic.
+     */
+    private fun parseVoiceSessionOptions(config: ReadableMap): AgentforceVoiceSessionOptions {
+        if (!config.hasKey("voiceOptions")) return AgentforceVoiceSessionOptions()
+        val voiceOpts = config.getMap("voiceOptions") ?: return AgentforceVoiceSessionOptions()
+
+        val timeout = if (
+            voiceOpts.hasKey("userSilenceTimeoutSeconds") &&
+            !voiceOpts.isNull("userSilenceTimeoutSeconds")
+        ) {
+            val raw = voiceOpts.getDouble("userSilenceTimeoutSeconds")
+            if (raw.isFinite()) raw.seconds else null
+        } else {
+            null
+        }
+
+        return AgentforceVoiceSessionOptions(userSilenceTimeout = timeout)
     }
 
     private data class FeatureFlags(

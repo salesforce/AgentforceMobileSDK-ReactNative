@@ -41,6 +41,7 @@ export type {
   UtteranceSentEvent,
   AgentSwitchEvent,
   ModifyUtteranceRequest,
+  VoiceOptions,
 } from './types';
 export { isServiceAgentConfig, isEmployeeAgentConfig, isLegacyConfig } from './types';
 

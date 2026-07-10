@@ -153,6 +153,13 @@ class AgentforceModule: RCTEventEmitter {
             return
         }
 
+        // Parse voice options up-front but pass them in as a `let` argument to the
+        // per-mode configurators rather than stashing on `self`. The value lives only
+        // for the lifetime of this configure call (matches the "immutable for the
+        // session lifetime" intent) and avoids a cross-actor write to instance state
+        // that would later be read on `@MainActor`.
+        let voiceSessionOptions = Self.parseVoiceSessionOptions(from: configDict)
+
         Task { @MainActor in
             // Skip if the RN bridge has torn this module down (hot reload) so we
             // don't run bridge work or resolve promises into a dead JS runtime.
@@ -160,11 +167,11 @@ class AgentforceModule: RCTEventEmitter {
             do {
                 switch type {
                 case "service":
-                    try await configureServiceAgent(configDict)
+                    try await configureServiceAgent(configDict, voiceSessionOptions: voiceSessionOptions)
                     resolve(["success": true, "mode": "service"])
 
                 case "employee":
-                    try await configureEmployeeAgent(configDict)
+                    try await configureEmployeeAgent(configDict, voiceSessionOptions: voiceSessionOptions)
                     resolve(["success": true, "mode": "employee"])
 
                 default:
@@ -177,9 +184,31 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
 
+    /// Parse `voiceOptions` from the JS-side config map into an `AgentforceVoiceSessionOptions`.
+    ///
+    /// Returns `.init()` (auto-end `.never`) when the field is missing. Any
+    /// supplied value is routed through `VoiceAutoEndPolicy.afterUserSilence(clamping:)`,
+    /// which normalizes non-finite (NaN / ±infinity) and non-positive durations
+    /// to `.never` — so the bridge does not need to pre-validate the number.
+    /// Mirrors the Android bridge.
+    private static func parseVoiceSessionOptions(from configDict: [String: Any]) -> AgentforceVoiceSessionOptions {
+        guard let voiceOpts = configDict["voiceOptions"] as? [String: Any] else {
+            return AgentforceVoiceSessionOptions()
+        }
+        guard let numberValue = voiceOpts["userSilenceTimeoutSeconds"] as? NSNumber else {
+            return AgentforceVoiceSessionOptions(autoEndPolicy: .never)
+        }
+        return AgentforceVoiceSessionOptions(
+            autoEndPolicy: .afterUserSilence(clamping: numberValue.doubleValue)
+        )
+    }
+
     // MARK: - Service Agent Configuration
 
-    private func configureServiceAgent(_ configDict: [String: Any]) async throws {
+    private func configureServiceAgent(
+        _ configDict: [String: Any],
+        voiceSessionOptions: AgentforceVoiceSessionOptions
+    ) async throws {
         guard let config = ServiceAgentModeConfig.from(dictionary: configDict) else {
             throw AgentConfigError.missingRequiredField("serviceApiURL, organizationId, or esDeveloperName")
         }
@@ -255,6 +284,7 @@ class AgentforceModule: RCTEventEmitter {
         .withFeatureFlags(featureFlagSettings)
         .withLogger(bridgeLogger)
         .withNavigation(bridgeNavigation)
+        .withVoiceSessionOptions(voiceSessionOptions)
 
         // Always pass bridgeViewProvider so late registrations take effect.
         // canHandle() returns false when the map is empty, matching nil behavior.
@@ -268,7 +298,10 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Employee Agent Configuration
 
-    private func configureEmployeeAgent(_ configDict: [String: Any]) async throws {
+    private func configureEmployeeAgent(
+        _ configDict: [String: Any],
+        voiceSessionOptions: AgentforceVoiceSessionOptions
+    ) async throws {
         guard let config = EmployeeAgentModeConfig.from(dictionary: configDict) else {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
         }
@@ -360,7 +393,8 @@ class AgentforceModule: RCTEventEmitter {
             agentforceFeatureFlagSettings: featureFlagSettings,
             salesforceNetwork: network,
             salesforceNavigation: bridgeNavigation,
-            salesforceLogger: bridgeLogger
+            salesforceLogger: bridgeLogger,
+            voiceSessionOptions: voiceSessionOptions
         )
 
         // Only create new client if needed (otherwise reuse existing to preserve conversation)
