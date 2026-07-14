@@ -25,4 +25,18 @@ export interface VoiceOptions {
    * Units: seconds (matches the native iOS `TimeInterval` type).
    */
   userSilenceTimeoutSeconds?: number;
+
+  /**
+   * Whether the {@link userSilenceTimeoutSeconds} deadline keeps running while
+   * the microphone is muted.
+   *
+   * `false` (default) preserves the original behavior: muting pauses the
+   * silence timer, because a muted mic reports near-silence that would
+   * otherwise be miscounted — so a user who mutes is never auto-ended. Set
+   * `true` to count muted time as silence: the conversation then auto-ends
+   * after the timeout even if the user muted and walked away.
+   *
+   * Has no effect when {@link userSilenceTimeoutSeconds} is unset.
+   */
+  autoEndWhileMuted?: boolean;
 }

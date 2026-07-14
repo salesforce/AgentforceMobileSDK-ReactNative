@@ -190,16 +190,18 @@ class AgentforceModule: RCTEventEmitter {
     /// supplied value is routed through `VoiceAutoEndPolicy.afterUserSilence(clamping:)`,
     /// which normalizes non-finite (NaN / ±infinity) and non-positive durations
     /// to `.never` — so the bridge does not need to pre-validate the number.
-    /// Mirrors the Android bridge.
+    /// `autoEndWhileMuted` defaults to `false` when absent. Mirrors the Android bridge.
     private static func parseVoiceSessionOptions(from configDict: [String: Any]) -> AgentforceVoiceSessionOptions {
         guard let voiceOpts = configDict["voiceOptions"] as? [String: Any] else {
             return AgentforceVoiceSessionOptions()
         }
+        let autoEndWhileMuted = (voiceOpts["autoEndWhileMuted"] as? NSNumber)?.boolValue ?? false
         guard let numberValue = voiceOpts["userSilenceTimeoutSeconds"] as? NSNumber else {
-            return AgentforceVoiceSessionOptions(autoEndPolicy: .never)
+            return AgentforceVoiceSessionOptions(autoEndPolicy: .never, autoEndWhileMuted: autoEndWhileMuted)
         }
         return AgentforceVoiceSessionOptions(
-            autoEndPolicy: .afterUserSilence(clamping: numberValue.doubleValue)
+            autoEndPolicy: .afterUserSilence(clamping: numberValue.doubleValue),
+            autoEndWhileMuted: autoEndWhileMuted
         )
     }
 

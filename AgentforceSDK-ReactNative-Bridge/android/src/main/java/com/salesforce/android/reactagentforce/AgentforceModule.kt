@@ -626,7 +626,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
      * `userSilenceTimeoutSeconds` of zero or negative is forwarded to the
      * native layer, which already coerces non-positive durations to disabled
      * and emits a warning. Non-finite values (NaN, +/-infinity) are dropped to
-     * avoid passing them to `Duration` arithmetic.
+     * avoid passing them to `Duration` arithmetic. `autoEndWhileMuted` defaults
+     * to `false` when absent.
      */
     private fun parseVoiceSessionOptions(config: ReadableMap): AgentforceVoiceSessionOptions {
         if (!config.hasKey("voiceOptions")) return AgentforceVoiceSessionOptions()
@@ -642,7 +643,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             null
         }
 
-        return AgentforceVoiceSessionOptions(userSilenceTimeout = timeout)
+        val autoEndWhileMuted = voiceOpts.hasKey("autoEndWhileMuted") &&
+            !voiceOpts.isNull("autoEndWhileMuted") &&
+            voiceOpts.getBoolean("autoEndWhileMuted")
+
+        return AgentforceVoiceSessionOptions(
+            userSilenceTimeout = timeout,
+            autoEndWhileMuted = autoEndWhileMuted,
+        )
     }
 
     private data class FeatureFlags(

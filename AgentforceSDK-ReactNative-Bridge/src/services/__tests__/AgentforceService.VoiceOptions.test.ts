@@ -93,4 +93,40 @@ describe('voiceOptions round-trip via configure()', () => {
     expect(payload.voiceOptions).toEqual({ userSilenceTimeoutSeconds: 60 });
     expect(payload.featureFlags.enableVoice).toBe(true);
   });
+
+  it('forwards autoEndWhileMuted alongside the silence timeout', async () => {
+    await AgentforceService.configure({
+      ...baseServiceConfig,
+      voiceOptions: { userSilenceTimeoutSeconds: 30, autoEndWhileMuted: true },
+    });
+
+    const payload = nativeModule.configureWithConfig.mock.calls[0][0];
+    expect(payload.voiceOptions).toEqual({
+      userSilenceTimeoutSeconds: 30,
+      autoEndWhileMuted: true,
+    });
+  });
+
+  it('forwards autoEndWhileMuted: false verbatim (does not drop the explicit opt-out)', async () => {
+    await AgentforceService.configure({
+      ...baseServiceConfig,
+      voiceOptions: { userSilenceTimeoutSeconds: 30, autoEndWhileMuted: false },
+    });
+
+    const payload = nativeModule.configureWithConfig.mock.calls[0][0];
+    expect(payload.voiceOptions).toEqual({
+      userSilenceTimeoutSeconds: 30,
+      autoEndWhileMuted: false,
+    });
+  });
+
+  it('omits autoEndWhileMuted when not provided (native default applies)', async () => {
+    await AgentforceService.configure({
+      ...baseServiceConfig,
+      voiceOptions: { userSilenceTimeoutSeconds: 30 },
+    });
+
+    const payload = nativeModule.configureWithConfig.mock.calls[0][0];
+    expect(payload.voiceOptions).not.toHaveProperty('autoEndWhileMuted');
+  });
 });
