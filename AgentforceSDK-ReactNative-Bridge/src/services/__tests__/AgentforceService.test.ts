@@ -23,6 +23,8 @@ jest.mock('react-native', () => {
     configureWithConfig: jest.fn().mockResolvedValue({ success: true, mode: 'service' }),
     getFeatureFlags: jest.fn(),
     setFeatureFlags: jest.fn().mockResolvedValue(undefined),
+    getInternalFlags: jest.fn().mockResolvedValue({}),
+    setInternalFlags: jest.fn().mockResolvedValue(undefined),
     launchConversation: jest.fn().mockResolvedValue({ success: true }),
     startNewConversation: jest.fn().mockResolvedValue({ success: true }),
     closeConversation: jest.fn().mockResolvedValue({ success: true }),
@@ -193,6 +195,90 @@ describe('AgentforceService.getFeatureFlags', () => {
       ...defaults,
       enableVoice: true,
     });
+  });
+});
+
+describe('AgentforceService.getInternalFlags', () => {
+  it('returns an empty object on an unsupported platform', async () => {
+    setPlatform('web');
+    await expect(AgentforceService.getInternalFlags()).resolves.toEqual({});
+    expect(nativeModule.getInternalFlags).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty object when the native call throws', async () => {
+    setPlatform('ios');
+    nativeModule.getInternalFlags.mockRejectedValueOnce(new Error('nope'));
+    await expect(AgentforceService.getInternalFlags()).resolves.toEqual({});
+  });
+
+  it('passes through only the boolean-valued flags that were set', async () => {
+    setPlatform('ios');
+    nativeModule.getInternalFlags.mockResolvedValueOnce({
+      tokenStreaming: true,
+      enableClosedCaptions: false,
+      // non-boolean values are dropped defensively
+      bogus: 'nope',
+    });
+    await expect(AgentforceService.getInternalFlags()).resolves.toEqual({
+      tokenStreaming: true,
+      enableClosedCaptions: false,
+    });
+  });
+
+  it('returns an empty object when native returns a non-object', async () => {
+    setPlatform('ios');
+    nativeModule.getInternalFlags.mockResolvedValueOnce(null);
+    await expect(AgentforceService.getInternalFlags()).resolves.toEqual({});
+  });
+});
+
+describe('AgentforceService.setInternalFlags', () => {
+  it('is a no-op on an unsupported platform', async () => {
+    setPlatform('web');
+    await AgentforceService.setInternalFlags({ tokenStreaming: true });
+    expect(nativeModule.setInternalFlags).not.toHaveBeenCalled();
+  });
+
+  it('forwards flags to the native module', async () => {
+    setPlatform('android');
+    await AgentforceService.setInternalFlags({ enableMocking: true });
+    expect(nativeModule.setInternalFlags).toHaveBeenCalledWith({ enableMocking: true });
+  });
+
+  it('swallows native errors', async () => {
+    setPlatform('ios');
+    nativeModule.setInternalFlags.mockRejectedValueOnce(new Error('boom'));
+    await expect(AgentforceService.setInternalFlags({ citations: true })).resolves.toBeUndefined();
+  });
+});
+
+describe('AgentforceService.configure internal-flags merge', () => {
+  it('merges stored internal flags when the config omits them', async () => {
+    setPlatform('ios');
+    nativeModule.getInternalFlags.mockResolvedValueOnce({ tokenStreaming: true });
+    const withoutFlags = { ...(serviceConfig as any) };
+    await AgentforceService.configure(withoutFlags);
+    const passed = nativeModule.configureWithConfig.mock.calls[0][0];
+    expect(passed.internalFlags).toEqual({ tokenStreaming: true });
+  });
+
+  it('does not attach internalFlags when nothing is stored', async () => {
+    setPlatform('ios');
+    nativeModule.getInternalFlags.mockResolvedValueOnce({});
+    await AgentforceService.configure({ ...(serviceConfig as any) });
+    const passed = nativeModule.configureWithConfig.mock.calls[0][0];
+    expect('internalFlags' in passed).toBe(false);
+  });
+
+  it('keeps provided internal flags without consulting native storage', async () => {
+    setPlatform('ios');
+    await AgentforceService.configure({
+      ...(serviceConfig as any),
+      internalFlags: { citations: true },
+    });
+    expect(nativeModule.getInternalFlags).not.toHaveBeenCalled();
+    const passed = nativeModule.configureWithConfig.mock.calls[0][0];
+    expect(passed.internalFlags).toEqual({ citations: true });
   });
 });
 

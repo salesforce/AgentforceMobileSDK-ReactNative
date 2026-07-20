@@ -15,6 +15,7 @@ import {
   ConfigurationResult,
   ConfigurationInfo,
   FeatureFlags,
+  InternalFlags,
   isLegacyConfig,
 } from '../types/AgentConfig';
 
@@ -39,7 +40,7 @@ import type { VoiceOptions } from '../types/VoiceOptions';
 const { AgentforceModule } = NativeModules;
 
 // Re-export types for convenience
-export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags };
+export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags, InternalFlags };
 export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
@@ -502,7 +503,10 @@ class AgentforceService {
       const normalizedConfig = this.normalizeConfig(config);
 
       // Merge stored feature flags into config if not provided (so native uses same defaults/stored)
-      const configWithFlags = await this.mergeFeatureFlagsIntoConfig(normalizedConfig);
+      const configWithFeatureFlags = await this.mergeFeatureFlagsIntoConfig(normalizedConfig);
+
+      // Merge stored internal flags into config if not provided (same source-of-truth pattern)
+      const configWithFlags = await this.mergeInternalFlagsIntoConfig(configWithFeatureFlags);
 
       // Call native module with the unified config object
       // iOS uses configureWithConfig, Android uses configure with object
@@ -534,6 +538,25 @@ class AgentforceService {
     }
     const stored = await this.getFeatureFlags();
     return { ...config, featureFlags: stored };
+  }
+
+  /**
+   * Merge stored internal flags into config if config does not already have internalFlags.
+   * Mirrors {@link mergeFeatureFlagsIntoConfig} so the native layer receives a single source
+   * of truth (config.internalFlags or stored). If neither the config nor storage provides
+   * internal flags, the field is left absent and the native SDK falls back to its own defaults.
+   */
+  private async mergeInternalFlagsIntoConfig(config: AgentConfig): Promise<AgentConfig> {
+    if (config.internalFlags != null) {
+      return config;
+    }
+    const stored = await this.getInternalFlags();
+    // Only attach if something is actually stored; an empty object would needlessly
+    // override the native SDK defaults with "nothing set".
+    if (Object.keys(stored).length === 0) {
+      return config;
+    }
+    return { ...config, internalFlags: stored };
   }
 
   /**
@@ -594,6 +617,65 @@ class AgentforceService {
       await AgentforceModule.setFeatureFlags(flags);
     } catch (error) {
       console.warn('[AgentforceService] Failed to save feature flags:', error);
+    }
+  }
+
+  /**
+   * Get the current internal (experimental) SDK flags from native storage.
+   *
+   * Returns only the flags that have been explicitly set (an empty object if none). Callers
+   * should treat a missing key as "use the SDK default", not "false". Values reflect what was
+   * stored via {@link setInternalFlags} or a prior `configure()` — they are not read back from
+   * the running SDK.
+   *
+   * ⚠️ Internal flags are not covered by API stability guarantees. See {@link InternalFlags}.
+   */
+  async getInternalFlags(): Promise<InternalFlags> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return {};
+    }
+    if (!AgentforceModule?.getInternalFlags) {
+      return {};
+    }
+    try {
+      const flags = await AgentforceModule.getInternalFlags();
+      // Native returns a plain map of canonical flag name -> boolean. Pass through
+      // only boolean-valued keys so the shape matches InternalFlags.
+      if (flags == null || typeof flags !== 'object') {
+        return {};
+      }
+      const result: InternalFlags = {};
+      for (const [key, value] of Object.entries(flags)) {
+        if (typeof value === 'boolean') {
+          (result as Record<string, boolean>)[key] = value;
+        }
+      }
+      return result;
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Save internal (experimental) SDK flags (persisted in native storage).
+   * Takes effect the next time configure() is called.
+   *
+   * Only the canonical keys defined in {@link InternalFlags} are honored; flags for the other
+   * platform are stored and forwarded but ignored by the native SDK (silent no-op).
+   *
+   * ⚠️ Internal flags are not covered by API stability guarantees. See {@link InternalFlags}.
+   */
+  async setInternalFlags(flags: InternalFlags): Promise<void> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return;
+    }
+    if (!AgentforceModule?.setInternalFlags) {
+      return;
+    }
+    try {
+      await AgentforceModule.setInternalFlags(flags);
+    } catch (error) {
+      console.warn('[AgentforceService] Failed to save internal flags:', error);
     }
   }
 

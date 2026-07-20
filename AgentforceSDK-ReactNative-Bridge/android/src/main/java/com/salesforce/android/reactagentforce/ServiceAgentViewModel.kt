@@ -43,9 +43,28 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
         private const val KEY_ENABLE_PDF_UPLOAD = "enablePDFUpload"
         private const val KEY_ENABLE_VOICE = "enableVoice"
     }
-    
+
     private val prefs: SharedPreferences = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val featureFlagsPrefs: SharedPreferences = application.getSharedPreferences(FEATURE_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
+    // Internal (experimental) flags share AgentforceModule's store + canonical mapping so the
+    // legacy Service path applies the same flags. Values are keyed by canonical flag name.
+    private val internalFlagsPrefs: SharedPreferences =
+        application.getSharedPreferences(AgentforceModule.INTERNAL_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
+
+    /**
+     * Read persisted canonical internal flags and translate them into the SDK's `setupFlags`
+     * string keys, dropping any canonical flag Android doesn't honor. Mirrors
+     * AgentforceModule.internalFlagsForSDK for the stored (no explicit config) case.
+     */
+    private fun storedInternalFlagsForSDK(): Map<String, Boolean> {
+        val mapped = mutableMapOf<String, Boolean>()
+        for ((canonicalKey, sdkKey) in AgentforceModule.INTERNAL_FLAG_KEY_MAP) {
+            if (internalFlagsPrefs.contains(canonicalKey)) {
+                mapped[sdkKey] = internalFlagsPrefs.getBoolean(canonicalKey, false)
+            }
+        }
+        return mapped
+    }
 
     // Service Agent configuration
     private val _serviceApiURL = MutableStateFlow("")
@@ -183,6 +202,9 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
                     .enablePDFUpload(featureFlagsPrefs.getBoolean(KEY_ENABLE_PDF_UPLOAD, false))
                     // Voice shipped for Service Agents in 262.0 (MIAW); honor the flag.
                     .enableVoice(featureFlagsPrefs.getBoolean(KEY_ENABLE_VOICE, false))
+                    // Apply stored internal (experimental) flags so this legacy path matches
+                    // AgentforceModule's configure path.
+                    .setupFlags(storedInternalFlagsForSDK())
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(getApplication())

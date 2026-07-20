@@ -141,3 +141,97 @@ Voice options are immutable for the lifetime of a configured session;
 re-configure to change them.
 
 ---
+
+### Internal Flags (experimental)
+
+Internal flags are SDK-managed toggles for experimental or in-development behavior. They are
+distinct from the five app-facing feature flags (`enableMultiAgent`, `enableMultiModalInput`,
+`enablePDFUpload`, `enableVoice`, `enableCustomViewProvider`) and are surfaced here so
+integrators can opt into or out of specific SDK behaviors.
+
+> ⚠️ **Not covered by API stability guarantees.** Any internal flag may be renamed, change its
+> default, or be removed in a future SDK release without a semver-major bump. Do not build
+> load-bearing product behavior on them.
+
+**Reading and writing:**
+
+Internal flags follow the same read/deferred-write pattern as feature flags — a value set via
+`setInternalFlags` (or passed on the `internalFlags` config field) is persisted and applied the
+next time `configure()` is called.
+
+```typescript
+import { AgentforceService, InternalFlags } from '@salesforce/react-native-agentforce';
+
+// Read the flags that have been explicitly set (missing key = "use SDK default")
+const flags: InternalFlags = await AgentforceService.getInternalFlags();
+
+// Persist flags; applied on the next configure()
+await AgentforceService.setInternalFlags({
+  tokenStreaming: true,
+  enableClosedCaptions: true,
+});
+
+// Or pass them inline on the config object
+await AgentforceService.configure({
+  type: 'service',
+  serviceApiURL: 'https://service.salesforce.com',
+  organizationId: '00Dxx0000001234',
+  esDeveloperName: 'MyServiceAgent',
+  internalFlags: { tokenStreaming: true },
+});
+```
+
+**Semantics:**
+
+- All flags are optional booleans. An omitted flag falls back to the SDK's own default —
+  a missing key is **not** the same as `false`.
+- `getInternalFlags()` returns only the flags that were explicitly set (an empty object if none).
+  It reflects stored values, not the running SDK's live state.
+- The canonical flag set below is the **union** of the iOS and Android internal flags. Setting a
+  flag on a platform that doesn't support it is a silent no-op — the value is stored and
+  forwarded, but that platform's SDK ignores it.
+
+**Flags and platform support:**
+
+| Flag                                  | iOS | Android | Meaning                                                                         |
+| ------------------------------------- | :-: | :-----: | ------------------------------------------------------------------------------- |
+| `endConversation`                     | ✅  |   ✅    | Show the end-conversation affordance                                            |
+| `downloadTranscript`                  | ✅  |   ✅    | Show the download-transcript affordance                                         |
+| `useMobileTypesApi`                   | ✅  |   ✅    | Use the Mobile Types API for message rendering                                  |
+| `enableHybridComponents`              | ✅  |   ✅    | Enable hybrid (native + Lightning) component rendering                          |
+| `enableClosedCaptions`                | ✅  |   ✅    | Enable closed captions in voice conversations                                   |
+| `tokenStreaming`                      | ✅  |   ✅    | Stream response tokens as they arrive                                           |
+| `lightningTypeStreaming`              | ✅  |   ✅    | Stream Lightning-type responses incrementally                                   |
+| `inlineCitations`                     | ✅  |   ✅    | Render inline citations within message text                                     |
+| `selectSingleTextTransform`           | ✅  |   ✅    | Use the select-single text transform                                            |
+| `secureForms`                         | ✅  |   ✅    | Enable secure forms during conversations                                        |
+| `enableVideoUpload`                   | ✅  |   ✅    | Allow video attachments/upload                                                  |
+| `enableAudioUpload`                   | ✅  |   ✅    | Allow audio attachments/upload                                                  |
+| `recommendedUtterancesApi`            | ✅  |   ✅    | Use the recommended-utterances API                                              |
+| `useWelcomeUtterances`                | ✅  |   ✅    | Use welcome utterances instead of a static welcome message                      |
+| `enableLightningOut`                  | ✅  |   ✅    | Enable the Lightning Out provider                                               |
+| `validationFailureChunk`              | ✅  |   ✅    | Enable handling/display of validation-failure chunks                            |
+| `citations`                           | ✅  |    —    | Render citations (iOS citation model; distinct from `inlineCitations`)          |
+| `compressImage`                       | ✅  |    —    | Compress images before upload                                                   |
+| `quickActions`                        | ✅  |    —    | Enable quick actions                                                            |
+| `showQueueStatus`                     | ✅  |    —    | Show the queue-status indicator                                                 |
+| `voiceContinuesOnBackground`          | ✅  |    —    | Keep voice sessions running when backgrounded                                   |
+| `enableVoiceCallKit`                  | ✅  |    —    | Route voice calls through CallKit                                               |
+| `enableMocking`                       |  —  |   ✅    | Enable mock responses for testing                                               |
+| `enableIterativeCompression`          |  —  |   ✅    | Iteratively compress images before upload (distinct from iOS `compressImage`)   |
+| `useFollowUpActionsApi`               |  —  |   ✅    | Use the follow-up-actions API                                                   |
+| `enableCopyAndViewMoreFollowUpAction` |  —  |   ✅    | Enable the copy / view-more follow-up action                                    |
+| `enableNavAndQuickFollowUpAction`     |  —  |   ✅    | Enable the navigation / quick follow-up action                                  |
+| `enableSimpleCitation`                |  —  |   ✅    | Render simple citations (Android citation model; distinct from iOS `citations`) |
+| `enableAgentforceCard`                |  —  |   ✅    | Enable the Agentforce card surface                                              |
+| `enablePushNotifications`             |  —  |   ✅    | Enable push notifications                                                       |
+| `enableClearChat`                     |  —  |   ✅    | Enable the clear-chat affordance                                                |
+| `showVoiceBetaBanner`                 |  —  |   ✅    | Show the voice beta banner                                                      |
+| `enableMobileBranding`                |  —  |   ✅    | Enable mobile branding                                                          |
+
+> **Semantic pairs kept separate:** iOS `citations` and Android `enableSimpleCitation` address
+> related citation behavior but map to distinct native flags, as do iOS `compressImage` and
+> Android `enableIterativeCompression`. They are intentionally _not_ merged into one canonical
+> flag so each platform's exact behavior stays addressable.
+
+---
