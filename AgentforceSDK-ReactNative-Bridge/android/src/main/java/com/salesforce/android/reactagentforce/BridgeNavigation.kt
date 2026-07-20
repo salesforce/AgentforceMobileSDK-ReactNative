@@ -13,7 +13,6 @@ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.salesforce.android.mobile.interfaces.navigation.Navigation
-import com.salesforce.android.mobile.interfaces.navigation.NavigationTarget
 import com.salesforce.android.mobile.interfaces.navigation.destination.App
 import com.salesforce.android.mobile.interfaces.navigation.destination.Destination
 import com.salesforce.android.mobile.interfaces.navigation.destination.Link
@@ -40,14 +39,6 @@ class BridgeNavigation(private val reactContext: ReactContext) : Navigation {
     }
 
     override fun goto(destination: Destination, replace: Boolean) {
-        if (!forwardingEnabled) return
-        emitDestination(destination, replace = replace)
-    }
-
-    // SDK 262.0 added a target-aware overload. The bridge surfaces a single
-    // navigation event to JS and does not distinguish targets, so forward the
-    // destination using the same emit path (honoring replace).
-    override fun goto(destination: Destination, target: NavigationTarget, replace: Boolean) {
         if (!forwardingEnabled) return
         emitDestination(destination, replace = replace)
     }
