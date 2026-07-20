@@ -46,8 +46,6 @@ export interface ServiceUISettings {
   showQueueStatus?: boolean;
   /** Enable video upload in conversations (default: false, iOS only) */
   enableVideoUpload?: boolean;
-  /** Enable Lightning Type mapping for experience model types (default: false) */
-  enableLightningType?: boolean;
   /** Enable secure forms during conversations (default: false, iOS only) */
   secureForms?: boolean;
   /** Enable audio upload in conversations (default: false, iOS only) */
@@ -69,7 +67,6 @@ export interface ServiceUISettings {
  *   esDeveloperName: 'MyServiceAgent',
  *   serviceUISettings: {
  *     downloadTranscript: false,
- *     enableLightningType: true,
  *   },
  * };
  * ```

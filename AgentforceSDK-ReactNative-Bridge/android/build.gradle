@@ -60,12 +60,8 @@ repositories {
 dependencies {
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
     implementation "com.facebook.react:react-android"
-    api "com.salesforce.android.agentforcesdk:agentforce-sdk:15.66.2"
-    api "com.salesforce.android.agentforcesdk:agentforce-sdk-voice:15.66.2"
-    // shared-ui 2.0.21 pins slds-icons 0.1.0, which was never published to the
-    // public SLDSIcons Maven repo (only 0.1.7 is). Pin the available version so
-    // the transitive request resolves. Remove once shared-ui repins to a published tag.
-    api "com.salesforce.android.sldsicons:slds-icons:0.1.7"
+    api "com.salesforce.android.agentforcesdk:agentforce-sdk:15.101.5"
+    api "com.salesforce.android.agentforcesdk:agentforce-sdk-voice:15.101.5"
     // compileOnly: host app adds this for Employee Agent. Bridge compiles; host provides at runtime.
     compileOnly "com.salesforce.mobilesdk:SalesforceReact:13.1.1"
 
