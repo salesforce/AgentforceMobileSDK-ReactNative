@@ -46,21 +46,21 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
 
     private val prefs: SharedPreferences = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val featureFlagsPrefs: SharedPreferences = application.getSharedPreferences(FEATURE_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
-    // Internal (experimental) flags share AgentforceModule's store + canonical mapping so the
-    // legacy Service path applies the same flags. Values are keyed by canonical flag name.
+    // Internal (experimental) flags share AgentforceModule's store so the legacy Service path
+    // applies the same flags. Values are keyed by the SDK's own flag names (passed through).
     private val internalFlagsPrefs: SharedPreferences =
         application.getSharedPreferences(AgentforceModule.INTERNAL_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
 
     /**
-     * Read persisted canonical internal flags and translate them into the SDK's `setupFlags`
-     * string keys, dropping any canonical flag Android doesn't honor. Mirrors
-     * AgentforceModule.internalFlagsForSDK for the stored (no explicit config) case.
+     * Read persisted internal flags for the SDK's `setupFlags`. Keys are the SDK's own flag
+     * names (passed through unchanged). Mirrors AgentforceModule.internalFlagsForSDK for the
+     * stored (no explicit config) case.
      */
     private fun storedInternalFlagsForSDK(): Map<String, Boolean> {
         val mapped = mutableMapOf<String, Boolean>()
-        for ((canonicalKey, sdkKey) in AgentforceModule.INTERNAL_FLAG_KEY_MAP) {
-            if (internalFlagsPrefs.contains(canonicalKey)) {
-                mapped[sdkKey] = internalFlagsPrefs.getBoolean(canonicalKey, false)
+        for ((key, value) in internalFlagsPrefs.all) {
+            if (value is Boolean) {
+                mapped[key] = value
             }
         }
         return mapped

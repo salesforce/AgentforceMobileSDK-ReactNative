@@ -74,56 +74,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // before calling setViewProviderDelegate). The native layer does not gate on it.
         private const val KEY_ENABLE_CUSTOM_VIEW_PROVIDER = "enableCustomViewProvider"
 
-        // Internal (experimental) flags are persisted in their own store, keyed by the
-        // bridge's canonical flag names (shared with JS/TS `InternalFlags` and the iOS
-        // bridge). Only flags that have been explicitly set are stored. Shared with
-        // ServiceAgentViewModel (legacy Service path) so the two paths can't drift.
+        // Internal (experimental) flags are persisted in their own store, keyed by the SDK's
+        // own internal-flag names (passed straight through — the bridge does not enumerate,
+        // rename, or validate them). Only flags that have been explicitly set are stored.
+        // Shared with ServiceAgentViewModel (legacy Service path) so the two paths can't drift.
+        //
+        // ⚠️ Internal flags are not covered by API stability guarantees.
         internal const val INTERNAL_FLAGS_PREFS_NAME = "AgentforceInternalFlags"
-
-        /**
-         * Maps the bridge's canonical internal-flag names to the Android SDK's
-         * `AgentforceFeatureFlagSettings` string keys (the values of the SDK's internal
-         * `InternalFlags` object, which is not visible to this module — so the string
-         * values are inlined here).
-         *
-         * Only the canonical flags that Android honors are listed. iOS-only canonical flags
-         * are intentionally absent — set on Android they are stored/forwarded but never reach
-         * the SDK (silent no-op), matching the union-with-per-platform-support contract in
-         * the JS `InternalFlags` type.
-         *
-         * ⚠️ Internal flags are not covered by API stability guarantees.
-         */
-        internal val INTERNAL_FLAG_KEY_MAP: Map<String, String> = mapOf(
-            // Cross-platform (iOS + Android)
-            "endConversation" to "endConversation",
-            "downloadTranscript" to "downloadTranscript",
-            "useMobileTypesApi" to "useMobileTypesApi",
-            "enableHybridComponents" to "enableHybridComponents",
-            "enableClosedCaptions" to "enableClosedCaptions",
-            "tokenStreaming" to "enableTokenStreaming",
-            "lightningTypeStreaming" to "enableLightningTypeStreaming",
-            "inlineCitations" to "enableInlineCitation",
-            "selectSingleTextTransform" to "enableSelectSingleTextTransform",
-            "secureForms" to "enableSecureForms",
-            "enableVideoUpload" to "enableVideoAttachments",
-            "enableAudioUpload" to "enableAudioAttachments",
-            "recommendedUtterancesApi" to "useRecommendedUtterancesApi",
-            "useWelcomeUtterances" to "useWelcomeUtterancesApi",
-            "enableLightningOut" to "enableLightningOutProvider",
-            "validationFailureChunk" to "enableValidationFailureHandling",
-            // Android-only
-            "enableMocking" to "enableMocking",
-            "enableIterativeCompression" to "enableIterativeCompression",
-            "useFollowUpActionsApi" to "useFollowUpActionsApi",
-            "enableCopyAndViewMoreFollowUpAction" to "enableCopyAndViewMoreFollowUpAction",
-            "enableNavAndQuickFollowUpAction" to "enableNavAndQuickFollowUpAction",
-            "enableSimpleCitation" to "enableSimpleCitation",
-            "enableAgentforceCard" to "enableAgentforceCard",
-            "enablePushNotifications" to "enablePushNotifications",
-            "enableClearChat" to "enableClearChat",
-            "showVoiceBetaBanner" to "showVoiceBetaBanner",
-            "enableMobileBranding" to "enableMobileBranding"
-        )
     }
 
     private val employeePrefs: SharedPreferences
@@ -809,9 +766,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // region Internal (experimental) flags
 
     /**
-     * Read the canonical internal-flag map from the JS config if present, else from
-     * SharedPreferences. Keys are canonical names; values are the raw booleans. Only flags
-     * that were explicitly set appear — absent flags fall back to the SDK's own defaults.
+     * Read the internal-flag map from the JS config if present, else from SharedPreferences.
+     * Keys are the SDK's own flag names; values are the raw booleans. Only flags that were
+     * explicitly set appear — absent flags fall back to the SDK's own defaults.
      */
     private fun getInternalFlagsFromConfigOrPrefs(config: ReadableMap): Map<String, Boolean> {
         val internalFlagsMap = if (config.hasKey("internalFlags")) config.getMap("internalFlags") else null
@@ -829,42 +786,28 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         return readStoredInternalFlags()
     }
 
-    /** Read all persisted canonical internal flags from SharedPreferences. */
+    /** Read all persisted internal flags from SharedPreferences. */
     private fun readStoredInternalFlags(): Map<String, Boolean> {
-        val prefs = internalFlagsPrefs
         val result = mutableMapOf<String, Boolean>()
-        for (canonicalKey in INTERNAL_FLAG_KEY_MAP.keys) {
-            if (prefs.contains(canonicalKey)) {
-                result[canonicalKey] = prefs.getBoolean(canonicalKey, false)
+        for ((key, value) in internalFlagsPrefs.all) {
+            if (value is Boolean) {
+                result[key] = value
             }
         }
         return result
     }
 
     /**
-     * Translate canonical internal flags into the `Map<String, Boolean>` the Android SDK's
-     * `setupFlags` expects, keyed by the SDK's internal flag string keys. Canonical flags
-     * with no Android mapping (iOS-only) are dropped.
+     * Build the SDK internal-flags map for a configure() call. Keys are passed through
+     * unchanged as the SDK's own flag names — the bridge does not rename or filter them.
      */
-    private fun mapInternalFlagsForSDK(canonicalFlags: Map<String, Boolean>): Map<String, Boolean> {
-        val mapped = mutableMapOf<String, Boolean>()
-        for ((canonicalKey, value) in canonicalFlags) {
-            val sdkKey = INTERNAL_FLAG_KEY_MAP[canonicalKey]
-            if (sdkKey != null) {
-                mapped[sdkKey] = value
-            }
-        }
-        return mapped
-    }
-
-    /** Build the SDK internal-flags map for a configure() call. */
     private fun internalFlagsForSDK(config: ReadableMap): Map<String, Boolean> {
-        return mapInternalFlagsForSDK(getInternalFlagsFromConfigOrPrefs(config))
+        return getInternalFlagsFromConfigOrPrefs(config)
     }
 
     @ReactMethod
     fun getInternalFlags(promise: Promise) {
-        // Return canonical-keyed booleans for only the flags that were explicitly set.
+        // Return only the flags that were explicitly set (empty map if none).
         promise.resolve(Arguments.createMap().apply {
             for ((key, value) in readStoredInternalFlags()) {
                 putBoolean(key, value)
@@ -876,8 +819,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun setInternalFlags(flags: ReadableMap, promise: Promise) {
         val editor = internalFlagsPrefs.edit()
         val iterator = flags.keySetIterator()
-        // Persist every canonical flag the caller sent (including iOS-only ones, which are
-        // stored/forwarded but ignored by the Android SDK). Non-boolean values are skipped.
+        // Persist the caller's flags verbatim (keyed by the SDK's own flag names). Non-boolean
+        // values are skipped; keys the running SDK doesn't recognize are simply ignored by it.
         while (iterator.hasNextKey()) {
             val key = iterator.nextKey()
             if (flags.getType(key) == ReadableType.Boolean) {
