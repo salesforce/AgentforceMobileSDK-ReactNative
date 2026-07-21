@@ -35,6 +35,7 @@ import com.facebook.react.ReactPackage;
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactNativeHost;
 import com.facebook.soloader.SoLoader;
+import com.salesforce.android.reactagentforce.AgentforcePackage;
 
 import java.util.List;
 
@@ -53,9 +54,13 @@ public class MainApplication extends Application implements ReactApplication {
 
 		@Override
 		protected List<ReactPackage> getPackages() {
-			@SuppressWarnings("UnnecessaryLocalVariable")
 			List<ReactPackage> packages = new PackageList(this).getPackages();
-			// Agentforce is provided by react-native-agentforce bridge (autolinking)
+			// Autolinking is disabled for the Agentforce bridge (see react-native.config.js
+			// — the scoped @salesforce/react-native-agentforce rename caused a Gradle
+			// double-registration), so register the package manually here. AgentforcePackage
+			// registers AgentforceModule always and EmployeeAgentAuthBridge only when the
+			// Mobile SDK is on the classpath (employeeAgent flavor).
+			packages.add(new AgentforcePackage());
 			return packages;
 		}
 

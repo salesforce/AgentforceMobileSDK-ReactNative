@@ -56,6 +56,16 @@ import { getContextVariables, setContextVariables } from '../store/ContextVariab
 
 type TabType = 'service' | 'employee' | 'features';
 
+// Preset utterances offered as quick-fill chips in the Send Utterance section.
+// A real host app would source these from suggested-prompt chips, deep links,
+// or its own UI — this list just demonstrates the sendUtterance API.
+const SAMPLE_UTTERANCES = [
+  'What can you help me with?',
+  'Summarize my open cases',
+  'What is the status of my latest order?',
+  'Show me my account details',
+];
+
 const FLAG_KEYS: (keyof FeatureFlags)[] = [
   'enableMultiAgent',
   'enableMultiModalInput',
@@ -140,6 +150,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   const [newEmployeeCtxType, setNewEmployeeCtxType] =
     useState<AgentforceContextVariableType>('Text');
   const [newEmployeeCtxValue, setNewEmployeeCtxValue] = useState('');
+
+  const [utteranceText, setUtteranceText] = useState('');
+  const [sendingUtterance, setSendingUtterance] = useState(false);
 
   useEffect(() => {
     loadSavedConfiguration();
@@ -462,6 +475,79 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     ]);
   };
 
+  // Send a free-form (or preset) utterance to the ACTIVE conversation.
+  // sendUtterance is agent-mode-agnostic — it delivers to whichever agent
+  // (Service or Employee) is currently launched. The native layer rejects with
+  // NO_CONVERSATION if nothing is active, so launch a conversation from the Home
+  // screen first, then return here to send.
+  const handleSendUtterance = async () => {
+    const text = utteranceText.trim();
+    if (!text) {
+      return;
+    }
+    setSendingUtterance(true);
+    try {
+      const sent = await AgentforceService.sendUtterance(text);
+      console.log(`[Settings] sendUtterance("${text}") -> ${sent}`);
+      Alert.alert('Utterance Sent', 'Open the agent from the Home screen to see it in the chat.');
+      setUtteranceText('');
+    } catch (error: any) {
+      // Most common case: no conversation launched yet (NO_CONVERSATION).
+      Alert.alert(
+        'Could Not Send',
+        error?.message ||
+          'Failed to send the utterance. Launch a conversation from the Home screen first.',
+      );
+      console.error('Send utterance error:', error);
+    } finally {
+      setSendingUtterance(false);
+    }
+  };
+
+  const renderSendUtteranceSection = (agentLabel: 'Service' | 'Employee') => (
+    <View style={styles.formContainer}>
+      <Text style={styles.label}>Send Utterance</Text>
+      <Text style={styles.hint}>
+        Programmatically send a message to the active {agentLabel} Agent conversation via
+        sendUtterance. Launch the conversation from the Home screen first, then send here.
+      </Text>
+
+      <View style={styles.quickAddRow}>
+        {SAMPLE_UTTERANCES.map(sample => (
+          <TouchableOpacity
+            key={sample}
+            style={styles.quickAddChip}
+            onPress={() => setUtteranceText(sample)}
+            disabled={sendingUtterance}>
+            <Text style={styles.quickAddChipText}>{sample}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <TextInput
+        style={[styles.input, styles.utteranceInput]}
+        value={utteranceText}
+        onChangeText={setUtteranceText}
+        placeholder="Type an utterance to send…"
+        placeholderTextColor="#999"
+        multiline
+        editable={!sendingUtterance}
+      />
+
+      <TouchableOpacity
+        style={[
+          styles.saveButton,
+          (!utteranceText.trim() || sendingUtterance) && styles.buttonDisabled,
+        ]}
+        onPress={handleSendUtterance}
+        disabled={!utteranceText.trim() || sendingUtterance}>
+        <Text style={styles.saveButtonText}>
+          {sendingUtterance ? 'Sending…' : 'Send Utterance'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderTabs = () => (
     <View style={styles.tabContainer}>
       {UI_FEATURES.SHOW_SERVICE_AGENT && (
@@ -764,6 +850,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
       {renderHiddenPreChatFieldsSection()}
 
+      {renderSendUtteranceSection('Service')}
+
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.buttonDisabled]}
@@ -859,6 +947,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       )}
 
       {authSupported && renderContextVariablesSection()}
+
+      {authSupported && employeeLoggedIn && renderSendUtteranceSection('Employee')}
 
       {authSupported && employeeLoggedIn && (
         <View style={styles.buttonContainer}>
@@ -1116,6 +1206,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#212529',
     backgroundColor: '#ffffff',
+  },
+  utteranceInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+    marginTop: 4,
+    marginBottom: 12,
   },
   buttonContainer: {
     gap: 12,

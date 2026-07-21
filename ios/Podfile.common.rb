@@ -20,11 +20,11 @@ def shared_pods
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  pod 'AgentforceSDK', '15.33.5'
-  pod 'AgentforceVoice', '2.1.7'
+  pod 'AgentforceSDK', '17.31.6'
+  pod 'AgentforceVoice', '2.5.2'
   pod 'Messaging-InApp-Core', '> 1.10.0'
   # Messaging-Multimedia-Core vends SMIMultimediaCore.framework, which
-  # AgentforceVoice 2.1.7 links at runtime (@rpath/SMIMultimediaCore.framework).
+  # AgentforceVoice 2.5.2 links at runtime (@rpath/SMIMultimediaCore.framework).
   # The AgentforceVoice podspec resolved from this Specs source declares only
   # AgentforceService/SalesforceLogging/SalesforceNetwork (not the Binary subspec
   # that the iOS SDK uses), so this transitive multimedia dep isn't pulled in and
@@ -44,9 +44,9 @@ def shared_pods
   pod 'JWTKit'
 
   # SharedUI provides the design-system module (Colors/Fonts/Dimensions) that
-  # AgentforceSDK 15.33.5 (262.0) publicly imports but does not declare in its
-  # podspec. Pin to the flat spec the iOS SDK ships with; SLDSIcons is held at
-  # 1.2.2 to avoid the "Multiple commands produce SLDSIcons.framework" collision.
+  # AgentforceSDK 17.31.6 (262.1) depends on ('SharedUI', '~> 1'). Pin to the
+  # exact flat spec the iOS SDK ships with; SLDSIcons is held at 1.2.2 to avoid
+  # the "Multiple commands produce SLDSIcons.framework" collision.
   pod 'SharedUI', '1.3.1'
   pod 'SLDSIcons', '1.2.2'
 

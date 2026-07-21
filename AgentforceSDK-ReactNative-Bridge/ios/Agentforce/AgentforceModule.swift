@@ -1213,6 +1213,39 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
 
+    /// Send an utterance (text message) to the current conversation.
+    /// Must be called after launching a conversation.
+    ///
+    /// @param utterance The text to send to the agent
+    /// @param resolve Promise resolver
+    /// @param reject Promise rejecter
+    @objc
+    func sendUtterance(
+        _ utterance: String,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
+
+            // Check if conversation exists
+            guard let conversation = currentConversation else {
+                reject(
+                    "NO_CONVERSATION",
+                    "No active conversation. Launch conversation first, then send an utterance.",
+                    nil
+                )
+                return
+            }
+
+            await conversation.sendUtterance(utterance: utterance, attachment: nil)
+            print("[AgentforceModule] ✓ Utterance sent")
+            resolve(["success": true])
+        }
+    }
+
     /// Reset all settings
     @objc
     func resetSettings(
