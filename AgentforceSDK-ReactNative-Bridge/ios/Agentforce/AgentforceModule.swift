@@ -1034,6 +1034,27 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
 
+    /// Dismiss the conversation UI while preserving the conversation and its history.
+    ///
+    /// Programmatic equivalent of the in-chat close (X) button: it only dismisses the
+    /// presented UI via `dismissConversation()` and deliberately leaves
+    /// `currentConversation` alive, so the next `launchConversation` reuses it with
+    /// history preserved. Contrast with `closeConversation`, which ends the conversation
+    /// (via `closeCurrentConversation()`) before dismissing.
+    @objc
+    func dismissConversation(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
+            dismissConversation()
+            resolve(["success": true])
+        }
+    }
+
     // MARK: - Hidden PreChat Fields
 
     /// Pre-register hidden prechat field values for the next Service Agent session.

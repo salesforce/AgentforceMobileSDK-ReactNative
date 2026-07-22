@@ -821,6 +821,27 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    /**
+     * Dismiss the conversation UI while preserving the conversation and its history.
+     *
+     * This is the programmatic equivalent of the in-chat close (X) button: it only
+     * hides the overlay (see [AgentforceConversationOverlay.hide]) and leaves the
+     * client + conversation in [AgentforceClientHolder] intact, so the next
+     * [launchConversation] reuses the existing conversation with history preserved.
+     *
+     * Contrast with [closeConversation], which destroys the overlay and clears the
+     * conversation, forcing a fresh conversation on the next launch.
+     */
+    @ReactMethod
+    fun dismissConversation(promise: Promise) {
+        scope.launch(Dispatchers.Main) {
+            AgentforceConversationOverlay.hide()
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", true)
+            })
+        }
+    }
+
     @ReactMethod
     fun resetSettings(promise: Promise) {
         scope.launch(Dispatchers.Main) {

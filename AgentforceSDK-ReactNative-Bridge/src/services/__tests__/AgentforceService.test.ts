@@ -26,6 +26,7 @@ jest.mock('react-native', () => {
     launchConversation: jest.fn().mockResolvedValue({ success: true }),
     startNewConversation: jest.fn().mockResolvedValue({ success: true }),
     closeConversation: jest.fn().mockResolvedValue({ success: true }),
+    dismissConversation: jest.fn().mockResolvedValue({ success: true }),
     sendUtterance: jest.fn().mockResolvedValue({ success: true }),
     isConfigured: jest.fn(),
     getConfiguration: jest.fn(),
@@ -421,5 +422,57 @@ describe('AgentforceService.sendUtterance', () => {
   it('propagates native errors', async () => {
     nativeModule.sendUtterance.mockRejectedValueOnce(new Error('NO_CONVERSATION'));
     await expect(AgentforceService.sendUtterance('hi')).rejects.toThrow('NO_CONVERSATION');
+  });
+});
+
+describe('AgentforceService.dismissConversation', () => {
+  beforeEach(() => {
+    setPlatform('ios');
+    nativeModule.dismissConversation.mockClear();
+    nativeModule.dismissConversation.mockResolvedValue({ success: true });
+  });
+
+  // Happy path — forwards to the native dismiss (preserve-history) method.
+  it('calls the native dismissConversation and resolves the success flag', async () => {
+    await expect(AgentforceService.dismissConversation()).resolves.toBe(true);
+    expect(nativeModule.dismissConversation).toHaveBeenCalledTimes(1);
+  });
+
+  // Distinct from closeConversation — dismiss must not tear the conversation down.
+  it('does not call the destructive closeConversation', async () => {
+    await AgentforceService.dismissConversation();
+    expect(nativeModule.closeConversation).not.toHaveBeenCalled();
+  });
+
+  // Normalization — default to true when native omits success, honor explicit false.
+  it('defaults to true when the native result omits success', async () => {
+    nativeModule.dismissConversation.mockResolvedValueOnce({});
+    await expect(AgentforceService.dismissConversation()).resolves.toBe(true);
+  });
+
+  it('resolves false when the native result reports success: false', async () => {
+    nativeModule.dismissConversation.mockResolvedValueOnce({ success: false });
+    await expect(AgentforceService.dismissConversation()).resolves.toBe(false);
+  });
+
+  // Platform guard — unsupported platforms return false without touching native.
+  it('returns false and skips the native call on unsupported platforms', async () => {
+    setPlatform('web');
+    await expect(AgentforceService.dismissConversation()).resolves.toBe(false);
+    expect(nativeModule.dismissConversation).not.toHaveBeenCalled();
+  });
+
+  // Back-compat guard — older native modules without the method resolve false, not throw.
+  it('returns false when the native module lacks dismissConversation', async () => {
+    const original = nativeModule.dismissConversation;
+    (nativeModule as any).dismissConversation = undefined;
+    await expect(AgentforceService.dismissConversation()).resolves.toBe(false);
+    (nativeModule as any).dismissConversation = original;
+  });
+
+  // Error handling — a native rejection is swallowed and reported as false.
+  it('returns false when the native call rejects', async () => {
+    nativeModule.dismissConversation.mockRejectedValueOnce(new Error('boom'));
+    await expect(AgentforceService.dismissConversation()).resolves.toBe(false);
   });
 });

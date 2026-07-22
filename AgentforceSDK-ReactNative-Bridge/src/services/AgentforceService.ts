@@ -847,6 +847,11 @@ class AgentforceService {
   /**
    * Close the current conversation.
    *
+   * Ends the conversation and discards its history — the next
+   * `launchConversation()` starts a fresh conversation. Use
+   * `dismissConversation()` instead if you want to hide the UI while
+   * keeping the conversation (and its history) alive.
+   *
    * @returns Promise<boolean> indicating success
    */
   async closeConversation(): Promise<boolean> {
@@ -864,6 +869,61 @@ class AgentforceService {
       return result?.success ?? true;
     } catch (error) {
       console.error('[AgentforceService] Failed to close conversation:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Dismiss the conversation UI while preserving the conversation and its history.
+   *
+   * This is the programmatic equivalent of the in-chat close (X) button: it hides
+   * the chat surface but keeps the underlying conversation alive, so a subsequent
+   * `launchConversation()` resumes where the user left off with history intact.
+   *
+   * Use this — rather than `closeConversation()` — when you need to dismiss the
+   * chat on events like a navigation request, without losing the conversation.
+   *
+   * @remarks
+   * On Android, if the app then navigates to a different Activity and reconfigures
+   * the agent, conversation state may still be rebuilt on the next launch (a
+   * platform constraint independent of this method). Staying on a single Activity
+   * preserves history across dismiss/relaunch.
+   *
+   * @returns Promise<boolean> indicating success
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setNavigationDelegate({
+   *   async onNavigate(request) {
+   *     // Hide the chat but keep history, then handle the navigation.
+   *     await AgentforceService.dismissConversation();
+   *     if (request.type === 'link' && request.uri) {
+   *       Linking.openURL(request.uri);
+   *     }
+   *   },
+   * });
+   * ```
+   */
+  async dismissConversation(): Promise<boolean> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return false;
+    }
+
+    if (!AgentforceModule) {
+      return false;
+    }
+
+    if (!AgentforceModule.dismissConversation) {
+      console.warn('[AgentforceService] dismissConversation not available on native module');
+      return false;
+    }
+
+    try {
+      const result = await AgentforceModule.dismissConversation();
+      console.log('[AgentforceService] Conversation dismissed (history preserved)');
+      return result?.success ?? true;
+    } catch (error) {
+      console.error('[AgentforceService] Failed to dismiss conversation:', error);
       return false;
     }
   }

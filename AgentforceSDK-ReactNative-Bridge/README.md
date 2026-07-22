@@ -105,3 +105,39 @@ await AgentforceService.setAdditionalContext({
 - Context persists for the current conversation session
 
 ---
+
+### Dismissing the conversation
+
+There are two ways to programmatically dismiss the chat UI, and they differ in what happens to the conversation:
+
+```typescript
+// Hide the chat but KEEP the conversation and its history.
+// This is the programmatic equivalent of the in-chat close (X) button.
+// A subsequent launchConversation() resumes where the user left off.
+await AgentforceService.dismissConversation();
+
+// End the conversation and DISCARD its history.
+// The next launchConversation() starts a fresh conversation.
+await AgentforceService.closeConversation();
+```
+
+Use `dismissConversation()` when you need to hide the chat on an event such as a
+navigation request without losing history:
+
+```typescript
+AgentforceService.setNavigationDelegate({
+  async onNavigate(request) {
+    await AgentforceService.dismissConversation();
+    if (request.type === 'link' && request.uri) {
+      Linking.openURL(request.uri);
+    }
+  },
+});
+```
+
+**Platform note (Android):** if the app navigates to a *different Android Activity*
+and then reconfigures the agent, conversation state may still be rebuilt on the next
+launch — a platform constraint independent of `dismissConversation()`. Staying within a
+single Activity preserves history across dismiss/relaunch.
+
+---
