@@ -135,7 +135,7 @@ AgentforceService.setNavigationDelegate({
 });
 ```
 
-**Platform note (Android):** if the app navigates to a *different Android Activity*
+**Platform note (Android):** if the app navigates to a _different Android Activity_
 and then reconfigures the agent, conversation state may still be rebuilt on the next
 launch — a platform constraint independent of `dismissConversation()`. Staying within a
 single Activity preserves history across dismiss/relaunch.
