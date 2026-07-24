@@ -5,6 +5,8 @@
  * Uses a discriminated union pattern with the 'type' field as the discriminator.
  */
 
+import type { VoiceOptions } from './VoiceOptions';
+
 /**
  * Feature flags for the Agentforce SDK (can be set in-app via Feature Flags screen).
  */
@@ -25,6 +27,15 @@ interface BaseAgentConfig {
 
   /** Optional feature flags. If omitted, stored flags (or defaults) are used. */
   featureFlags?: FeatureFlags;
+
+  /**
+   * Optional behavioral configuration for voice conversations.
+   *
+   * Applies to voice sessions started after this configuration is applied;
+   * sessions already in progress keep their original options. Omit to
+   * preserve the SDK's default voice behavior on both platforms.
+   */
+  voiceOptions?: VoiceOptions;
 }
 
 /**

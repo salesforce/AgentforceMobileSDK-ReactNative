@@ -23,7 +23,6 @@ jest.mock('react-native', () => {
   };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../../package.json');
 
 describe('package.json is a publishable scoped npm package (SC1)', () => {
@@ -80,7 +79,6 @@ describe('package.json is a publishable scoped npm package (SC1)', () => {
 });
 
 describe('public API barrel exposes the documented runtime surface (SC2)', () => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const api = require('../index');
 
   it('default-exports AgentforceService as the primary entry', () => {
