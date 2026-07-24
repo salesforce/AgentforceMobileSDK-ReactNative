@@ -105,3 +105,39 @@ await AgentforceService.setAdditionalContext({
 - Context persists for the current conversation session
 
 ---
+
+### Voice Options
+
+Optionally configure per-session voice behaviors when calling `configure()`.
+All fields are optional and default to "off"; omitting `voiceOptions`
+preserves existing behavior.
+
+```typescript
+await AgentforceService.configure({
+  type: 'service',
+  serviceApiURL: 'https://example.salesforce.com',
+  organizationId: '00Dxx0000001234',
+  esDeveloperName: 'MyServiceAgent',
+  voiceOptions: {
+    // Auto-end the voice conversation after this many seconds
+    // of continuous user silence. Omit to keep the session open.
+    userSilenceTimeoutSeconds: 30,
+  },
+});
+```
+
+**Fields**
+
+- `userSilenceTimeoutSeconds` _(number, optional)_ — Seconds of continuous
+  user silence before the voice session auto-ends. Omit or pass `undefined`
+  to disable. Non-positive values are treated as disabled by the native
+  layer.
+
+**Platform support:**
+
+- Honored on both Service and Employee Agent paths on iOS and Android.
+
+Voice options are immutable for the lifetime of a configured session;
+re-configure to change them.
+
+---

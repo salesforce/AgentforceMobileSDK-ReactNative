@@ -34,6 +34,7 @@ import type {
   AgentSwitchEvent,
   ModifyUtteranceRequest,
 } from '../types/UIDelegate';
+import type { VoiceOptions } from '../types/VoiceOptions';
 
 const { AgentforceModule } = NativeModules;
 
@@ -51,6 +52,7 @@ export type {
   AgentSwitchEvent,
   ModifyUtteranceRequest,
 };
+export type { VoiceOptions };
 
 /**
  * Native module event names

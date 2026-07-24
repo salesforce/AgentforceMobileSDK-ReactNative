@@ -235,7 +235,9 @@ if (!boostPath && platform === 'win32') {
 
   for (var j = 0; j < winBoostCandidates.length; j++) {
     var winCandidate = winBoostCandidates[j];
-    if (!winCandidate) continue;
+    if (!winCandidate) {
+      continue;
+    }
     var winBoostInclude = path.join(winCandidate, 'include', 'boost');
     if (fs.existsSync(winBoostInclude)) {
       boostPath = winCandidate;

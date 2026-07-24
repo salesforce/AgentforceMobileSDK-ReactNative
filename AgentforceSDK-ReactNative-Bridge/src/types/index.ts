@@ -38,6 +38,9 @@ export { ViewProviderDelegate, ViewProviderComponentData } from './ViewProviderD
 // Hidden prechat field types
 export type { HiddenPreChatFields } from './HiddenPreChatFields';
 
+// Voice configuration types
+export type { VoiceOptions } from './VoiceOptions';
+
 // UI delegate types
 export type {
   UIDelegate,
