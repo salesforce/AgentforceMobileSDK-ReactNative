@@ -128,7 +128,7 @@ await AgentforceService.configure({
 
 **Fields**
 
-- `userSilenceTimeoutSeconds` *(number, optional)* — Seconds of continuous
+- `userSilenceTimeoutSeconds` _(number, optional)_ — Seconds of continuous
   user silence before the voice session auto-ends. Omit or pass `undefined`
   to disable. Non-positive values are treated as disabled by the native
   layer.
