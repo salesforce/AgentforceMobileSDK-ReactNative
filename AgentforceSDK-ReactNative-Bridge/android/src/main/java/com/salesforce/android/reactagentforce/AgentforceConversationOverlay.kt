@@ -12,41 +12,33 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.salesforce.android.reactagentforce.models.AgentMode
+import com.salesforce.android.agentforcesdk.components.theme.LocalAgentforceTheme
 
 /**
  * Manages the Agentforce conversation UI as an overlay on the current Activity.
@@ -63,6 +55,19 @@ object AgentforceConversationOverlay {
     internal var isVisible = mutableStateOf(false)
     private var overlayContainer: ViewGroup? = null
     private var attachedActivity: ComponentActivity? = null
+
+    /**
+     * Whether the overlay is currently attached to [activity].
+     *
+     * Returns false when nothing is attached yet, or when the overlay is attached to a
+     * DIFFERENT Activity instance than the one given. The SDK scopes its conversation
+     * ViewModel (and its one-shot bootstrap) to the host Activity, so a re-launch onto a
+     * new Activity instance can't reuse the existing conversation — see
+     * [[project_rn_android_bootstrap_fix]]. Callers use this to decide whether reuse is
+     * safe before showing.
+     */
+    fun isAttachedTo(activity: Activity): Boolean =
+        overlayContainer != null && attachedActivity === activity
 
     /**
      * Show the conversation overlay on the given Activity.
@@ -163,76 +168,52 @@ object AgentforceConversationOverlay {
 private fun ConversationOverlayContent(onClose: () -> Unit) {
     val visible by AgentforceConversationOverlay.isVisible
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = slideInVertically(
-            initialOffsetY = { fullHeight -> fullHeight },
-            animationSpec = tween(durationMillis = 250)
-        ),
-        exit = slideOutVertically(
-            targetOffsetY = { fullHeight -> fullHeight },
-            animationSpec = tween(durationMillis = 250)
-        )
-    ) {
+    val client = AgentforceClientHolder.agentforceClient
+    val conversation = AgentforceClientHolder.currentConversation
+
+    if (conversation == null || client == null) return
+
+    // Keep the container permanently composed and animate visibility via translationY only.
+    // AnimatedVisibility would remove it from the composition on hide and re-run the SDK's
+    // one-shot bootstrap on the next show, which 404s on a reused conversation. See
+    // [[project_rn_android_bootstrap_fix]].
+    if (visible) {
         BackHandler { onClose() }
+    }
 
-        val client = AgentforceClientHolder.agentforceClient
-        val conversation = AgentforceClientHolder.currentConversation
+    var heightPx by remember { mutableIntStateOf(0) }
+    // Slide fully off-screen (downward) when hidden; rest at 0 (fully shown) when visible.
+    val translationY by animateFloatAsState(
+        targetValue = if (visible) 0f else heightPx.toFloat(),
+        animationSpec = tween(durationMillis = 250),
+        label = "overlaySlide"
+    )
 
-        val title = when (AgentforceClientHolder.currentMode) {
-            is AgentMode.Employee -> AgentforceClientHolder.agentLabel ?: "Employee Agent"
-            is AgentMode.Service -> "Service Agent"
-            null -> "Agentforce"
-        }
+    // Render the SDK container directly — no bridge-owned top bar. The SDK
+    // draws its own header (showTopBar defaults to true), and the agent label
+    // override is applied via BridgeTopAppBarBuilder wired into the SDK config
+    // in AgentforceModule.configureEmployeeAgent. Wrapping it in our own
+    // Scaffold/TopAppBar previously produced a duplicate, redundant header.
+    // Fill the system-bar insets with the SDK's chat surface (surface1) so they match.
+    val surfaceColor = LocalAgentforceTheme.current.colors().surface1
 
-        if (conversation != null && client != null) {
-            MaterialTheme {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    title,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            },
-                            navigationIcon = {
-                                IconButton(onClick = onClose) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Back",
-                                        tint = Color.White
-                                    )
-                                }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = Color(0xFF0176D3),
-                                titleContentColor = Color.White,
-                                navigationIconContentColor = Color.White
-                            ),
-                            windowInsets = WindowInsets(top = 50.dp, bottom = 0.dp),
-                            modifier = Modifier.heightIn(max = 95.dp)
-                        )
-                    },
-                    contentWindowInsets = WindowInsets(0.dp)
-                ) { paddingValues ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
-                            .navigationBarsPadding()
-                            .imePadding()
-                    ) {
-                        client.AgentforceConversationContainer(
-                            conversation = conversation,
-                            onClose = onClose
-                        )
-                    }
-                }
-            }
+    MaterialTheme {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { heightPx = it.height }
+                .graphicsLayer { this.translationY = translationY }
+                // Background before the insets, so the padded strips aren't transparent
+                // (host screen bleed-through); after graphicsLayer so it slides on hide.
+                .background(surfaceColor)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
+        ) {
+            client.AgentforceConversationContainer(
+                conversation = conversation,
+                onClose = onClose
+            )
         }
     }
 }

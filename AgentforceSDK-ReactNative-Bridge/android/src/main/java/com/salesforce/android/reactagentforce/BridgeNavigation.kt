@@ -78,7 +78,15 @@ class BridgeNavigation(private val reactContext: ReactContext) : Navigation {
                 params.putString("type", "record")
                 params.putString("recordId", destination.id)
                 destination.type?.let { params.putString("objectType", it) }
-                destination.pageReference?.let { params.putString("pageReference", it) }
+                // The Android SDK leaves Record.pageReference null on a tapped record (its nav
+                // call sites use the short Record(id, type) constructor), whereas the iOS SDK's
+                // Record self-populates a standard__recordPage pageReference. Synthesize the same
+                // shape here so JS consumers get a consistent payload cross-platform (W-23294974).
+                // Use the SDK-provided value when present so the edit flow's pageReference (and a
+                // future SDK that populates it) is never clobbered.
+                val pageReference = destination.pageReference
+                    ?: recordPageReference(destination.id, destination.type)
+                params.putString("pageReference", pageReference)
             }
             is ObjectHome -> {
                 params.putString("type", "objectHome")

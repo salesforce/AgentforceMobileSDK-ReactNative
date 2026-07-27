@@ -20,16 +20,23 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.ReadableType
+import com.salesforce.android.agentforcesdk.components.models.DefaultTopAppBarBuilder
 import com.salesforce.android.agentforcesdkimpl.AgentforceClient
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceMode
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentConfiguration
+import com.salesforce.android.agentforcesdkimpl.configuration.ServiceAgentVoiceConfig
 import com.salesforce.android.agentforcesdkimpl.configuration.ServiceUISettings
 import com.salesforce.android.agentforcesdkimpl.utils.AgentforceFeatureFlagSettings
 import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceProviderFactory
 import com.salesforce.android.agentforcesdkvoice.AgentforceVoiceUIProvider
+import com.salesforce.android.agentforcesdkvoice.miaw.MiawVoiceProvider
+import com.salesforce.android.agentforceservice.voice.MiawVoiceProviderFactory
+import com.salesforce.android.smi.multimedia.core.MultimediaExtension
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotContextVariable
 import com.salesforce.android.agentforceservice.conversationservice.data.CopilotAdditionalContext
+import com.salesforce.android.agentforceservice.voice.AgentforceVoiceSessionOptions
+import kotlin.time.Duration.Companion.seconds
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
@@ -37,6 +44,8 @@ import com.salesforce.android.reactagentforce.providers.BridgeViewProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
 import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
 import com.salesforce.android.agentforcesdkimpl.network.AgentforceNetworkImpl
+import com.salesforce.android.mobile.interfaces.user.Org
+import com.salesforce.android.mobile.interfaces.user.User
 import com.salesforce.androidsdk.app.SalesforceSDKManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +73,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Advisory only — gating is done on the JS side (HomeScreen checks this flag
         // before calling setViewProviderDelegate). The native layer does not gate on it.
         private const val KEY_ENABLE_CUSTOM_VIEW_PROVIDER = "enableCustomViewProvider"
+
+        // Internal (experimental) flags are persisted in their own store, keyed by the SDK's
+        // own internal-flag names (passed straight through — the bridge does not enumerate,
+        // rename, or validate them). Only flags that have been explicitly set are stored.
+        // Shared with ServiceAgentViewModel (legacy Service path) so the two paths can't drift.
+        //
+        // ⚠️ Internal flags are not covered by API stability guarantees.
+        internal const val INTERNAL_FLAGS_PREFS_NAME = "AgentforceInternalFlags"
     }
 
     private val employeePrefs: SharedPreferences
@@ -71,6 +88,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     private val featureFlagsPrefs: SharedPreferences
         get() = reactApplicationContext.getSharedPreferences(FEATURE_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val internalFlagsPrefs: SharedPreferences
+        get() = reactApplicationContext.getSharedPreferences(INTERNAL_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
 
     // Legacy ViewModel for Service Agent backward compatibility
     private var viewModel: ServiceAgentViewModel? = null
@@ -96,6 +116,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Bridge UI delegate for forwarding SDK UI events to JS
     private val bridgeUIDelegate = BridgeUIDelegate(reactContext)
 
+    // Behavioral options applied to the next voice session.
+    // Populated from `voiceOptions` on the JS-side configuration map and
+    // forwarded into [AgentforceConfiguration.Builder.setVoiceSessionOptions]
+    // so the SDK's voice UI ViewModel reads them via the conversation's
+    // configuration when starting a session.
+    // Defaults to all-off (`AgentforceVoiceSessionOptions()`).
+    private var voiceSessionOptions: AgentforceVoiceSessionOptions = AgentforceVoiceSessionOptions()
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -110,9 +138,17 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun configure(config: ReadableMap, promise: Promise) {
         val type = config.getString("type")
-        
+
         Log.d(TAG, "configure() called with type: $type")
-        
+
+        // Parse voice options once, before dispatching to the per-mode configurator.
+        // Stored on the module so they apply to the next voice session created by
+        // either path; both per-mode configurators forward this value to
+        // `AgentforceConfiguration.Builder.setVoiceSessionOptions(...)` so the
+        // SDK's voice UI ViewModel honors the option when the user launches voice
+        // from the chat UI.
+        voiceSessionOptions = parseVoiceSessionOptions(config)
+
         when (type) {
             "service" -> configureServiceAgent(config, promise)
             "employee" -> configureEmployeeAgent(config, promise)
@@ -169,7 +205,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     ServiceUISettings(
                         downloadTranscript = raw["downloadTranscript"] ?: true,
                         endConversation = raw["endConversation"] ?: true,
-                        enableLightingType = raw["enableLightningType"] ?: false
+                        clearChat = raw["clearChat"] ?: false
                     )
                 } ?: ServiceUISettings()
 
@@ -182,12 +218,16 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     )
                     .setServiceUISettings(uiSettings)
                     .build()
+                // Voice shipped for Service Agents in 262.0 (MIAW). Honor the
+                // enableVoice flag like the Employee path; the MIAW voice provider is
+                // registered below via setBridgeVoiceModule().
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
-                    .enableVoice(false)
+                    .enableVoice(flags.enableVoice)
+                    .setupFlags(internalFlagsForSDK(config))
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
@@ -203,8 +243,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
+                    .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
-                agentforceConfigBuilder.setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
+                agentforceConfigBuilder.setBridgeVoiceModule()
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
@@ -251,9 +292,35 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
 
-        // Check if agentId changed - only clear if it did
+        // Rebuild the client only when switching from Service mode, the agentId changed, or no
+        // client exists yet (mirrors iOS's needsNewClient). Otherwise reuse it: rebuilding while
+        // preserving the conversation orphans that conversation on the old client and breaks
+        // re-launch with a 404. See [[project_rn_android_bootstrap_fix]].
         val currentEmployeeMode = currentMode as? LocalAgentMode.Employee
+        val switchingModes = AgentforceClientHolder.isServiceAgent
         val agentIdChanged = currentEmployeeMode?.config?.agentId != employeeConfig.agentId
+
+        // Cross-activity re-launch: reuse is only safe while the overlay is still attached to the
+        // SAME host Activity, because the SDK scopes its conversation ViewModel + one-shot bootstrap
+        // to that Activity (getActivityScopedViewModelStoreOwner). If the host app handed us a
+        // different Activity (multi-activity nav, recreated host, etc.), reusing the conversation
+        // re-fires bootstrap on a fresh activity-scoped ViewModel, hits the by-design discovery 404
+        // it can't recover from, and the chat hangs on "I'm on my way…". Force a fresh client+
+        // conversation in that case so the recoverable fresh-bootstrap path runs instead.
+        // Trade-off: conversation history is lost on an activity swap, but the chat never hangs.
+        // The sample app is single-Activity so this never triggers there; some customer host apps
+        // are not. See [[project_rn_android_bootstrap_fix]].
+        val activity = currentActivity
+        val activityChanged = AgentforceClientHolder.agentforceClient != null &&
+            activity != null &&
+            !AgentforceConversationOverlay.isAttachedTo(activity)
+
+        val needsNewClient = switchingModes || agentIdChanged ||
+            AgentforceClientHolder.agentforceClient == null || activityChanged
+
+        if (activityChanged) {
+            Log.d(TAG, "Host Activity changed since last attach - forcing fresh client to avoid re-launch hang")
+        }
 
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
@@ -263,17 +330,24 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Persist employee agentId (editable in Settings tab)
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
 
-        val shouldClear = AgentforceClientHolder.isServiceAgent || agentIdChanged
-
         scope.launch(Dispatchers.Main) {
-            // Destroy overlay and clear on main thread to avoid Compose observer errors
-            if (shouldClear) {
-                Log.d(TAG, "AgentId changed or switching modes - clearing client and conversation")
-                AgentforceConversationOverlay.destroy()
-                AgentforceClientHolder.clear()
-            } else {
-                Log.d(TAG, "AgentId unchanged - preserving conversation")
+            if (!needsNewClient) {
+                // Reuse the existing client and its conversation (credentials refresh automatically
+                // via UnifiedCredentialProvider). Preserves conversation history across re-launch.
+                Log.d(TAG, "AgentId unchanged - reusing existing client and conversation")
+                AgentforceClientHolder.setMode(LocalAgentMode.Employee(employeeConfig))
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                    putString("mode", "employee")
+                })
+                return@launch
             }
+
+            // Tear down the previous overlay/client/conversation before building a fresh one, so
+            // launchConversation() recreates a conversation paired with the new client.
+            Log.d(TAG, "Switching modes or agentId changed - clearing client and conversation")
+            AgentforceConversationOverlay.destroy()
+            AgentforceClientHolder.clear()
             try {
                 // Create AgentforceConfiguration for FullConfig mode
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
@@ -282,6 +356,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
                     .enableVoice(flags.enableVoice)
+                    .setupFlags(internalFlagsForSDK(config))
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
@@ -305,13 +380,41 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
+                    // Route bootstrap (BotsAPI connect calls) through the authenticated
+                    // RestClient-backed network, matching the iOS bridge (which passes
+                    // salesforceNetwork). Without this, the SDK falls back to a default
+                    // AgentforceNetworkImpl() with no salesforceDomain, so the bootstrap
+                    // connect call 404s and the client never gets connectionInfo.
+                    .setNetwork(network)
                     .setDataProvider(dataProvider)
+                    // Set the User/Org so the SDK knows the orgId. The SDK derives the
+                    // runtime connection info from user.org.id when the internal-core
+                    // discovery endpoints are unavailable (the external-app case), via
+                    // AgentforceConnectionInfo(orgId=...). The iOS bridge sets this too;
+                    // without it, orgId is null and that fallback can't resolve a host.
+                    .setUser(
+                        User(
+                            org = Org(id = employeeConfig.organizationId, community = null),
+                            userName = employeeConfig.userId,
+                            displayName = employeeConfig.userId
+                        )
+                    )
+                    .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
-                agentforceConfigBuilder.setAgentforceVoiceModule(AgentforceVoiceProviderFactory(), AgentforceVoiceUIProvider())
+                agentforceConfigBuilder.setBridgeVoiceModule()
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
                 agentforceConfigBuilder.setDelegate(bridgeUIDelegate)
+                // Override the header title with the client-supplied agentLabel when
+                // present (client wins); otherwise use the SDK default bar, which falls
+                // back to the server-provided agent label. Mirrors the iOS bridge.
+                val agentLabel = employeeConfig.agentLabel?.trim()
+                if (!agentLabel.isNullOrEmpty()) {
+                    agentforceConfigBuilder.setTopAppBarBuilder(BridgeTopAppBarBuilder(agentLabel))
+                } else {
+                    agentforceConfigBuilder.setTopAppBarBuilder(DefaultTopAppBarBuilder)
+                }
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 // Use FullConfig mode for Employee Agent
@@ -476,6 +579,41 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    /**
+     * Send an utterance (text message) to the current conversation.
+     * Must be called after launching a conversation.
+     *
+     * @param utterance The text to send to the agent
+     * @param promise Promise to resolve/reject
+     */
+    @ReactMethod
+    fun sendUtterance(utterance: String, promise: Promise) {
+        Log.d(TAG, "sendUtterance() called")
+
+        scope.launch(Dispatchers.Main) {
+            val conversation = AgentforceClientHolder.currentConversation
+            if (conversation == null) {
+                Log.w(TAG, "No active conversation for sendUtterance")
+                promise.reject(
+                    "NO_CONVERSATION",
+                    "No active conversation. Launch conversation first, then send an utterance."
+                )
+                return@launch
+            }
+
+            try {
+                conversation.sendUtterance(utterance)
+                Log.d(TAG, "Utterance sent")
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                })
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send utterance", e)
+                promise.reject("SEND_UTTERANCE_ERROR", e.message, e)
+            }
+        }
+    }
+
     // endregion
 
     // region Configuration Query Methods
@@ -527,6 +665,40 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun setEmployeeAgentId(agentId: String, promise: Promise) {
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, agentId ?: "").apply()
         promise.resolve(null)
+    }
+
+    /**
+     * Parse `voiceOptions` from the JS-side config map into an [AgentforceVoiceSessionOptions].
+     *
+     * Returns the all-off default when the field is missing or empty. A
+     * `userSilenceTimeoutSeconds` of zero or negative is forwarded to the
+     * native layer, which already coerces non-positive durations to disabled
+     * and emits a warning. Non-finite values (NaN, +/-infinity) are dropped to
+     * avoid passing them to `Duration` arithmetic. `autoEndWhileMuted` defaults
+     * to `false` when absent.
+     */
+    private fun parseVoiceSessionOptions(config: ReadableMap): AgentforceVoiceSessionOptions {
+        if (!config.hasKey("voiceOptions")) return AgentforceVoiceSessionOptions()
+        val voiceOpts = config.getMap("voiceOptions") ?: return AgentforceVoiceSessionOptions()
+
+        val timeout = if (
+            voiceOpts.hasKey("userSilenceTimeoutSeconds") &&
+            !voiceOpts.isNull("userSilenceTimeoutSeconds")
+        ) {
+            val raw = voiceOpts.getDouble("userSilenceTimeoutSeconds")
+            if (raw.isFinite()) raw.seconds else null
+        } else {
+            null
+        }
+
+        val autoEndWhileMuted = voiceOpts.hasKey("autoEndWhileMuted") &&
+            !voiceOpts.isNull("autoEndWhileMuted") &&
+            voiceOpts.getBoolean("autoEndWhileMuted")
+
+        return AgentforceVoiceSessionOptions(
+            userSilenceTimeout = timeout,
+            autoEndWhileMuted = autoEndWhileMuted,
+        )
     }
 
     private data class FeatureFlags(
@@ -590,6 +762,76 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             .apply()
         promise.resolve(null)
     }
+
+    // region Internal (experimental) flags
+
+    /**
+     * Read the internal-flag map from the JS config if present, else from SharedPreferences.
+     * Keys are the SDK's own flag names; values are the raw booleans. Only flags that were
+     * explicitly set appear — absent flags fall back to the SDK's own defaults.
+     */
+    private fun getInternalFlagsFromConfigOrPrefs(config: ReadableMap): Map<String, Boolean> {
+        val internalFlagsMap = if (config.hasKey("internalFlags")) config.getMap("internalFlags") else null
+        if (internalFlagsMap != null) {
+            val result = mutableMapOf<String, Boolean>()
+            val iterator = internalFlagsMap.keySetIterator()
+            while (iterator.hasNextKey()) {
+                val key = iterator.nextKey()
+                if (internalFlagsMap.getType(key) == ReadableType.Boolean) {
+                    result[key] = internalFlagsMap.getBoolean(key)
+                }
+            }
+            return result
+        }
+        return readStoredInternalFlags()
+    }
+
+    /** Read all persisted internal flags from SharedPreferences. */
+    private fun readStoredInternalFlags(): Map<String, Boolean> {
+        val result = mutableMapOf<String, Boolean>()
+        for ((key, value) in internalFlagsPrefs.all) {
+            if (value is Boolean) {
+                result[key] = value
+            }
+        }
+        return result
+    }
+
+    /**
+     * Build the SDK internal-flags map for a configure() call. Keys are passed through
+     * unchanged as the SDK's own flag names — the bridge does not rename or filter them.
+     */
+    private fun internalFlagsForSDK(config: ReadableMap): Map<String, Boolean> {
+        return getInternalFlagsFromConfigOrPrefs(config)
+    }
+
+    @ReactMethod
+    fun getInternalFlags(promise: Promise) {
+        // Return only the flags that were explicitly set (empty map if none).
+        promise.resolve(Arguments.createMap().apply {
+            for ((key, value) in readStoredInternalFlags()) {
+                putBoolean(key, value)
+            }
+        })
+    }
+
+    @ReactMethod
+    fun setInternalFlags(flags: ReadableMap, promise: Promise) {
+        val editor = internalFlagsPrefs.edit()
+        val iterator = flags.keySetIterator()
+        // Persist the caller's flags verbatim (keyed by the SDK's own flag names). Non-boolean
+        // values are skipped; keys the running SDK doesn't recognize are simply ignored by it.
+        while (iterator.hasNextKey()) {
+            val key = iterator.nextKey()
+            if (flags.getType(key) == ReadableType.Boolean) {
+                editor.putBoolean(key, flags.getBoolean(key))
+            }
+        }
+        editor.apply()
+        promise.resolve(null)
+    }
+
+    // endregion
 
     @ReactMethod
     fun getConfigurationInfo(promise: Promise) {
@@ -710,6 +952,27 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             AgentforceConversationOverlay.destroy()
             AgentforceClientHolder.clearConversation()
             viewModel?.closeConversation()
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", true)
+            })
+        }
+    }
+
+    /**
+     * Dismiss the conversation UI while preserving the conversation and its history.
+     *
+     * This is the programmatic equivalent of the in-chat close (X) button: it only
+     * hides the overlay (see [AgentforceConversationOverlay.hide]) and leaves the
+     * client + conversation in [AgentforceClientHolder] intact, so the next
+     * [launchConversation] reuses the existing conversation with history preserved.
+     *
+     * Contrast with [closeConversation], which destroys the overlay and clears the
+     * conversation, forcing a fresh conversation on the next launch.
+     */
+    @ReactMethod
+    fun dismissConversation(promise: Promise) {
+        scope.launch(Dispatchers.Main) {
+            AgentforceConversationOverlay.hide()
             promise.resolve(Arguments.createMap().apply {
                 putBoolean("success", true)
             })
@@ -928,3 +1191,30 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // endregion
 }
+
+/**
+ * Registers voice with the SDK config builder using the non-deprecated
+ * [AgentforceConfiguration.Builder.setVoiceModule] entry point. Wires both:
+ *  - Employee Agent voice (LiveKit) via [AgentforceVoiceProviderFactory]
+ *  - Service Agent voice (MIAW) via [ServiceAgentVoiceConfig] — new in 262.0.
+ *
+ * Both modes share the same [AgentforceVoiceUIProvider]. The MIAW multimedia
+ * stack ([MultimediaExtension]) is provided transitively by `agentforce-sdk-voice`.
+ * Whether voice actually surfaces is still gated by the `enableVoice` feature flag
+ * and the backend advertising voice support for the conversation.
+ *
+ * Top-level `internal` (not a private member) so both [AgentforceModule] and the
+ * legacy [ServiceAgentViewModel] path register voice identically — one definition,
+ * no drift when the SDK `setVoiceModule` signature next changes.
+ */
+internal fun AgentforceConfiguration.Builder.setBridgeVoiceModule() = setVoiceModule(
+    uiProvider = AgentforceVoiceUIProvider(),
+    employeeAgentFactory = AgentforceVoiceProviderFactory(),
+    serviceAgentConfig = ServiceAgentVoiceConfig(
+        extension = MultimediaExtension,
+        // 3rd ctor arg (instrumentationHandler) defaults to null; omit it.
+        factory = MiawVoiceProviderFactory { _, conversationClientProvider, multimediaClient ->
+            MiawVoiceProvider(conversationClientProvider, multimediaClient)
+        }
+    )
+)

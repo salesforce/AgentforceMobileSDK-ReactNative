@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { Text, TouchableOpacity } from 'react-native';
-import { AgentforceService } from 'react-native-agentforce';
+import { AgentforceService } from '@salesforce/react-native-agentforce';
 
 export function HeaderLaunchButton() {
   return (

@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { AgentforceService } from 'react-native-agentforce';
+import { AgentforceService } from '@salesforce/react-native-agentforce';
 
 export function ChatLaunchButton() {
   const [configured, setConfigured] = useState(false);

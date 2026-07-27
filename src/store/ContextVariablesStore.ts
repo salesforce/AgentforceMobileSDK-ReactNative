@@ -1,4 +1,4 @@
-import type { AgentforceContextVariable } from 'react-native-agentforce';
+import type { AgentforceContextVariable } from '@salesforce/react-native-agentforce';
 
 let store: AgentforceContextVariable[] = [];
 

@@ -29,8 +29,8 @@ npm install salesforce/AgentforceMobileSDK-ReactNative#dev --save
 …or pin to a specific commit/tag. Then run the platform install scripts that ship with the bridge:
 
 ```bash
-node node_modules/react-native-agentforce/installios.js service     # or 'employee' / 'all'
-node node_modules/react-native-agentforce/installandroid.js service
+node node_modules/@salesforce/react-native-agentforce/installios.js service     # or 'employee' / 'all'
+node node_modules/@salesforce/react-native-agentforce/installandroid.js service
 ```
 
 These scripts:
@@ -47,7 +47,7 @@ Clone or vendor `AgentforceSDK-ReactNative-Bridge/` into the consumer's repo, th
 ```json
 {
   "dependencies": {
-    "react-native-agentforce": "file:./AgentforceSDK-ReactNative-Bridge"
+    "@salesforce/react-native-agentforce": "file:./AgentforceSDK-ReactNative-Bridge"
   }
 }
 ```
@@ -69,7 +69,7 @@ For Service Agent only:
 
 ```ruby
 target 'YourApp' do
-  pod 'ReactNativeAgentforce', :path => '../node_modules/react-native-agentforce/ios'
+  pod 'ReactNativeAgentforce', :path => '../node_modules/@salesforce/react-native-agentforce/ios'
   # ...rest of your Podfile
 end
 ```
@@ -78,7 +78,7 @@ For Employee Agent (host app must include Mobile SDK pods):
 
 ```ruby
 target 'YourApp' do
-  pod 'ReactNativeAgentforce', :path => '../node_modules/react-native-agentforce/ios'
+  pod 'ReactNativeAgentforce', :path => '../node_modules/@salesforce/react-native-agentforce/ios'
   pod 'SalesforceReact'
   pod 'SalesforceSDKCore'
   pod 'SmartStore'
@@ -122,7 +122,7 @@ For Employee Agent, add:
 implementation "com.salesforce.mobilesdk:SalesforceReact:13.1.1"
 ```
 
-Autolinking handles `react-native-agentforce` itself — no manual `implementation` line needed for the bridge.
+Autolinking handles `@salesforce/react-native-agentforce` itself — no manual `implementation` line needed for the bridge.
 
 ### Sync
 
@@ -146,7 +146,7 @@ If the user is on Linux or Windows (no Homebrew), point them at `docs/ci-guide.m
 
 ```bash
 # JS side
-npm ls react-native-agentforce
+npm ls @salesforce/react-native-agentforce
 
 # iOS — pod is linked
 grep -i ReactNativeAgentforce ios/Podfile.lock

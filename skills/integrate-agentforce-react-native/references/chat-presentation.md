@@ -11,7 +11,7 @@ That means presentation choices on RN are limited to **where the launch trigger 
 Best for "open the assistant" CTAs. Visible, discoverable, easy to gate on configuration state.
 
 ```tsx
-import { AgentforceService } from 'react-native-agentforce';
+import { AgentforceService } from '@salesforce/react-native-agentforce';
 
 function HomeScreen() {
   const onLaunch = async () => {

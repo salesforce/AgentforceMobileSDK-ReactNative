@@ -40,6 +40,10 @@ allprojects {
         // Required for AgentforceSDK
         maven { url('https://jitpack.io') }
         maven { url('https://opensource.salesforce.com/AgentforceMobileSDK-Android/agentforce-sdk-repository') }
+        // SharedUI design-system library pulled transitively by agentforce-sdk 15.66.2 (262.0)
+        maven { url('https://opensource.salesforce.com/SharedUI-Android/shared-ui-repository') }
+        // SLDSIcons: shared-ui depends transitively on com.salesforce.android.sldsicons:slds-icons
+        maven { url('https://opensource.salesforce.com/SLDSIcons-Android/slds-icons-repository') }
         maven { url("https://s3.amazonaws.com/inapp.salesforce.com/public/android") }
         maven { url('https://s3.amazonaws.com/salesforce-async-messaging-experimental/public/android') }
     }

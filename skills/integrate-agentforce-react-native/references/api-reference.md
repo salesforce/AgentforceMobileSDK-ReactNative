@@ -1,11 +1,11 @@
 # `AgentforceService` API reference
 
-The bridge exports a singleton `AgentforceService` from `react-native-agentforce`. All methods return Promises and are no-ops on web/desktop (return `false` or empty values).
+The bridge exports a singleton `AgentforceService` from `@salesforce/react-native-agentforce`. All methods return Promises and are no-ops on web/desktop (return `false` or empty values).
 
 ## Lifecycle
 
 ```ts
-import { AgentforceService } from 'react-native-agentforce';
+import { AgentforceService } from '@salesforce/react-native-agentforce';
 
 // 1. Register delegates first (so they catch init-time SDK output)
 AgentforceService.setLoggerDelegate(myLogger);
@@ -171,7 +171,7 @@ import {
   logoutEmployeeAgent,
   getEmployeeAgentCredentials,
   refreshEmployeeAgentCredentials,
-} from 'react-native-agentforce';
+} from '@salesforce/react-native-agentforce';
 ```
 
 See `auth-flows.md` for the full flow.
