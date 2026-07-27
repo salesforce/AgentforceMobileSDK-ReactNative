@@ -73,6 +73,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Advisory only — gating is done on the JS side (HomeScreen checks this flag
         // before calling setViewProviderDelegate). The native layer does not gate on it.
         private const val KEY_ENABLE_CUSTOM_VIEW_PROVIDER = "enableCustomViewProvider"
+
+        // Internal (experimental) flags are persisted in their own store, keyed by the SDK's
+        // own internal-flag names (passed straight through — the bridge does not enumerate,
+        // rename, or validate them). Only flags that have been explicitly set are stored.
+        // Shared with ServiceAgentViewModel (legacy Service path) so the two paths can't drift.
+        //
+        // ⚠️ Internal flags are not covered by API stability guarantees.
+        internal const val INTERNAL_FLAGS_PREFS_NAME = "AgentforceInternalFlags"
     }
 
     private val employeePrefs: SharedPreferences
@@ -80,6 +88,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     private val featureFlagsPrefs: SharedPreferences
         get() = reactApplicationContext.getSharedPreferences(FEATURE_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val internalFlagsPrefs: SharedPreferences
+        get() = reactApplicationContext.getSharedPreferences(INTERNAL_FLAGS_PREFS_NAME, Context.MODE_PRIVATE)
 
     // Legacy ViewModel for Service Agent backward compatibility
     private var viewModel: ServiceAgentViewModel? = null
@@ -216,6 +227,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
                     .enableVoice(flags.enableVoice)
+                    .setupFlags(internalFlagsForSDK(config))
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
@@ -344,6 +356,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
                     .enableVoice(flags.enableVoice)
+                    .setupFlags(internalFlagsForSDK(config))
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
@@ -749,6 +762,76 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             .apply()
         promise.resolve(null)
     }
+
+    // region Internal (experimental) flags
+
+    /**
+     * Read the internal-flag map from the JS config if present, else from SharedPreferences.
+     * Keys are the SDK's own flag names; values are the raw booleans. Only flags that were
+     * explicitly set appear — absent flags fall back to the SDK's own defaults.
+     */
+    private fun getInternalFlagsFromConfigOrPrefs(config: ReadableMap): Map<String, Boolean> {
+        val internalFlagsMap = if (config.hasKey("internalFlags")) config.getMap("internalFlags") else null
+        if (internalFlagsMap != null) {
+            val result = mutableMapOf<String, Boolean>()
+            val iterator = internalFlagsMap.keySetIterator()
+            while (iterator.hasNextKey()) {
+                val key = iterator.nextKey()
+                if (internalFlagsMap.getType(key) == ReadableType.Boolean) {
+                    result[key] = internalFlagsMap.getBoolean(key)
+                }
+            }
+            return result
+        }
+        return readStoredInternalFlags()
+    }
+
+    /** Read all persisted internal flags from SharedPreferences. */
+    private fun readStoredInternalFlags(): Map<String, Boolean> {
+        val result = mutableMapOf<String, Boolean>()
+        for ((key, value) in internalFlagsPrefs.all) {
+            if (value is Boolean) {
+                result[key] = value
+            }
+        }
+        return result
+    }
+
+    /**
+     * Build the SDK internal-flags map for a configure() call. Keys are passed through
+     * unchanged as the SDK's own flag names — the bridge does not rename or filter them.
+     */
+    private fun internalFlagsForSDK(config: ReadableMap): Map<String, Boolean> {
+        return getInternalFlagsFromConfigOrPrefs(config)
+    }
+
+    @ReactMethod
+    fun getInternalFlags(promise: Promise) {
+        // Return only the flags that were explicitly set (empty map if none).
+        promise.resolve(Arguments.createMap().apply {
+            for ((key, value) in readStoredInternalFlags()) {
+                putBoolean(key, value)
+            }
+        })
+    }
+
+    @ReactMethod
+    fun setInternalFlags(flags: ReadableMap, promise: Promise) {
+        val editor = internalFlagsPrefs.edit()
+        val iterator = flags.keySetIterator()
+        // Persist the caller's flags verbatim (keyed by the SDK's own flag names). Non-boolean
+        // values are skipped; keys the running SDK doesn't recognize are simply ignored by it.
+        while (iterator.hasNextKey()) {
+            val key = iterator.nextKey()
+            if (flags.getType(key) == ReadableType.Boolean) {
+                editor.putBoolean(key, flags.getBoolean(key))
+            }
+        }
+        editor.apply()
+        promise.resolve(null)
+    }
+
+    // endregion
 
     @ReactMethod
     fun getConfigurationInfo(promise: Promise) {

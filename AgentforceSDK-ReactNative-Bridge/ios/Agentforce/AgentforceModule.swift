@@ -272,7 +272,7 @@ class AgentforceModule: RCTEventEmitter {
             shouldBlockMicrophone: false,
             enableVoice: flags.enableVoice,
             enableOnboarding: false,
-            internalFlags: [:]
+            internalFlags: internalFlagsForSDK(configDict)
         )
 
         // Use .serviceAgent() mode with overrides for logger and navigation.
@@ -380,7 +380,7 @@ class AgentforceModule: RCTEventEmitter {
             shouldBlockMicrophone: false,
             enableVoice: flags.enableVoice,
             enableOnboarding: false,
-            internalFlags: [:]
+            internalFlags: internalFlagsForSDK(configDict)
         )
 
         // Build full configuration with authenticated network and data provider for Employee Agent.
@@ -716,6 +716,90 @@ class AgentforceModule: RCTEventEmitter {
         UserDefaults.standard.set(flags.enablePDFUpload, forKey: Self.featureFlagKeys.enablePDFUpload)
         UserDefaults.standard.set(flags.enableVoice, forKey: Self.featureFlagKeys.enableVoice)
         UserDefaults.standard.set(flags.enableCustomViewProvider, forKey: Self.featureFlagKeys.enableCustomViewProvider)
+    }
+
+    // MARK: - Internal (experimental) flags
+
+    /// Internal flags are a free-form `[String: Bool]` map passed straight through to the iOS
+    /// SDK using its own flag key names. The bridge does not enumerate, rename, or validate
+    /// them — keys the SDK doesn't recognize are ignored by the SDK (silent no-op).
+    ///
+    /// ⚠️ Internal flags are not covered by API stability guarantees.
+    ///
+    /// The full map is persisted as a single UserDefaults dictionary so the set of keys need
+    /// not be known ahead of time.
+    private static let internalFlagsDefaultsKey = "AgentforceInternalFlags"
+
+    /// Read the internal-flag map from the JS config if present, else from UserDefaults.
+    /// Only boolean-valued entries are kept; absent keys fall back to the SDK's own defaults.
+    private func getInternalFlagsFromConfigOrUserDefaults(_ configDict: [String: Any]) -> [String: Bool] {
+        if let internalFlags = configDict["internalFlags"] as? [String: Any] {
+            var result: [String: Bool] = [:]
+            for (key, value) in internalFlags {
+                if let boolValue = (value as? NSNumber)?.boolValue {
+                    result[key] = boolValue
+                }
+            }
+            return result
+        }
+        return readStoredInternalFlags()
+    }
+
+    /// Read the persisted internal-flag map from UserDefaults.
+    private func readStoredInternalFlags() -> [String: Bool] {
+        let stored = UserDefaults.standard.dictionary(forKey: Self.internalFlagsDefaultsKey) ?? [:]
+        var result: [String: Bool] = [:]
+        for (key, value) in stored {
+            if let boolValue = (value as? NSNumber)?.boolValue {
+                result[key] = boolValue
+            }
+        }
+        return result
+    }
+
+    /// Build the SDK internal-flags dict for a configure() call. Keys are passed through
+    /// unchanged as the SDK's own flag names.
+    private func internalFlagsForSDK(_ configDict: [String: Any]) -> [String: Bool] {
+        return getInternalFlagsFromConfigOrUserDefaults(configDict)
+    }
+
+    @objc
+    func getInternalFlags(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        // Return only the flags that were explicitly set (empty map if none).
+        resolve(readStoredInternalFlags())
+    }
+
+    @objc
+    func setInternalFlags(
+        _ flags: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
+            guard let dict = flags as? [String: Any] else {
+                resolve(nil)
+                return
+            }
+
+            // Merge the caller's flags into the persisted map (matching the Android path,
+            // which accumulates across calls). Non-boolean values are dropped; keys are stored
+            // as-is (the SDK ignores any it doesn't recognize).
+            var toStore = UserDefaults.standard.dictionary(forKey: Self.internalFlagsDefaultsKey) ?? [:]
+            for (key, value) in dict {
+                guard let boolValue = (value as? NSNumber)?.boolValue else { continue }
+                toStore[key] = boolValue
+            }
+            UserDefaults.standard.set(toStore, forKey: Self.internalFlagsDefaultsKey)
+
+            print("[AgentforceModule] Internal flags saved (will apply on next configure)")
+            resolve(nil)
+        }
     }
 
     @objc

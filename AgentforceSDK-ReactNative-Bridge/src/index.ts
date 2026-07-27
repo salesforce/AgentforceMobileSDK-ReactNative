@@ -23,6 +23,7 @@ export type {
   EmployeeAgentConfig,
   AgentConfig,
   FeatureFlags,
+  InternalFlags,
   LegacyServiceAgentConfig,
   ConfigurationResult,
   ConfigurationInfo,

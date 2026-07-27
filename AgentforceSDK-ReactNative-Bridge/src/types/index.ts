@@ -11,6 +11,7 @@ export {
   EmployeeAgentConfig,
   AgentConfig,
   FeatureFlags,
+  InternalFlags,
   LegacyServiceAgentConfig,
   ConfigurationResult,
   ConfigurationInfo,

@@ -177,3 +177,60 @@ Voice options are immutable for the lifetime of a configured session;
 re-configure to change them.
 
 ---
+
+### Internal Flags (experimental)
+
+Internal flags are SDK-managed toggles for experimental or in-development behavior. They are
+distinct from the five app-facing feature flags (`enableMultiAgent`, `enableMultiModalInput`,
+`enablePDFUpload`, `enableVoice`, `enableCustomViewProvider`) and are surfaced here so
+integrators can opt into or out of specific SDK behaviors.
+
+`InternalFlags` is a free-form `Record<string, boolean>` — a map of flag name → boolean passed
+straight through to the native SDK. **The keys are the native SDK's own internal-flag names**
+(e.g. `enableTokenStreaming`, `enableInlineCitation`), not bridge-defined aliases. The bridge
+does not enumerate, rename, or validate them.
+
+> ⚠️ **Not covered by API stability guarantees.** Any internal flag may be renamed, change its
+> default, or be removed in a future SDK release without a semver-major bump. Do not build
+> load-bearing product behavior on them.
+
+**Reading and writing:**
+
+Internal flags follow the same read/deferred-write pattern as feature flags — a value set via
+`setInternalFlags` (or passed on the `internalFlags` config field) is persisted and applied the
+next time `configure()` is called.
+
+```typescript
+import { AgentforceService, InternalFlags } from '@salesforce/react-native-agentforce';
+
+// Read the flags that have been explicitly set (missing key = "use SDK default")
+const flags: InternalFlags = await AgentforceService.getInternalFlags();
+
+// Persist flags; applied on the next configure(). Keys are the native SDK's own flag names.
+await AgentforceService.setInternalFlags({
+  enableTokenStreaming: true,
+  enableClosedCaptions: true,
+});
+
+// Or pass them inline on the config object
+await AgentforceService.configure({
+  type: 'service',
+  serviceApiURL: 'https://service.salesforce.com',
+  organizationId: '00Dxx0000001234',
+  esDeveloperName: 'MyServiceAgent',
+  internalFlags: { enableTokenStreaming: true },
+});
+```
+
+**Semantics:**
+
+- Values are booleans. An omitted flag falls back to the SDK's own default — a missing key is
+  **not** the same as `false`.
+- `getInternalFlags()` returns only the flags that were explicitly set (an empty object if none).
+  It reflects stored values, not the running SDK's live state.
+- Keys are the native SDK's own flag names, and the iOS and Android SDKs each recognize a
+  **different set**. Setting a key the running platform's SDK doesn't recognize is a silent
+  no-op — the value is stored and forwarded, but that SDK ignores unknown keys. Consult the
+  native AgentforceSDK's internal-flag documentation for the keys valid on each platform.
+
+---

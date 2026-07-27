@@ -19,6 +19,28 @@ export interface FeatureFlags {
 }
 
 /**
+ * Internal (experimental) SDK flags.
+ *
+ * A free-form map of SDK internal-flag name → boolean. These are SDK-managed toggles for
+ * experimental or in-development behavior — distinct from the five app-facing
+ * {@link FeatureFlags}. They are passed straight through to the native SDK using its own
+ * flag key names; the bridge does not enumerate, rename, or validate them.
+ *
+ * ⚠️ **Stability**: internal flags are NOT covered by the SDK's public API stability
+ * guarantees. Any flag may be renamed, change default, or be removed in a future SDK
+ * release without a semver-major bump. Do not build load-bearing product behavior on them.
+ *
+ * **Keys are the native SDK's own flag names** (e.g. `enableTokenStreaming`,
+ * `enableInlineCitation`), and the iOS and Android SDKs each recognize a different set.
+ * Setting a key the running platform's SDK doesn't recognize is a silent no-op — the value
+ * is stored and forwarded, but that SDK ignores unknown keys. Consult the native SDK's
+ * internal-flag documentation for the keys valid on each platform.
+ *
+ * Values are booleans; an omitted key falls back to the SDK's own default.
+ */
+export type InternalFlags = Record<string, boolean>;
+
+/**
  * Base configuration shared by all agent types
  */
 interface BaseAgentConfig {
@@ -36,6 +58,13 @@ interface BaseAgentConfig {
    * preserve the SDK's default voice behavior on both platforms.
    */
   voiceOptions?: VoiceOptions;
+
+  /**
+   * Optional internal (experimental) SDK flags. If omitted, stored flags (or SDK
+   * defaults) are used. See {@link InternalFlags} for the caveats — these are not
+   * covered by API stability guarantees.
+   */
+  internalFlags?: InternalFlags;
 }
 
 /**
