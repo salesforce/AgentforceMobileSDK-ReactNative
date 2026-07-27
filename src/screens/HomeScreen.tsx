@@ -44,6 +44,11 @@ import {
   LogLevel,
   NavigationDelegate,
   NavigationRequest,
+  UIDelegate,
+  AgentResponseEvent,
+  UtteranceSentEvent,
+  AgentSwitchEvent,
+  ModifyUtteranceRequest,
 } from '@salesforce/react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
 import { getContextVariables } from '../store/ContextVariablesStore';
