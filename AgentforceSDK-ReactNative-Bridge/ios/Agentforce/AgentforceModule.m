@@ -68,6 +68,9 @@ RCT_EXTERN_METHOD(launchConversation:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(closeConversation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(dismissConversation:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(startNewConversation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
