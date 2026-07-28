@@ -58,6 +58,10 @@
     "react-native": "*"
   },
   "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "react": "18.2.0",
+    "react-native": "0.74.7",
     "rimraf": "^5.0.5",
     "typescript": "^5.0.4"
   },
