@@ -69,7 +69,7 @@ You don't need to write any auth provider — the bridge handles it.
 
 ## Employee Agent — Mobile SDK flow
 
-The bridge exposes `EmployeeAgentAuthBridge` (only present in builds that include the Mobile SDK). Surfaced via these JS helpers from `react-native-agentforce`:
+The bridge exposes `EmployeeAgentAuthBridge` (only present in builds that include the Mobile SDK). Surfaced via these JS helpers from `@salesforce/react-native-agentforce`:
 
 ```ts
 import {
@@ -80,7 +80,7 @@ import {
   logoutEmployeeAgent,
   getEmployeeAgentCredentials,
   refreshEmployeeAgentCredentials,
-} from 'react-native-agentforce';
+} from '@salesforce/react-native-agentforce';
 ```
 
 Typical flow:

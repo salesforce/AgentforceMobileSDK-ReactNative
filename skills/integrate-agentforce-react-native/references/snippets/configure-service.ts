@@ -4,7 +4,7 @@
 // once at app startup, then `AgentforceService.launchConversation()`
 // when the user opens the chat.
 
-import { AgentforceService } from 'react-native-agentforce';
+import { AgentforceService } from '@salesforce/react-native-agentforce';
 import { agentforceLogger } from './agentforceLogger';
 import { agentforceNavigation } from './agentforceNavigation';
 

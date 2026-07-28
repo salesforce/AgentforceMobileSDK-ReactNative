@@ -60,6 +60,15 @@ RCT_EXTERN_METHOD(setFeatureFlags:(NSDictionary *)flags
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Internal (experimental) Flags
+
+RCT_EXTERN_METHOD(getInternalFlags:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(setInternalFlags:(NSDictionary *)flags
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 // MARK: - Conversation Methods
 
 RCT_EXTERN_METHOD(launchConversation:(RCTPromiseResolveBlock)resolve
@@ -68,7 +77,14 @@ RCT_EXTERN_METHOD(launchConversation:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(closeConversation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(dismissConversation:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(startNewConversation:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(sendUtterance:(NSString *)utterance
+                  resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 // MARK: - Hidden PreChat Fields

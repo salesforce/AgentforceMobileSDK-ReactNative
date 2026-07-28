@@ -25,7 +25,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import type { ViewProviderComponentData } from 'react-native-agentforce';
+import type { ViewProviderComponentData } from '@salesforce/react-native-agentforce';
 
 /** Props passed from the native BridgeViewProvider via RCTRootView / ReactRootView. */
 interface CustomAgentforceViewProps {

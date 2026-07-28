@@ -1,15 +1,66 @@
 {
-  "name": "react-native-agentforce",
+  "name": "@salesforce/react-native-agentforce",
   "version": "1.0.0",
   "description": "Agentforce React Native bridge: JS API and native module for Service Agent and Employee Agent (auth bridge included; host app adds Mobile SDK).",
-  "main": "src/index.ts",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "react-native": "src/index.ts",
-  "scripts": {},
+  "source": "src/index.ts",
+  "files": [
+    "lib",
+    "src",
+    "ios",
+    "android",
+    "README.md",
+    "LICENSE",
+    "!android/build",
+    "!android/.gradle",
+    "!android/src/test",
+    "!android/src/androidTest",
+    "!ios/build",
+    "!**/__tests__",
+    "!**/*.test.ts",
+    "!**/*.test.tsx"
+  ],
+  "keywords": [
+    "react-native",
+    "ios",
+    "android",
+    "salesforce",
+    "agentforce",
+    "ai",
+    "chatbot",
+    "service-agent",
+    "employee-agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/salesforce/AgentforceMobileSDK-ReactNative.git",
+    "directory": "AgentforceSDK-ReactNative-Bridge"
+  },
+  "homepage": "https://github.com/salesforce/AgentforceMobileSDK-ReactNative#readme",
+  "bugs": {
+    "url": "https://github.com/salesforce/AgentforceMobileSDK-ReactNative/issues"
+  },
+  "author": "Salesforce",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rimraf lib",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
   "peerDependencies": {
     "react": "*",
     "react-native": "*"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "rimraf": "^5.0.5",
+    "typescript": "^5.0.4"
+  },
   "engines": {
     "node": ">=18"
   }

@@ -44,6 +44,12 @@ class AgentforceModule: RCTEventEmitter {
     /// Current mode configuration
     private var currentMode: AgentMode?
 
+    /// Navigation bar builder used to override the conversation header title with a
+    /// client-supplied Employee Agent label. Strongly retained here because
+    /// `NavigationBarManager` holds it as a weak reference. `nil` when no label is
+    /// supplied, so the SDK falls back to the server-provided agent label.
+    private var navigationBarBuilder: BridgeNavigationBarBuilder?
+
 
     private let listenerLock = NSLock()
     private var _hasListeners = false
@@ -91,6 +97,21 @@ class AgentforceModule: RCTEventEmitter {
     private var modifyContinuations: [String: CheckedContinuation<String?, Never>] = [:]
     private let modifyContinuationsLock = NSLock()
 
+    // MARK: - Teardown State
+
+    /// Set once the RN bridge tears this module down (hot reload or app teardown).
+    /// Guarded by `invalidationLock`. Once true, in-flight async work must not touch
+    /// the (deallocating) client or call promise resolvers back into a dead JS runtime.
+    /// Mirrors the Android bridge, which cancels its coroutine scope in `invalidate()`.
+    private var _isInvalidated = false
+    private let invalidationLock = NSLock()
+
+    /// True after `invalidate()` has begun. Async task bodies check this before
+    /// resolving/rejecting promises or accessing `agentforceClient`.
+    private var isInvalidated: Bool {
+        invalidationLock.withLock { _isInvalidated }
+    }
+
     // MARK: - Module Setup
 
     override static func requiresMainQueueSetup() -> Bool {
@@ -132,15 +153,25 @@ class AgentforceModule: RCTEventEmitter {
             return
         }
 
+        // Parse voice options up-front but pass them in as a `let` argument to the
+        // per-mode configurators rather than stashing on `self`. The value lives only
+        // for the lifetime of this configure call (matches the "immutable for the
+        // session lifetime" intent) and avoids a cross-actor write to instance state
+        // that would later be read on `@MainActor`.
+        let voiceSessionOptions = Self.parseVoiceSessionOptions(from: configDict)
+
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             do {
                 switch type {
                 case "service":
-                    try await configureServiceAgent(configDict)
+                    try await configureServiceAgent(configDict, voiceSessionOptions: voiceSessionOptions)
                     resolve(["success": true, "mode": "service"])
 
                 case "employee":
-                    try await configureEmployeeAgent(configDict)
+                    try await configureEmployeeAgent(configDict, voiceSessionOptions: voiceSessionOptions)
                     resolve(["success": true, "mode": "employee"])
 
                 default:
@@ -153,9 +184,33 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
 
+    /// Parse `voiceOptions` from the JS-side config map into an `AgentforceVoiceSessionOptions`.
+    ///
+    /// Returns `.init()` (auto-end `.never`) when the field is missing. Any
+    /// supplied value is routed through `VoiceAutoEndPolicy.afterUserSilence(clamping:)`,
+    /// which normalizes non-finite (NaN / ±infinity) and non-positive durations
+    /// to `.never` — so the bridge does not need to pre-validate the number.
+    /// `autoEndWhileMuted` defaults to `false` when absent. Mirrors the Android bridge.
+    private static func parseVoiceSessionOptions(from configDict: [String: Any]) -> AgentforceVoiceSessionOptions {
+        guard let voiceOpts = configDict["voiceOptions"] as? [String: Any] else {
+            return AgentforceVoiceSessionOptions()
+        }
+        let autoEndWhileMuted = (voiceOpts["autoEndWhileMuted"] as? NSNumber)?.boolValue ?? false
+        guard let numberValue = voiceOpts["userSilenceTimeoutSeconds"] as? NSNumber else {
+            return AgentforceVoiceSessionOptions(autoEndPolicy: .never, autoEndWhileMuted: autoEndWhileMuted)
+        }
+        return AgentforceVoiceSessionOptions(
+            autoEndPolicy: .afterUserSilence(clamping: numberValue.doubleValue),
+            autoEndWhileMuted: autoEndWhileMuted
+        )
+    }
+
     // MARK: - Service Agent Configuration
 
-    private func configureServiceAgent(_ configDict: [String: Any]) async throws {
+    private func configureServiceAgent(
+        _ configDict: [String: Any],
+        voiceSessionOptions: AgentforceVoiceSessionOptions
+    ) async throws {
         guard let config = ServiceAgentModeConfig.from(dictionary: configDict) else {
             throw AgentConfigError.missingRequiredField("serviceApiURL, organizationId, or esDeveloperName")
         }
@@ -172,6 +227,10 @@ class AgentforceModule: RCTEventEmitter {
         // Configure unified credential provider for Service Agent mode
         credentialProvider.configure(serviceAgent: config)
         currentMode = .service(config: config)
+
+        // Service Agent has no client-supplied label override; clear any builder
+        // left over from a prior Employee Agent session.
+        navigationBarBuilder = nil
 
         // Persist trimmed values to UserDefaults for cross-session recall
         let trimmedSiteUrl = config.serviceApiURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -191,7 +250,6 @@ class AgentforceModule: RCTEventEmitter {
                 useWelcomeUtterances: raw["useWelcomeUtterances"] ?? false,
                 showQueueStatus: raw["showQueueStatus"] ?? true,
                 enableVideoUpload: raw["enableVideoUpload"] ?? false,
-                enableLightningType: raw["enableLightningType"] ?? false,
                 secureForms: raw["secureForms"] ?? true,
                 enableAudioUpload: raw["enableAudioUpload"] ?? false
             )
@@ -202,6 +260,21 @@ class AgentforceModule: RCTEventEmitter {
             )
         }
 
+        // Voice shipped for Service Agents in 262.0. Mirror the Employee path and
+        // thread the enableVoice flag through; the SDK wires the voice stack
+        // (LiveKit/MIAW) internally once the flag is on. shouldBlockMicrophone stays
+        // false so the mic isn't gated; other public flags carry through too.
+        let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        let featureFlagSettings = AgentforceFeatureFlagSettings(
+            enableMultiModalInput: flags.enableMultiModalInput,
+            enablePDFFileUpload: flags.enablePDFUpload,
+            multiAgent: flags.enableMultiAgent,
+            shouldBlockMicrophone: false,
+            enableVoice: flags.enableVoice,
+            enableOnboarding: false,
+            internalFlags: internalFlagsForSDK(configDict)
+        )
+
         // Use .serviceAgent() mode with overrides for logger and navigation.
         let serviceConfig = ServiceAgentConfiguration(
             esDeveloperName: config.esDeveloperName,
@@ -210,8 +283,10 @@ class AgentforceModule: RCTEventEmitter {
             serviceUISettings: uiSettings,
             forceConfigEndPoint: config.serviceApiURL
         )
+        .withFeatureFlags(featureFlagSettings)
         .withLogger(bridgeLogger)
         .withNavigation(bridgeNavigation)
+        .withVoiceSessionOptions(voiceSessionOptions)
 
         // Always pass bridgeViewProvider so late registrations take effect.
         // canHandle() returns false when the map is empty, matching nil behavior.
@@ -225,7 +300,10 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Employee Agent Configuration
 
-    private func configureEmployeeAgent(_ configDict: [String: Any]) async throws {
+    private func configureEmployeeAgent(
+        _ configDict: [String: Any],
+        voiceSessionOptions: AgentforceVoiceSessionOptions
+    ) async throws {
         guard let config = EmployeeAgentModeConfig.from(dictionary: configDict) else {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
         }
@@ -258,6 +336,15 @@ class AgentforceModule: RCTEventEmitter {
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
         credentialProvider.configure(employeeAgent: config)
         currentMode = .employee(config: config)
+
+        // Install a navigation bar builder to override the header title when the
+        // client supplies a non-empty agentLabel. When absent, leave it nil so the
+        // SDK falls back to the server-provided agent label / default.
+        if let label = config.agentLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+            navigationBarBuilder = BridgeNavigationBarBuilder(agentLabel: label)
+        } else {
+            navigationBarBuilder = nil
+        }
 
         // Persist employee agentId (editable in Settings tab)
         UserDefaults.standard.set(config.agentId ?? "", forKey: "EmployeeAgentId")
@@ -293,7 +380,7 @@ class AgentforceModule: RCTEventEmitter {
             shouldBlockMicrophone: false,
             enableVoice: flags.enableVoice,
             enableOnboarding: false,
-            internalFlags: [:]
+            internalFlags: internalFlagsForSDK(configDict)
         )
 
         // Build full configuration with authenticated network and data provider for Employee Agent.
@@ -308,7 +395,8 @@ class AgentforceModule: RCTEventEmitter {
             agentforceFeatureFlagSettings: featureFlagSettings,
             salesforceNetwork: network,
             salesforceNavigation: bridgeNavigation,
-            salesforceLogger: bridgeLogger
+            salesforceLogger: bridgeLogger,
+            voiceSessionOptions: voiceSessionOptions
         )
 
         // Only create new client if needed (otherwise reuse existing to preserve conversation)
@@ -403,6 +491,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             do {
                 guard let client = agentforceClient, let mode = currentMode else {
                     throw AgentConfigError.notConfigured
@@ -418,7 +509,8 @@ class AgentforceModule: RCTEventEmitter {
                         Task { @MainActor in
                             self?.dismissConversation()
                         }
-                    }
+                    },
+                    navigationBarBuilder: navigationBarBuilder
                 )
 
                 presentConversationView(chatView)
@@ -441,6 +533,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             do {
                 await closeCurrentConversation()
 
@@ -458,7 +553,8 @@ class AgentforceModule: RCTEventEmitter {
                         Task { @MainActor in
                             self?.dismissConversation()
                         }
-                    }
+                    },
+                    navigationBarBuilder: navigationBarBuilder
                 )
 
                 presentConversationView(chatView)
@@ -534,6 +630,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             resolve(credentialProvider.isConfigured)
         }
     }
@@ -556,6 +655,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             let oldAgentId = UserDefaults.standard.string(forKey: "EmployeeAgentId") ?? ""
             let newAgentId = agentId.trimmingCharacters(in: .whitespaces)
 
@@ -616,6 +718,90 @@ class AgentforceModule: RCTEventEmitter {
         UserDefaults.standard.set(flags.enableCustomViewProvider, forKey: Self.featureFlagKeys.enableCustomViewProvider)
     }
 
+    // MARK: - Internal (experimental) flags
+
+    /// Internal flags are a free-form `[String: Bool]` map passed straight through to the iOS
+    /// SDK using its own flag key names. The bridge does not enumerate, rename, or validate
+    /// them — keys the SDK doesn't recognize are ignored by the SDK (silent no-op).
+    ///
+    /// ⚠️ Internal flags are not covered by API stability guarantees.
+    ///
+    /// The full map is persisted as a single UserDefaults dictionary so the set of keys need
+    /// not be known ahead of time.
+    private static let internalFlagsDefaultsKey = "AgentforceInternalFlags"
+
+    /// Read the internal-flag map from the JS config if present, else from UserDefaults.
+    /// Only boolean-valued entries are kept; absent keys fall back to the SDK's own defaults.
+    private func getInternalFlagsFromConfigOrUserDefaults(_ configDict: [String: Any]) -> [String: Bool] {
+        if let internalFlags = configDict["internalFlags"] as? [String: Any] {
+            var result: [String: Bool] = [:]
+            for (key, value) in internalFlags {
+                if let boolValue = (value as? NSNumber)?.boolValue {
+                    result[key] = boolValue
+                }
+            }
+            return result
+        }
+        return readStoredInternalFlags()
+    }
+
+    /// Read the persisted internal-flag map from UserDefaults.
+    private func readStoredInternalFlags() -> [String: Bool] {
+        let stored = UserDefaults.standard.dictionary(forKey: Self.internalFlagsDefaultsKey) ?? [:]
+        var result: [String: Bool] = [:]
+        for (key, value) in stored {
+            if let boolValue = (value as? NSNumber)?.boolValue {
+                result[key] = boolValue
+            }
+        }
+        return result
+    }
+
+    /// Build the SDK internal-flags dict for a configure() call. Keys are passed through
+    /// unchanged as the SDK's own flag names.
+    private func internalFlagsForSDK(_ configDict: [String: Any]) -> [String: Bool] {
+        return getInternalFlagsFromConfigOrUserDefaults(configDict)
+    }
+
+    @objc
+    func getInternalFlags(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        // Return only the flags that were explicitly set (empty map if none).
+        resolve(readStoredInternalFlags())
+    }
+
+    @objc
+    func setInternalFlags(
+        _ flags: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
+            guard let dict = flags as? [String: Any] else {
+                resolve(nil)
+                return
+            }
+
+            // Merge the caller's flags into the persisted map (matching the Android path,
+            // which accumulates across calls). Non-boolean values are dropped; keys are stored
+            // as-is (the SDK ignores any it doesn't recognize).
+            var toStore = UserDefaults.standard.dictionary(forKey: Self.internalFlagsDefaultsKey) ?? [:]
+            for (key, value) in dict {
+                guard let boolValue = (value as? NSNumber)?.boolValue else { continue }
+                toStore[key] = boolValue
+            }
+            UserDefaults.standard.set(toStore, forKey: Self.internalFlagsDefaultsKey)
+
+            print("[AgentforceModule] Internal flags saved (will apply on next configure)")
+            resolve(nil)
+        }
+    }
+
     @objc
     func getFeatureFlags(
         _ resolve: @escaping RCTPromiseResolveBlock,
@@ -639,6 +825,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             guard let dict = flags as? [String: Any] else {
                 resolve(nil)
                 return
@@ -670,6 +859,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             if case .service(let config) = currentMode {
                 resolve([
                     "serviceApiURL": config.serviceApiURL,
@@ -696,6 +888,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             if credentialProvider.isConfigured {
                 resolve([
                     "configured": true,
@@ -718,6 +913,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             resolve(agentforceClient != nil)
         }
     }
@@ -833,8 +1031,18 @@ class AgentforceModule: RCTEventEmitter {
                 "utterance": utteranceText,
             ])
 
-            Task {
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            // Timeout task: weak self so a hot-reload teardown between scheduling and
+            // firing can't reach through a deallocated module (W-23231222). If the
+            // sleep is cancelled or the module is gone, `invalidate()` has already
+            // drained this continuation via `drainPendingContinuations()`, so we do
+            // nothing. `removeValue` under the lock guarantees a single resume.
+            Task { [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                } catch {
+                    return
+                }
+                guard let self else { return }
                 self.modifyContinuationsLock.lock()
                 let pending = self.modifyContinuations.removeValue(forKey: requestId)
                 self.modifyContinuationsLock.unlock()
@@ -884,6 +1092,44 @@ class AgentforceModule: RCTEventEmitter {
         resolve(["success": true])
     }
 
+    // MARK: - Teardown
+
+    /// Called by the RN bridge when it tears this module down — the exact
+    /// `-[RCTCxxBridge invalidate]` path seen in the hot-reload crash (W-23231222).
+    /// Marks the module invalidated (so guarded async bodies bail out before touching
+    /// the client or resolving into a dead JS runtime), resumes any pending
+    /// continuations, and releases the client so no in-flight async completion touches
+    /// a deallocating object.
+    ///
+    /// Mirrors the Android bridge's `invalidate()` (`scope.cancel()` + client release).
+    /// `RCTEventEmitter` already conforms to `RCTInvalidating` and declares
+    /// `invalidate` as `NS_REQUIRES_SUPER`, so this overrides and calls `super`.
+    override func invalidate() {
+        invalidationLock.withLock { _isInvalidated = true }
+
+        // Resume any awaiting modify-utterance continuations so nothing leaks or
+        // resumes into a torn-down JS runtime. Thread-safe (locks internally).
+        drainPendingContinuations()
+
+        // Release the client/conversation on the main actor (they were created there).
+        // The `isInvalidated` guard on every bridge task prevents new work from racing
+        // this teardown.
+        Task { @MainActor [weak self] in
+            self?.cleanupClient()
+        }
+
+        super.invalidate()
+    }
+
+    /// Belt-and-suspenders: in the standard RN lifecycle the bridge always calls
+    /// `invalidate()` before releasing this module, which drains continuations. This
+    /// `deinit` covers any non-standard dealloc path that skips `invalidate()` so a
+    /// suspended `withCheckedContinuation` awaiter can never be orphaned/leaked.
+    /// Safe from `deinit`: only touches `modifyContinuations` and its lock.
+    deinit {
+        drainPendingContinuations()
+    }
+
     // MARK: - Cleanup
 
     private func cleanupClient() {
@@ -899,7 +1145,31 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             await closeCurrentConversation()
+            dismissConversation()
+            resolve(["success": true])
+        }
+    }
+
+    /// Dismiss the conversation UI while preserving the conversation and its history.
+    ///
+    /// Programmatic equivalent of the in-chat close (X) button: it only dismisses the
+    /// presented UI via `dismissConversation()` and deliberately leaves
+    /// `currentConversation` alive, so the next `launchConversation` reuses it with
+    /// history preserved. Contrast with `closeConversation`, which ends the conversation
+    /// (via `closeCurrentConversation()`) before dismissing.
+    @objc
+    func dismissConversation(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             dismissConversation()
             resolve(["success": true])
         }
@@ -981,6 +1251,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             do {
                 // Validate context structure
                 guard let variables = contextDict["variables"] as? [[String: Any]] else {
@@ -1045,6 +1318,39 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
 
+    /// Send an utterance (text message) to the current conversation.
+    /// Must be called after launching a conversation.
+    ///
+    /// @param utterance The text to send to the agent
+    /// @param resolve Promise resolver
+    /// @param reject Promise rejecter
+    @objc
+    func sendUtterance(
+        _ utterance: String,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
+
+            // Check if conversation exists
+            guard let conversation = currentConversation else {
+                reject(
+                    "NO_CONVERSATION",
+                    "No active conversation. Launch conversation first, then send an utterance.",
+                    nil
+                )
+                return
+            }
+
+            await conversation.sendUtterance(utterance: utterance, attachment: nil)
+            print("[AgentforceModule] ✓ Utterance sent")
+            resolve(["success": true])
+        }
+    }
+
     /// Reset all settings
     @objc
     func resetSettings(
@@ -1052,6 +1358,9 @@ class AgentforceModule: RCTEventEmitter {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
+            // Skip if the RN bridge has torn this module down (hot reload) so we
+            // don't run bridge work or resolve promises into a dead JS runtime.
+            guard !isInvalidated else { return }
             await closeCurrentConversation()
             cleanupClient()
             currentMode = nil

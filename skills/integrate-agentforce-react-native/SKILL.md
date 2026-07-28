@@ -1,11 +1,11 @@
 ---
 name: integrate-agentforce-react-native
-description: Integrate the Agentforce Mobile SDK into an existing React Native app. Walks the consumer through use-case discovery, picks the right configuration (Service Agent for public/customer-facing, Employee Agent for signed-in workforce), wires the `react-native-agentforce` bridge package + native iOS/Android dependencies, and scaffolds TypeScript files for the AgentforceService configuration, logger/navigation/view-provider delegates, and a launch button. Use when a developer asks to "add Agentforce", "integrate the Agentforce SDK", "set up Agentforce chat", or wire a React Native app up to a Salesforce agent.
+description: Integrate the Agentforce Mobile SDK into an existing React Native app. Walks the consumer through use-case discovery, picks the right configuration (Service Agent for public/customer-facing, Employee Agent for signed-in workforce), wires the `@salesforce/react-native-agentforce` bridge package + native iOS/Android dependencies, and scaffolds TypeScript files for the AgentforceService configuration, logger/navigation/view-provider delegates, and a launch button. Use when a developer asks to "add Agentforce", "integrate the Agentforce SDK", "set up Agentforce chat", or wire a React Native app up to a Salesforce agent.
 ---
 
 # integrate-agentforce-react-native
 
-This skill walks a consumer through wiring the **Agentforce Mobile SDK** (via the `react-native-agentforce` bridge) into their React Native app. It is **interactive** — ask the user the questions in each phase before generating code. Don't assume; the wrong configuration mode is the most common integration mistake.
+This skill walks a consumer through wiring the **Agentforce Mobile SDK** (via the `@salesforce/react-native-agentforce` bridge) into their React Native app. It is **interactive** — ask the user the questions in each phase before generating code. Don't assume; the wrong configuration mode is the most common integration mistake.
 
 ## Operating rules
 
@@ -133,7 +133,7 @@ implementation("com.salesforce.mobilesdk:SalesforceReact:13.1.1")
 
 ## Phase 4 — Add the bridge dependency
 
-The bridge ships as a local package `react-native-agentforce`. Two install paths:
+The bridge ships as a local package `@salesforce/react-native-agentforce`. Two install paths:
 
 ### Path 1: Install from this repo (recommended for now)
 
@@ -141,14 +141,14 @@ The bridge ships as a local package `react-native-agentforce`. Two install paths
 # Add the bridge package as a tarball or git dependency
 npm install salesforce/AgentforceMobileSDK-ReactNative#dev --save
 # or, if the bridge is published to a registry your org uses:
-npm install react-native-agentforce
+npm install @salesforce/react-native-agentforce
 ```
 
 Then run the platform install scripts shipped with the bridge (these patch CocoaPods / Gradle, install Boost, etc.):
 
 ```bash
-node node_modules/react-native-agentforce/installios.js service   # or 'employee' / 'all'
-node node_modules/react-native-agentforce/installandroid.js service
+node node_modules/@salesforce/react-native-agentforce/installios.js service   # or 'employee' / 'all'
+node node_modules/@salesforce/react-native-agentforce/installandroid.js service
 ```
 
 ### Path 2: In-repo bridge (for forks / patches)
@@ -158,7 +158,7 @@ If the consumer is forking or contributing back, vendor `AgentforceSDK-ReactNati
 ```json
 {
   "dependencies": {
-    "react-native-agentforce": "file:./AgentforceSDK-ReactNative-Bridge"
+    "@salesforce/react-native-agentforce": "file:./AgentforceSDK-ReactNative-Bridge"
   }
 }
 ```

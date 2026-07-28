@@ -15,6 +15,7 @@ import {
   ConfigurationResult,
   ConfigurationInfo,
   FeatureFlags,
+  InternalFlags,
   isLegacyConfig,
 } from '../types/AgentConfig';
 
@@ -34,11 +35,12 @@ import type {
   AgentSwitchEvent,
   ModifyUtteranceRequest,
 } from '../types/UIDelegate';
+import type { VoiceOptions } from '../types/VoiceOptions';
 
 const { AgentforceModule } = NativeModules;
 
 // Re-export types for convenience
-export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags };
+export type { ServiceAgentConfig, EmployeeAgentConfig, AgentConfig, FeatureFlags, InternalFlags };
 export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
@@ -51,6 +53,7 @@ export type {
   AgentSwitchEvent,
   ModifyUtteranceRequest,
 };
+export type { VoiceOptions };
 
 /**
  * Native module event names
@@ -500,7 +503,10 @@ class AgentforceService {
       const normalizedConfig = this.normalizeConfig(config);
 
       // Merge stored feature flags into config if not provided (so native uses same defaults/stored)
-      const configWithFlags = await this.mergeFeatureFlagsIntoConfig(normalizedConfig);
+      const configWithFeatureFlags = await this.mergeFeatureFlagsIntoConfig(normalizedConfig);
+
+      // Merge stored internal flags into config if not provided (same source-of-truth pattern)
+      const configWithFlags = await this.mergeInternalFlagsIntoConfig(configWithFeatureFlags);
 
       // Call native module with the unified config object
       // iOS uses configureWithConfig, Android uses configure with object
@@ -532,6 +538,25 @@ class AgentforceService {
     }
     const stored = await this.getFeatureFlags();
     return { ...config, featureFlags: stored };
+  }
+
+  /**
+   * Merge stored internal flags into config if config does not already have internalFlags.
+   * Mirrors {@link mergeFeatureFlagsIntoConfig} so the native layer receives a single source
+   * of truth (config.internalFlags or stored). If neither the config nor storage provides
+   * internal flags, the field is left absent and the native SDK falls back to its own defaults.
+   */
+  private async mergeInternalFlagsIntoConfig(config: AgentConfig): Promise<AgentConfig> {
+    if (config.internalFlags != null) {
+      return config;
+    }
+    const stored = await this.getInternalFlags();
+    // Only attach if something is actually stored; an empty object would needlessly
+    // override the native SDK defaults with "nothing set".
+    if (Object.keys(stored).length === 0) {
+      return config;
+    }
+    return { ...config, internalFlags: stored };
   }
 
   /**
@@ -592,6 +617,65 @@ class AgentforceService {
       await AgentforceModule.setFeatureFlags(flags);
     } catch (error) {
       console.warn('[AgentforceService] Failed to save feature flags:', error);
+    }
+  }
+
+  /**
+   * Get the current internal (experimental) SDK flags from native storage.
+   *
+   * Returns only the flags that have been explicitly set (an empty object if none). Callers
+   * should treat a missing key as "use the SDK default", not "false". Values reflect what was
+   * stored via {@link setInternalFlags} or a prior `configure()` — they are not read back from
+   * the running SDK.
+   *
+   * ⚠️ Internal flags are not covered by API stability guarantees. See {@link InternalFlags}.
+   */
+  async getInternalFlags(): Promise<InternalFlags> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return {};
+    }
+    if (!AgentforceModule?.getInternalFlags) {
+      return {};
+    }
+    try {
+      const flags = await AgentforceModule.getInternalFlags();
+      // Native returns a plain map of canonical flag name -> boolean. Pass through
+      // only boolean-valued keys so the shape matches InternalFlags.
+      if (flags == null || typeof flags !== 'object') {
+        return {};
+      }
+      const result: InternalFlags = {};
+      for (const [key, value] of Object.entries(flags)) {
+        if (typeof value === 'boolean') {
+          (result as Record<string, boolean>)[key] = value;
+        }
+      }
+      return result;
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Save internal (experimental) SDK flags (persisted in native storage).
+   * Takes effect the next time configure() is called.
+   *
+   * Only the canonical keys defined in {@link InternalFlags} are honored; flags for the other
+   * platform are stored and forwarded but ignored by the native SDK (silent no-op).
+   *
+   * ⚠️ Internal flags are not covered by API stability guarantees. See {@link InternalFlags}.
+   */
+  async setInternalFlags(flags: InternalFlags): Promise<void> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return;
+    }
+    if (!AgentforceModule?.setInternalFlags) {
+      return;
+    }
+    try {
+      await AgentforceModule.setInternalFlags(flags);
+    } catch (error) {
+      console.warn('[AgentforceService] Failed to save internal flags:', error);
     }
   }
 
@@ -847,6 +931,11 @@ class AgentforceService {
   /**
    * Close the current conversation.
    *
+   * Ends the conversation and discards its history — the next
+   * `launchConversation()` starts a fresh conversation. Use
+   * `dismissConversation()` instead if you want to hide the UI while
+   * keeping the conversation (and its history) alive.
+   *
    * @returns Promise<boolean> indicating success
    */
   async closeConversation(): Promise<boolean> {
@@ -865,6 +954,105 @@ class AgentforceService {
     } catch (error) {
       console.error('[AgentforceService] Failed to close conversation:', error);
       return false;
+    }
+  }
+
+  /**
+   * Dismiss the conversation UI while preserving the conversation and its history.
+   *
+   * This is the programmatic equivalent of the in-chat close (X) button: it hides
+   * the chat surface but keeps the underlying conversation alive, so a subsequent
+   * `launchConversation()` resumes where the user left off with history intact.
+   *
+   * Use this — rather than `closeConversation()` — when you need to dismiss the
+   * chat on events like a navigation request, without losing the conversation.
+   *
+   * @remarks
+   * On Android, if the app then navigates to a different Activity and reconfigures
+   * the agent, conversation state may still be rebuilt on the next launch (a
+   * platform constraint independent of this method). Staying on a single Activity
+   * preserves history across dismiss/relaunch.
+   *
+   * @returns Promise<boolean> indicating success
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setNavigationDelegate({
+   *   async onNavigate(request) {
+   *     // Hide the chat but keep history, then handle the navigation.
+   *     await AgentforceService.dismissConversation();
+   *     if (request.type === 'link' && request.uri) {
+   *       Linking.openURL(request.uri);
+   *     }
+   *   },
+   * });
+   * ```
+   */
+  async dismissConversation(): Promise<boolean> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return false;
+    }
+
+    if (!AgentforceModule) {
+      return false;
+    }
+
+    if (!AgentforceModule.dismissConversation) {
+      console.warn('[AgentforceService] dismissConversation not available on native module');
+      return false;
+    }
+
+    try {
+      const result = await AgentforceModule.dismissConversation();
+      console.log('[AgentforceService] Conversation dismissed (history preserved)');
+      return result?.success ?? true;
+    } catch (error) {
+      console.error('[AgentforceService] Failed to dismiss conversation:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Send an utterance (a text message) to the active conversation.
+   *
+   * Programmatically sends the given text to the agent, as if the user had typed
+   * and submitted it. Works for both Service Agent and Employee Agent modes.
+   *
+   * **Must be called after launching a conversation** — if no conversation is
+   * active, the native module rejects and this method throws.
+   *
+   * @param utterance - The non-empty text to send to the agent.
+   * @returns Promise<boolean> indicating success
+   * @throws Error if the utterance is empty/invalid, or if no conversation is active
+   *
+   * @example
+   * ```typescript
+   * await AgentforceService.launchConversation();
+   * await AgentforceService.sendUtterance('What is the status of my order?');
+   * ```
+   */
+  async sendUtterance(utterance: string): Promise<boolean> {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      console.warn('Agentforce only supported on Android and iOS');
+      return false;
+    }
+
+    if (!AgentforceModule) {
+      console.error('AgentforceModule native module not found');
+      return false;
+    }
+
+    if (typeof utterance !== 'string' || utterance.trim().length === 0) {
+      throw new Error('Invalid utterance: must be a non-empty string');
+    }
+
+    try {
+      const result = await AgentforceModule.sendUtterance(utterance);
+      console.log('[AgentforceService] Utterance sent');
+      return result?.success ?? true;
+    } catch (error) {
+      console.error('[AgentforceService] Failed to send utterance:', error);
+      throw error;
     }
   }
 

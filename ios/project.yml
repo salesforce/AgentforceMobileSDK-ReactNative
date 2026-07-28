@@ -111,6 +111,16 @@ schemes:
       config: Release
     shared: true
 
+  BridgeUnitTests:
+    build:
+      targets:
+        BridgeUnitTests: [test]
+    test:
+      config: Debug
+      targets:
+        - BridgeUnitTests
+    shared: true
+
   EmployeeAgent:
     build:
       targets:
@@ -153,3 +163,20 @@ targets:
           - "AppDelegate.m"
       - path: EmployeeAgent
         type: group
+
+  # Standalone unit-test bundle for the bridge's Foundation-only pure logic.
+  # It compiles the testable bridge source directly (no host app, no pods/SDK
+  # linking) so it runs fast and stays independent of the CocoaPods graph.
+  # SDK-coupled types (UnifiedCredentialProvider, BridgeNetwork) are out of scope.
+  BridgeUnitTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.salesforce.reactagentforce.bridgetests
+      GENERATE_INFOPLIST_FILE: YES
+      CODE_SIGNING_ALLOWED: NO
+    sources:
+      - path: Tests
+        type: group
+      - path: ../AgentforceSDK-ReactNative-Bridge/ios/Agentforce/Models/AgentMode.swift

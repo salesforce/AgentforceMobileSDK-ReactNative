@@ -1,0 +1,96 @@
+name: Publish NPM Package
+
+# Publishes @salesforce/react-native-agentforce to npmjs.org via OIDC Trusted
+# Publishing — no stored NPM_TOKEN. The trust relationship between this workflow
+# and the npm account is configured by OSPO on the npm side (bound to THIS
+# workflow file: publish-npm-package.yml). Do not rename this file without
+# updating the trusted-publisher binding with OSPO (#opensource).
+#
+# Release flow: testers validate a build off dev -> PR dev into main -> tag main
+# (vX.Y.Z) -> this workflow publishes that tag. Pushes to dev and PRs never publish.
+# The FIRST publish of a new package is performed by OSPO; subsequent versions
+# publish here once the OIDC trusted publisher is configured.
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Required for OIDC Trusted Publishing: mints the short-lived token npm exchanges
+  # with the registry. No secrets are used.
+  id-token: write
+
+jobs:
+  publish:
+    name: Build & Publish to npm (OIDC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Only publish tags that point at a commit on main, so a stray tag on any
+      # other branch cannot trigger a release. Untrusted values (tag name, sha)
+      # are passed via env and quoted — never interpolated into the shell.
+      - name: Verify tag is on main
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if ! git branch -r --contains "$COMMIT_SHA" | grep -qE '(^|[[:space:]])origin/main$'; then
+            echo "::error::Tag $TAG_NAME does not point at a commit on origin/main — refusing to publish."
+            exit 1
+          fi
+          echo "Tag $TAG_NAME is on main."
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # OIDC Trusted Publishing requires a recent npm. setup-node ships an older
+      # npm with Node 20, so upgrade to a version that supports --provenance via OIDC.
+      - name: Upgrade npm (OIDC trusted publishing support)
+        run: npm install -g npm@latest
+
+      - name: Verify tag matches package.json version
+        working-directory: AgentforceSDK-ReactNative-Bridge
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${TAG_NAME#v}"
+          echo "package.json version: $PKG_VERSION"
+          echo "git tag version:      $TAG_VERSION"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag $TAG_NAME (=$TAG_VERSION) does not match package.json version $PKG_VERSION. Aborting publish."
+            exit 1
+          fi
+
+      - name: Install bridge dependencies
+        working-directory: AgentforceSDK-ReactNative-Bridge
+        run: npm install --legacy-peer-deps --ignore-scripts
+
+      - name: Build package
+        working-directory: AgentforceSDK-ReactNative-Bridge
+        run: npm run build
+
+      - name: Verify package contents
+        working-directory: AgentforceSDK-ReactNative-Bridge
+        run: npm pack --dry-run
+
+      - name: Publish to npm via OIDC Trusted Publishing
+        working-directory: AgentforceSDK-ReactNative-Bridge
+        # No NODE_AUTH_TOKEN: id-token:write + the OSPO-configured trusted publisher
+        # let npm mint credentials from the OIDC token. publishConfig.access=public
+        # in package.json publishes the scoped package publicly; --provenance
+        # attaches a signed build-provenance attestation.
+        run: npm publish --provenance

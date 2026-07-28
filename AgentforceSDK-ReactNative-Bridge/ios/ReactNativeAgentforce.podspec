@@ -2,7 +2,7 @@
 # React Native bridge for Agentforce SDK – iOS podspec
 #
 # Consumers: add to your app Podfile:
-#   pod 'ReactNativeAgentforce', :path => '../node_modules/react-native-agentforce/ios'
+#   pod 'ReactNativeAgentforce', :path => '../node_modules/@salesforce/react-native-agentforce/ios'
 #
 # Your app must also include the Agentforce iOS SDK (and for Employee Agent, the
 # Salesforce Mobile SDK). See README for details.
@@ -17,7 +17,7 @@ Pod::Spec.new do |s|
   s.summary      = "Agentforce React Native bridge"
   s.description  = package["description"]
   s.homepage     = "https://github.com/salesforce/AgentforceMobileSDK-ReactNative"
-  s.license      = "BSD-3-Clause"
+  s.license      = "Apache-2.0"
   s.author       = "Salesforce"
   s.source       = { :git => "https://github.com/salesforce/AgentforceMobileSDK-ReactNative.git", :tag => "v#{s.version}" }
   s.requires_arc = true
@@ -34,7 +34,10 @@ Pod::Spec.new do |s|
     ]
     core.dependency "React-Core"
     core.dependency "AgentforceSDK"
-    core.dependency "AgentforceVoice", "1.1.3"
+    core.dependency "AgentforceVoice", "2.5.2"
+    # AgentforceSDK 17.31.6 (262.1) depends on SharedUI ('~> 1'); declare it so
+    # this target can resolve the design-system module.
+    core.dependency "SharedUI", "1.3.1"
   end
 
   # Optional: add for Employee Agent auth (OAuth via Salesforce Mobile SDK).
