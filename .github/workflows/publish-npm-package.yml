@@ -53,11 +53,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
       # OIDC Trusted Publishing requires a recent npm. setup-node ships an older
-      # npm with Node 20, so upgrade to a version that supports --provenance via OIDC.
+      # npm with Node 22, so upgrade to a version that supports --provenance via OIDC.
+      # Node 22 (>=22.22.2) is required by current npm@latest — Node 20 fails EBADENGINE.
       - name: Upgrade npm (OIDC trusted publishing support)
         run: npm install -g npm@latest
 
