@@ -93,9 +93,20 @@ class BridgeUIDelegate: AgentforceUIDelegate {
         // Voice is managed internally in 260.5 - no forwarding needed.
     }
 
-    // didReceiveResponse is a no-op on iOS: AgentforceMessage properties are internal
-    // in SDK 260.5, so the bridge cannot extract message text, type, or timestamp.
-    // Android exposes these publicly via its data class. Re-evaluate when the iOS SDK
-    // makes AgentforceMessage fields public.
-    func didReceiveResponse(_ message: AgentforceMessage, from conversation: any AgentConversation) {}
+    func didReceiveResponse(_ message: AgentforceMessage, from conversation: any AgentConversation) {
+        guard forwardingEnabled, message.state == .finished else { return }
+
+        // AgentforceSDK.AgentforceMessage does not yet expose `id` or `type`.
+        // Generate a local responseId and derive type from isUserMessage until
+        // the SDK surfaces those properties.
+        let payload: [String: Any] = [
+            "responseId": UUID().uuidString,
+            "message": message.message ?? NSNull(),
+            "type": message.isUserMessage ? "user" : "agent",
+            "conversationId": conversation.conversationId.uuidString,
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+        ]
+
+        module?.emitAgentResponseEvent(payload)
+    }
 }

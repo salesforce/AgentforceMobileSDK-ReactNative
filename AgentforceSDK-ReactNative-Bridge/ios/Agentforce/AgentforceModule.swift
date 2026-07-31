@@ -124,6 +124,7 @@ class AgentforceModule: RCTEventEmitter {
             "onNavigationRequest",
             "onUtteranceSent",
             "onAgentSwitch",
+            "onAgentResponse",
             "onModifyUtteranceRequest",
         ]
     }
@@ -1059,6 +1060,11 @@ class AgentforceModule: RCTEventEmitter {
     func emitAgentSwitchEvent(_ payload: [String: Any]) {
         guard listenerLock.withLock({ _hasListeners }) else { return }
         sendEvent(withName: "onAgentSwitch", body: payload)
+    }
+
+    func emitAgentResponseEvent(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onAgentResponse", body: payload)
     }
 
     // MARK: - View Provider

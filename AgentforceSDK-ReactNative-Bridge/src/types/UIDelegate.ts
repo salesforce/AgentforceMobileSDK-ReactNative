@@ -69,7 +69,7 @@ export interface ModifyUtteranceRequest {
  * ```
  */
 export interface UIDelegate {
-  /** Called when the agent sends a response. Android only — iOS SDK does not expose message fields publicly. */
+  /** Called when the agent sends a completed (non-streaming) response. */
   onAgentResponse?(event: AgentResponseEvent): void;
   onUtteranceSent?(event: UtteranceSentEvent): void;
   onAgentSwitch?(event: AgentSwitchEvent): void;
