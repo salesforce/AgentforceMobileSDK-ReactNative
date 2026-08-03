@@ -291,7 +291,7 @@ class AgentforceModule: RCTEventEmitter {
 
         // Always pass bridgeViewProvider so late registrations take effect.
         // canHandle() returns false when the map is empty, matching nil behavior.
-        agentforceClient = AgentforceClient(
+        agentforceClient = await AgentforceClient(
             credentialProvider: credentialProvider,
             mode: .serviceAgent(serviceConfig),
             viewProvider: bridgeViewProvider
@@ -405,7 +405,7 @@ class AgentforceModule: RCTEventEmitter {
             print("[AgentforceModule] Creating new AgentforceClient for Employee Agent")
             // Always pass bridgeViewProvider so late registrations take effect.
             // canHandle() returns false when the map is empty, matching nil behavior.
-            agentforceClient = AgentforceClient(
+            agentforceClient = await AgentforceClient(
                 credentialProvider: credentialProvider,
                 mode: .fullConfig(fullConfiguration),
                 viewProvider: bridgeViewProvider
