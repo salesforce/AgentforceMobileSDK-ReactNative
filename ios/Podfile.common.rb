@@ -20,8 +20,8 @@ def shared_pods
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  pod 'AgentforceSDK', '18.26.8'
-  pod 'AgentforceVoice', '2.8.2'
+  pod 'AgentforceSDK', '17.31.6'
+  pod 'AgentforceVoice', '2.5.2'
   pod 'Messaging-InApp-Core', '> 1.10.0'
   # Messaging-Multimedia-Core vends SMIMultimediaCore.framework, which
   # AgentforceVoice 2.5.2 links at runtime (@rpath/SMIMultimediaCore.framework).
