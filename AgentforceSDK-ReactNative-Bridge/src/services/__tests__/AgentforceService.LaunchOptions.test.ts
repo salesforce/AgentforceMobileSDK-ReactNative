@@ -23,7 +23,9 @@ describe('AgentforceService.launchConversation with initialMode', () => {
     it('accepts voice mode', async () => {
       await AgentforceService.launchConversation({ initialMode: 'voice' });
 
-      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({ initialMode: 'voice' });
+      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
+        initialMode: 'voice',
+      });
     });
   });
 
