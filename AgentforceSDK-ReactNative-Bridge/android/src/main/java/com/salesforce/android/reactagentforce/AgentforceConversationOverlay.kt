@@ -53,6 +53,7 @@ object AgentforceConversationOverlay {
     private const val TAG = "AgentforceConvOverlay"
 
     internal var isVisible = mutableStateOf(false)
+    internal var isVoiceMode = mutableStateOf(false)
     private var overlayContainer: ViewGroup? = null
     private var attachedActivity: ComponentActivity? = null
 
@@ -73,7 +74,7 @@ object AgentforceConversationOverlay {
      * Show the conversation overlay on the given Activity.
      * Creates the ComposeView on first call, then toggles visibility.
      */
-    fun show(activity: Activity) {
+    fun show(activity: Activity, voiceMode: Boolean = false) {
         if (activity !is ComponentActivity) {
             Log.e(TAG, "Activity must be a ComponentActivity")
             return
@@ -83,8 +84,9 @@ object AgentforceConversationOverlay {
             attachToActivity(activity)
         }
 
+        isVoiceMode.value = voiceMode
         isVisible.value = true
-        Log.d(TAG, "Conversation overlay shown")
+        Log.d(TAG, "Conversation overlay shown (voiceMode=$voiceMode)")
     }
 
     /**
@@ -110,6 +112,7 @@ object AgentforceConversationOverlay {
         overlayContainer = null
         attachedActivity = null
         isVisible.value = false
+        isVoiceMode.value = false
         Log.d(TAG, "Conversation overlay destroyed")
     }
 
@@ -167,6 +170,7 @@ object AgentforceConversationOverlay {
 @Composable
 private fun ConversationOverlayContent(onClose: () -> Unit) {
     val visible by AgentforceConversationOverlay.isVisible
+    val voiceMode by AgentforceConversationOverlay.isVoiceMode
 
     val client = AgentforceClientHolder.agentforceClient
     val conversation = AgentforceClientHolder.currentConversation
@@ -210,10 +214,17 @@ private fun ConversationOverlayContent(onClose: () -> Unit) {
                 .navigationBarsPadding()
                 .imePadding()
         ) {
-            client.AgentforceConversationContainer(
-                conversation = conversation,
-                onClose = onClose
-            )
+            if (voiceMode) {
+                client.AgentforceVoiceContainer(
+                    session = conversation,
+                    onClose = onClose
+                )
+            } else {
+                client.AgentforceConversationContainer(
+                    conversation = conversation,
+                    onClose = onClose
+                )
+            }
         }
     }
 }

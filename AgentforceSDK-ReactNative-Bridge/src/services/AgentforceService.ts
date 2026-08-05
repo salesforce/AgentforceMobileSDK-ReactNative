@@ -36,6 +36,7 @@ import type {
   ModifyUtteranceRequest,
 } from '../types/UIDelegate';
 import type { VoiceOptions } from '../types/VoiceOptions';
+import type { LaunchOptions } from '../types/LaunchOptions';
 
 const { AgentforceModule } = NativeModules;
 
@@ -54,6 +55,7 @@ export type {
   ModifyUtteranceRequest,
 };
 export type { VoiceOptions };
+export type { LaunchOptions };
 
 /**
  * Native module event names
@@ -705,20 +707,20 @@ class AgentforceService {
    * Preserves existing conversation if available, allowing users to continue
    * where they left off. Works for both Service Agent and Employee Agent modes.
    *
+   * @param options - Optional launch configuration
    * @returns Promise<boolean> indicating success
    * @throws Error if SDK is not configured or launch fails
    *
    * @example
    * ```typescript
-   * try {
-   *   await AgentforceService.launchConversation();
-   *   console.log('Conversation launched');
-   * } catch (error) {
-   *   console.error('Failed to launch:', error);
-   * }
+   * // Launch in default Chat mode
+   * await AgentforceService.launchConversation();
+   *
+   * // Launch directly in Voice mode
+   * await AgentforceService.launchConversation({ initialMode: 'voice' });
    * ```
    */
-  async launchConversation(): Promise<boolean> {
+  async launchConversation(options?: LaunchOptions): Promise<boolean> {
     if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
       console.warn('Agentforce only supported on Android and iOS');
       return false;
@@ -730,8 +732,9 @@ class AgentforceService {
     }
 
     try {
-      const result = await AgentforceModule.launchConversation();
-      console.log('[AgentforceService] Conversation launched successfully');
+      const initialMode = options?.initialMode ?? 'chat';
+      const result = await AgentforceModule.launchConversation({ initialMode });
+      console.log(`[AgentforceService] Conversation launched successfully (mode: ${initialMode})`);
       return result?.success ?? true;
     } catch (error) {
       console.error('[AgentforceService] Failed to launch conversation:', error);

@@ -222,6 +222,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 // enableVoice flag like the Employee path; the MIAW voice provider is
                 // registered below via setBridgeVoiceModule().
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
+                saveFeatureFlagsToPrefs(flags)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
@@ -331,6 +332,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
 
         scope.launch(Dispatchers.Main) {
+            val flags = getFeatureFlagsFromConfigOrPrefs(config)
+            saveFeatureFlagsToPrefs(flags)
+
             if (!needsNewClient) {
                 // Reuse the existing client and its conversation (credentials refresh automatically
                 // via UnifiedCredentialProvider). Preserves conversation history across re-launch.
@@ -350,7 +354,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             AgentforceClientHolder.clear()
             try {
                 // Create AgentforceConfiguration for FullConfig mode
-                val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
@@ -471,14 +474,27 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     /**
      * Launch the Agentforce conversation UI - works for both Service and Employee agents
+     *
+     * @param options Optional map with "initialMode": "chat" | "voice"
+     * @param promise Promise to resolve/reject
      */
     @ReactMethod
-    fun launchConversation(promise: Promise) {
+    fun launchConversation(options: ReadableMap?, promise: Promise) {
         Log.d(TAG, "launchConversation() called")
+
+        val initialMode = options?.getString("initialMode") ?: "chat"
+        Log.d(TAG, "launchConversation: initialMode=$initialMode")
 
         val activity = currentActivity
         if (activity == null) {
             promise.reject("ERROR", "Activity not available")
+            return
+        }
+
+        // Validate Voice feature flag if Voice mode requested
+        if (initialMode == "voice" && !getFeatureFlagsFromConfigOrPrefs(Arguments.createMap()).enableVoice) {
+            Log.e(TAG, "Voice mode requested but enableVoice feature flag is disabled")
+            promise.reject("VOICE_DISABLED", "Voice is not enabled for this Agentforce configuration")
             return
         }
 
@@ -497,7 +513,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 try {
                     viewModel?.initializeAgentforce()
 
-                    AgentforceConversationOverlay.show(activity)
+                    AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
@@ -519,10 +535,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
                 }
 
-                // Show conversation as overlay on current Activity (preserves ViewModel across show/hide)
-                AgentforceConversationOverlay.show(activity)
+                AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
+                Log.d(TAG, "Conversation shown (initialMode=$initialMode)")
 
-                Log.d(TAG, "Conversation overlay shown")
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                 })

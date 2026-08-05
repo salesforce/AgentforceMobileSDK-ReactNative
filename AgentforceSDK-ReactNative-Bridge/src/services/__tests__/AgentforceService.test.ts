@@ -327,11 +327,18 @@ describe('AgentforceService UI delegate', () => {
     AgentforceService.setUIDelegate({ onAgentResponse, onUtteranceSent, onAgentSwitch });
     expect(nativeModule.enableUIDelegateForwarding).toHaveBeenCalledWith(true);
 
-    emit('onAgentResponse', { responseId: '1', message: 'hi', type: 'text', conversationId: 'c' });
+    const response = {
+      responseId: '1',
+      message: 'hi',
+      type: 'text',
+      conversationId: 'c',
+      sessionId: 'session-1',
+    };
+    emit('onAgentResponse', response);
     emit('onUtteranceSent', { utterance: 'hello', hasAttachment: false, timestamp: 't' });
     emit('onAgentSwitch', { conversationId: 'c2', timestamp: 't' });
 
-    expect(onAgentResponse).toHaveBeenCalledTimes(1);
+    expect(onAgentResponse).toHaveBeenCalledWith(response);
     expect(onUtteranceSent).toHaveBeenCalledTimes(1);
     expect(onAgentSwitch).toHaveBeenCalledTimes(1);
   });
