@@ -266,6 +266,7 @@ class AgentforceModule: RCTEventEmitter {
         // (LiveKit/MIAW) internally once the flag is on. shouldBlockMicrophone stays
         // false so the mic isn't gated; other public flags carry through too.
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        saveFeatureFlagsToUserDefaults(flags)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
@@ -374,6 +375,7 @@ class AgentforceModule: RCTEventEmitter {
         )
 
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        saveFeatureFlagsToUserDefaults(flags)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
@@ -509,8 +511,7 @@ class AgentforceModule: RCTEventEmitter {
 
                 // Validate Voice is enabled if voice mode requested
                 if initialMode == .voice {
-                    let flags = try await client.getFeatureFlags()
-                    guard flags.enableVoice else {
+                    guard getFeatureFlagsFromConfigOrUserDefaults([:]).enableVoice else {
                         throw NSError(
                             domain: "AgentforceModule",
                             code: 1001,

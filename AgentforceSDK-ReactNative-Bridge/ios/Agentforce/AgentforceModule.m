@@ -71,7 +71,8 @@ RCT_EXTERN_METHOD(setInternalFlags:(NSDictionary *)flags
 
 // MARK: - Conversation Methods
 
-RCT_EXTERN_METHOD(launchConversation:(RCTPromiseResolveBlock)resolve
+RCT_EXTERN_METHOD(launchConversation:(NSDictionary *)options
+                  resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(closeConversation:(RCTPromiseResolveBlock)resolve
