@@ -27,6 +27,7 @@ import type {
   AgentforceContextVariableType,
 } from '../types/AgentforceContext';
 import { ViewProviderDelegate } from '../types/ViewProviderDelegate';
+import type { SplashScreenDelegate } from '../types/SplashScreenDelegate';
 import type { HiddenPreChatFields } from '../types/HiddenPreChatFields';
 import type {
   UIDelegate,
@@ -46,6 +47,7 @@ export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
 export type { ViewProviderDelegate };
+export type { SplashScreenDelegate };
 export type { HiddenPreChatFields };
 export type {
   UIDelegate,
@@ -147,6 +149,11 @@ class AgentforceService {
    * View provider delegate configuration (registered component types + React component name)
    */
   private viewProviderDelegate: ViewProviderDelegate | null = null;
+
+  /**
+   * Splash screen delegate configuration (agent ID -> React component name)
+   */
+  private splashScreenDelegate: SplashScreenDelegate | null = null;
 
   /**
    * UI delegate for receiving agent response, utterance, and switch events
@@ -352,6 +359,124 @@ class AgentforceService {
     } catch (error) {
       console.warn('[AgentforceService] Failed to clear view provider:', error);
     }
+  }
+
+  /**
+   * Register a splash screen delegate to supply a custom welcome ("splash")
+   * screen — a React Native component shown on top of the conversation before the
+   * user has interacted with an agent.
+   *
+   * The chat UI is fully native, so the splash content is a React Native component
+   * hosted inside the native conversation view (like the View Provider). Register
+   * each component with `AppRegistry.registerComponent()` and map agent IDs to the
+   * registered component names via `delegate.componentMap`.
+   *
+   * The native SDK asks for a splash screen when the chat view is first shown and
+   * again whenever the active agent changes, so a host can show a splash for only
+   * some agents. Use the wildcard key `'*'` to supply a default for every agent.
+   *
+   * Can be called before or after `configure()` — the native provider is always
+   * attached and checks the component map dynamically.
+   *
+   * When the user chooses a starter utterance, the splash component must report it
+   * with `selectSplashScreenUtterance(agentId, utterance)`; the SDK then animates
+   * the splash away and sends the utterance into the conversation. The splash also
+   * dismisses when the user sends text from the input bar.
+   *
+   * @param delegate - Splash screen delegate configuration
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setSplashScreenDelegate({
+   *   componentMap: {
+   *     '0XxABC0000001234': 'WelcomeSplash',
+   *   },
+   * });
+   * ```
+   */
+  async setSplashScreenDelegate(delegate: SplashScreenDelegate): Promise<void> {
+    this.splashScreenDelegate = delegate;
+
+    if (!AgentforceModule?.registerSplashScreenProvider) {
+      console.warn(
+        '[AgentforceService] registerSplashScreenProvider not available on native module',
+      );
+      return;
+    }
+
+    try {
+      await AgentforceModule.registerSplashScreenProvider({
+        componentMap: delegate.componentMap,
+      });
+      console.log(
+        `[AgentforceService] Splash screen registered for ${
+          Object.keys(delegate.componentMap).length
+        } agent(s)`,
+      );
+    } catch (error) {
+      console.error('[AgentforceService] Failed to register splash screen provider:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear the registered splash screen delegate.
+   * After clearing, the native SDK shows the standard conversation UI for all agents.
+   */
+  async clearSplashScreenDelegate(): Promise<void> {
+    this.splashScreenDelegate = null;
+
+    if (!AgentforceModule?.clearSplashScreenProvider) {
+      return;
+    }
+
+    try {
+      await AgentforceModule.clearSplashScreenProvider();
+      console.log('[AgentforceService] Splash screen delegate cleared');
+    } catch (error) {
+      console.warn('[AgentforceService] Failed to clear splash screen provider:', error);
+    }
+  }
+
+  /**
+   * Report that the user chose a starter utterance on a custom splash screen.
+   *
+   * Call this from your splash screen component (registered via
+   * `setSplashScreenDelegate`) when the user taps a suggested utterance. The SDK
+   * animates the splash screen away, reveals the conversation behind it, and sends
+   * the utterance into the conversation.
+   *
+   * @param agentId - The agent ID the splash screen was shown for (received as an
+   *   initial prop by the splash component).
+   * @param utterance - The utterance the user chose.
+   *
+   * @example
+   * ```typescript
+   * function WelcomeSplash({ agentId }: { agentId: string }) {
+   *   return (
+   *     <Button
+   *       title="Track my order"
+   *       onPress={() =>
+   *         AgentforceService.selectSplashScreenUtterance(agentId, 'Track my order')
+   *       }
+   *     />
+   *   );
+   * }
+   * ```
+   */
+  selectSplashScreenUtterance(agentId: string, utterance: string): void {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return;
+    }
+
+    if (!AgentforceModule?.selectSplashScreenUtterance) {
+      console.warn(
+        '[AgentforceService] selectSplashScreenUtterance not available on native module',
+      );
+      return;
+    }
+
+    AgentforceModule.selectSplashScreenUtterance(agentId ?? '', utterance ?? '');
   }
 
   /**
@@ -1255,6 +1380,12 @@ class AgentforceService {
       this.clearViewProviderDelegate().catch(() => {});
     }
     this.viewProviderDelegate = null;
+
+    // Clear native splash screen registration before nulling the JS reference
+    if (this.splashScreenDelegate) {
+      this.clearSplashScreenDelegate().catch(() => {});
+    }
+    this.splashScreenDelegate = null;
 
     this.eventEmitter = null;
     this.initialized = false;

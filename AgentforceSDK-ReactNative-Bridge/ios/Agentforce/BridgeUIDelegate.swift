@@ -5,6 +5,7 @@
  */
 
 import Foundation
+import SwiftUI
 import AgentforceSDK
 import AgentforceService
 
@@ -23,6 +24,11 @@ class BridgeUIDelegate: AgentforceUIDelegate {
     /// Weak reference to the module to avoid retain cycles
     weak var module: AgentforceModule?
 
+    /// Splash screen provider that hosts a React Native welcome screen. Held
+    /// strongly: the module owns this delegate, and the provider owns no reference
+    /// back to it, so there is no retain cycle.
+    private let splashScreenProvider: BridgeSplashScreenProvider
+
     private let lock = NSLock()
     private var _forwardingEnabled: Bool = false
 
@@ -39,8 +45,9 @@ class BridgeUIDelegate: AgentforceUIDelegate {
 
     // MARK: - Initialization
 
-    init(module: AgentforceModule) {
+    init(module: AgentforceModule, splashScreenProvider: BridgeSplashScreenProvider) {
         self.module = module
+        self.splashScreenProvider = splashScreenProvider
     }
 
     // MARK: - AgentforceUIDelegate Protocol Implementation
@@ -109,5 +116,16 @@ class BridgeUIDelegate: AgentforceUIDelegate {
         ]
 
         module?.emitAgentResponseEvent(payload)
+    }
+
+    // Splash screen is not gated by `forwardingEnabled`: it renders a registered
+    // React Native component (independent of the JS event stream), and the provider
+    // returns nil when no component is registered for the agent.
+    @MainActor
+    func splashScreen(
+        forAgent agentId: String,
+        utteranceDelegate: AgentforceSplashScreenUtteranceDelegate
+    ) -> AnyView? {
+        splashScreenProvider.splashScreen(forAgent: agentId, utteranceDelegate: utteranceDelegate)
     }
 }

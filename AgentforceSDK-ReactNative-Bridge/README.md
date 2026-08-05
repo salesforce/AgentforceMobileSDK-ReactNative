@@ -104,6 +104,56 @@ await AgentforceService.setAdditionalContext({
 - iOS: Uses `AgentforceVariable` with `JSEncodableValue` enum; type is just a label
 - Context persists for the current conversation session
 
+### Custom Splash Screen
+
+Supply a custom welcome ("splash") screen shown on top of the conversation before
+the user has interacted with an agent. The chat UI is fully native, so the splash
+content is a React Native component hosted inside the native conversation view.
+The SDK asks for a splash when the chat view is first shown and again whenever the
+active agent changes, so you can show a splash for only some agents.
+
+The splash renders in the conversation content region — below the top bar and above
+the input bar (both stay interactive) — and moves up with the keyboard. It is
+dismissed (animated away to reveal the conversation) when the user either chooses a
+starter utterance or sends text from the input bar.
+
+```typescript
+import { AppRegistry, View, Text, Button } from 'react-native';
+import { AgentforceService } from 'react-native-agentforce';
+
+// 1. A splash component. It receives { agentId } as an initial prop and reports
+//    the chosen utterance back to the SDK.
+function WelcomeSplash({ agentId }: { agentId: string }) {
+  return (
+    <View>
+      <Text>Welcome! How can I help?</Text>
+      <Button
+        title="Track my order"
+        onPress={() => AgentforceService.selectSplashScreenUtterance(agentId, 'Track my order')}
+      />
+    </View>
+  );
+}
+
+// 2. Register it with a unique component name.
+AppRegistry.registerComponent('WelcomeSplash', () => WelcomeSplash);
+
+// 3. Map agent IDs to that component name. Use '*' for a default that applies to
+//    every agent without an explicit entry.
+AgentforceService.setSplashScreenDelegate({
+  componentMap: {
+    '0XxABC0000001234': 'WelcomeSplash',
+    '*': 'WelcomeSplash',
+  },
+});
+```
+
+When the user taps a suggested utterance, call
+`AgentforceService.selectSplashScreenUtterance(agentId, utterance)` — the SDK
+animates the splash away and sends the utterance into the conversation (running it
+through `modifyUtterance` if a UI delegate is set). Call
+`AgentforceService.clearSplashScreenDelegate()` to remove it.
+
 ---
 
 ### Dismissing the conversation
