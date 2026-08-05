@@ -2,6 +2,20 @@
  * Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
  */
 
+jest.mock('react-native', () => {
+  class NativeEventEmitter {}
+
+  return {
+    NativeModules: {
+      AgentforceModule: {
+        launchConversation: jest.fn(),
+      },
+    },
+    NativeEventEmitter,
+    Platform: { OS: 'ios' },
+  };
+});
+
 import { NativeModules } from 'react-native';
 import AgentforceService from '../AgentforceService';
 
