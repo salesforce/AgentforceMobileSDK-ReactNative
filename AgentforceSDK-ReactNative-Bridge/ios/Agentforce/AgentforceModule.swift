@@ -488,7 +488,8 @@ class AgentforceModule: RCTEventEmitter {
     /// Launch the conversation UI - works for both Service and Employee agents
     @objc
     func launchConversation(
-        _ resolve: @escaping RCTPromiseResolveBlock,
+        _ options: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
@@ -502,8 +503,25 @@ class AgentforceModule: RCTEventEmitter {
 
                 let conversation = try getOrCreateConversation(client: client, mode: mode)
 
+                // Parse initialMode from options (defaults to chat)
+                let initialModeString = options["initialMode"] as? String ?? "chat"
+                let initialMode: AgentforceViewMode = (initialModeString == "voice") ? .voice : .chat
+
+                // Validate Voice is enabled if voice mode requested
+                if initialMode == .voice {
+                    let flags = try await client.getFeatureFlags()
+                    guard flags.enableVoice else {
+                        throw NSError(
+                            domain: "AgentforceModule",
+                            code: 1001,
+                            userInfo: [NSLocalizedDescriptionKey: "Voice is not enabled. Set enableVoice: true in feature flags."]
+                        )
+                    }
+                }
+
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
+                    initialMode: initialMode,
                     delegate: bridgeUIDelegate,
                     showTopBar: true,
                     onContainerClose: { [weak self] in

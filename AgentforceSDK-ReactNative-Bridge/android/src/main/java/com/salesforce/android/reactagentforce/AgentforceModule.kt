@@ -471,15 +471,31 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     /**
      * Launch the Agentforce conversation UI - works for both Service and Employee agents
+     *
+     * @param options Optional map with "initialMode": "chat" | "voice"
+     * @param promise Promise to resolve/reject
      */
     @ReactMethod
-    fun launchConversation(promise: Promise) {
+    fun launchConversation(options: ReadableMap?, promise: Promise) {
         Log.d(TAG, "launchConversation() called")
+
+        val initialMode = options?.getString("initialMode") ?: "chat"
+        Log.d(TAG, "launchConversation: initialMode=$initialMode")
 
         val activity = currentActivity
         if (activity == null) {
             promise.reject("ERROR", "Activity not available")
             return
+        }
+
+        // Validate Voice feature flag if Voice mode requested
+        if (initialMode == "voice") {
+            val featureFlagSettings = AgentforceFeatureFlagSettings.getInstance()
+            if (!featureFlagSettings.enableVoice) {
+                Log.e(TAG, "Voice mode requested but enableVoice feature flag is disabled")
+                promise.reject("VOICE_DISABLED", "Voice is not enabled for this Agentforce configuration")
+                return
+            }
         }
 
         // Check if configured via new unified path or legacy path
@@ -497,7 +513,20 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 try {
                     viewModel?.initializeAgentforce()
 
-                    AgentforceConversationOverlay.show(activity)
+                    if (initialMode == "voice") {
+                        // Launch Voice UI directly
+                        val conversation = AgentforceClientHolder.currentConversation
+                        if (conversation != null) {
+                            conversation.startVoice()
+                            Log.d(TAG, "Voice mode started (legacy path)")
+                        } else {
+                            Log.e(TAG, "Failed to start voice mode: no active conversation")
+                            promise.reject("VOICE_START_ERROR", "Failed to start voice mode")
+                            return@launch
+                        }
+                    } else {
+                        AgentforceConversationOverlay.show(activity)
+                    }
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
@@ -519,10 +548,24 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
                 }
 
-                // Show conversation as overlay on current Activity (preserves ViewModel across show/hide)
-                AgentforceConversationOverlay.show(activity)
+                // Route to Voice or Chat UI based on initialMode
+                if (initialMode == "voice") {
+                    // Launch Voice UI directly
+                    val conversation = AgentforceClientHolder.currentConversation
+                    if (conversation != null) {
+                        conversation.startVoice()
+                        Log.d(TAG, "Voice mode started")
+                    } else {
+                        Log.e(TAG, "Failed to start voice mode: no active conversation")
+                        promise.reject("VOICE_START_ERROR", "Failed to start voice mode")
+                        return@launch
+                    }
+                } else {
+                    // Show conversation as overlay on current Activity (preserves ViewModel across show/hide)
+                    AgentforceConversationOverlay.show(activity)
+                    Log.d(TAG, "Chat mode shown")
+                }
 
-                Log.d(TAG, "Conversation overlay shown")
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                 })
