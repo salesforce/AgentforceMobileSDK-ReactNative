@@ -141,6 +141,7 @@ class BridgeUIDelegate(private val reactContext: ReactContext) : AgentforceUIDel
             putString("message", agentforceMessage.message ?: agentforceMessage.text)
             putString("type", agentforceMessage.type ?: "agent")
             putString("conversationId", getConversationId(conversation))
+            putString("sessionId", conversation.sessionId.value)
             putString("timestamp", formatTimestamp(agentforceMessage.timeStamp))
         }
 

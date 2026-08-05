@@ -104,6 +104,7 @@ class BridgeUIDelegate: AgentforceUIDelegate {
             "message": message.message ?? NSNull(),
             "type": message.isUserMessage ? "user" : "agent",
             "conversationId": conversation.conversationId.uuidString,
+            "sessionId": conversation.sessionId ?? NSNull(),
             "timestamp": ISO8601DateFormatter().string(from: Date()),
         ]
 
