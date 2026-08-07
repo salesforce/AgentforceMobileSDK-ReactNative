@@ -288,7 +288,7 @@ class AgentforceModule: RCTEventEmitter {
         )
 
         // Use .serviceAgent() mode with overrides for logger and navigation.
-        let serviceConfig = ServiceAgentConfiguration(
+        var serviceConfig = ServiceAgentConfiguration(
             esDeveloperName: config.esDeveloperName,
             organizationId: config.organizationId,
             serviceApiURL: config.serviceApiURL,
@@ -299,6 +299,17 @@ class AgentforceModule: RCTEventEmitter {
         .withLogger(bridgeLogger)
         .withNavigation(bridgeNavigation)
         .withVoiceSessionOptions(voiceSessionOptions)
+
+        if let mode = try AppearanceConfiguration.themeMode(from: configDict) {
+            if AppearanceConfiguration.hasOverrides(from: configDict) {
+                throw AgentConfigError.invalidMode(
+                    "iOS cannot combine appearance.themeMode with sparse appearance overrides in the installed AgentforceSDK"
+                )
+            }
+            serviceConfig = serviceConfig.setTheming(.customManager(AppearanceConfiguration.themeManager(for: mode)))
+        } else if let theming = try AppearanceConfiguration.theming(from: configDict) {
+            serviceConfig = serviceConfig.setTheming(theming)
+        }
 
         // Always pass bridgeViewProvider so late registrations take effect.
         // canHandle() returns false when the map is empty, matching nil behavior.
@@ -400,7 +411,7 @@ class AgentforceModule: RCTEventEmitter {
         let network = createAuthenticatedNetwork()
         let dataProvider = createDataProvider(network: network)
 
-        let fullConfiguration = AgentforceConfiguration(
+        var fullConfiguration = AgentforceConfiguration(
             user: user,
             agentforceCopier: BridgeCopier(),
             forceConfigEndpoint: config.instanceUrl,
@@ -411,6 +422,17 @@ class AgentforceModule: RCTEventEmitter {
             salesforceLogger: bridgeLogger,
             voiceSessionOptions: voiceSessionOptions
         )
+
+        if let mode = try AppearanceConfiguration.themeMode(from: configDict) {
+            if AppearanceConfiguration.hasOverrides(from: configDict) {
+                throw AgentConfigError.invalidMode(
+                    "iOS cannot combine appearance.themeMode with sparse appearance overrides in the installed AgentforceSDK"
+                )
+            }
+            fullConfiguration = fullConfiguration.setTheming(.customManager(AppearanceConfiguration.themeManager(for: mode)))
+        } else if let theming = try AppearanceConfiguration.theming(from: configDict) {
+            fullConfiguration = fullConfiguration.setTheming(theming)
+        }
 
         // Only create new client if needed (otherwise reuse existing to preserve conversation)
         if needsNewClient {

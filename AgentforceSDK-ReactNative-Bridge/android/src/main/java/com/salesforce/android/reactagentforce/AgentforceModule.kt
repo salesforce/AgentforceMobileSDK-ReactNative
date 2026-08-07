@@ -251,6 +251,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
+                AppearanceConfiguration.theming(config, application)?.let(agentforceConfigBuilder::setTheming)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
@@ -413,6 +414,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
+                AppearanceConfiguration.theming(config, application)?.let(agentforceConfigBuilder::setTheming)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)

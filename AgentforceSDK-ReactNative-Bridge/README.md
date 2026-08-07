@@ -61,6 +61,50 @@ Include the Salesforce Mobile SDK pods in your Podfile and perform **bootconfig*
 
 ## API Reference
 
+### Appearance Customization
+
+Pass an optional serializable `appearance` object to `configure()` to override Agentforce's
+native colors, icons, visible labels, typography, and theme mode. Unspecified values preserve
+the native SDK's defaults (or server branding when enabled).
+
+```typescript
+await AgentforceService.configure({
+  type: 'service',
+  serviceApiURL: 'https://example.salesforce.com',
+  organizationId: '00Dxx0000001234',
+  esDeveloperName: 'MyServiceAgent',
+  appearance: {
+    themeMode: 'system',
+    lightColors: { chatBackground: '#FFFFFF', accent1: '#0176D3' },
+    darkColors: { chatBackground: '#181818', accent1: '#78B9FF' },
+    icons: {
+      aiAgent: {
+        ios: { light: 'BrandAgentLight', dark: 'BrandAgentDark' },
+        android: { light: 'brand_agent_light', dark: 'brand_agent_dark' },
+      },
+    },
+    displayNames: { inputTextPlaceholder: 'Ask Acme Assistant' },
+    typography: { fontFamily: { type: 'generic', family: 'serif' } },
+  },
+});
+```
+
+- Colors must be `#RRGGBB` or `#AARRGGBB`.
+- Icon keys and display-name keys are native Agentforce token names such as `aiAgent`,
+  `actionSend`, `inputTextPlaceholder`, and `preChatTitle`. Unsupported keys reject
+  `configure()` with a platform-specific error.
+- `aiAgent` is the SDK's avatar/logo slot. Omit it to keep the default Agentforce asset.
+- iOS icon values name image assets in the host application's asset catalog. Android values name
+  host `drawable` resources. Keep resources from being removed by Android resource shrinking.
+- Generic fonts support `default`, `sans-serif`, `serif`, `monospace`, and `cursive`. Bundled
+  fonts use a registered iOS font name and Android `font` resource names per numeric weight.
+- Typography styles are the common cross-platform styles: `bodyScaleNeg2Regular` through
+  `displayScale8Light`. Each accepts `size`, `weight` (100-900), and an optional font family.
+- `agentLabel` remains the Employee Agent chat-header override and takes precedence over
+  appearance-managed header text.
+- The installed iOS SDK cannot combine a forced `themeMode` with sparse appearance overrides;
+  use one or the other on iOS. Android supports both together.
+
 ### Core Methods
 
 **Configure and launch:**

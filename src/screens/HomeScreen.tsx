@@ -46,6 +46,8 @@ import {
   NavigationRequest,
 } from '@salesforce/react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
+import { BRANDED_AGENT_APPEARANCE } from '../config/AgentAppearance';
+import { isBrandedAppearanceEnabled } from '../store/AgentAppearanceStore';
 import { getContextVariables } from '../store/ContextVariablesStore';
 
 interface HomeScreenProps {
@@ -187,6 +189,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             organizationId: config.organizationId,
             esDeveloperName: config.esDeveloperName,
             featureFlags,
+            appearance: isBrandedAppearanceEnabled() ? BRANDED_AGENT_APPEARANCE : undefined,
           });
         }
       }
@@ -232,9 +235,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             agentLabel: '', // optional: set a custom name to display in the chat header (overrides the server agent label)
             accessToken: creds.accessToken,
             featureFlags,
+            appearance: isBrandedAppearanceEnabled() ? BRANDED_AGENT_APPEARANCE : undefined,
           }
         : // optional: set agentLabel to a custom name to display in the chat header (overrides the server agent label)
-          { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId, agentLabel: '', featureFlags };
+          {
+            ...EMPLOYEE_AGENT_CONFIG,
+            agentId: agentId,
+            agentLabel: '',
+            featureFlags,
+            appearance: isBrandedAppearanceEnabled() ? BRANDED_AGENT_APPEARANCE : undefined,
+          };
       await AgentforceService.configure(config);
 
       await AgentforceService.launchConversation();

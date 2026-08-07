@@ -6,6 +6,7 @@
  */
 
 import type { VoiceOptions } from './VoiceOptions';
+import type { AgentforceAppearance } from './AgentforceAppearance';
 
 /**
  * Feature flags for the Agentforce SDK (can be set in-app via Feature Flags screen).
@@ -65,6 +66,9 @@ interface BaseAgentConfig {
    * covered by API stability guarantees.
    */
   internalFlags?: InternalFlags;
+
+  /** Optional cross-platform visual customization for the native Agentforce UI. */
+  appearance?: AgentforceAppearance;
 }
 
 /**

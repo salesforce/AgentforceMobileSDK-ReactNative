@@ -52,6 +52,11 @@ import type {
   AgentforceContextVariableType,
 } from '@salesforce/react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
+import { BRANDED_AGENT_APPEARANCE } from '../config/AgentAppearance';
+import {
+  isBrandedAppearanceEnabled,
+  setBrandedAppearanceEnabled,
+} from '../store/AgentAppearanceStore';
 import { getContextVariables, setContextVariables } from '../store/ContextVariablesStore';
 
 type TabType = 'service' | 'employee' | 'features';
@@ -138,6 +143,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
   const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(null);
   const [savingFlags, setSavingFlags] = useState(false);
+  const [useBrandedAppearance, setUseBrandedAppearance] = useState(isBrandedAppearanceEnabled);
 
   const [hiddenPreChatFields, setHiddenPreChatFields] = useState<HiddenPreChatFields>({});
   const [newFieldName, setNewFieldName] = useState('');
@@ -251,6 +257,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         organizationId: organizationId.trim(),
         esDeveloperName: esDeveloperName.trim(),
         featureFlags: currentFlags,
+        appearance: isBrandedAppearanceEnabled() ? BRANDED_AGENT_APPEARANCE : undefined,
       });
       Alert.alert('Success', 'Service Agent configured successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() },
@@ -303,6 +310,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         agentId: agentIdToUse || undefined,
         accessToken: creds.accessToken,
         featureFlags: currentFlags,
+        appearance: isBrandedAppearanceEnabled() ? BRANDED_AGENT_APPEARANCE : undefined,
       });
       setEmployeeLoggedIn(true);
       Alert.alert(
@@ -431,6 +439,17 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       setFeatureFlags(featureFlags);
     } finally {
       setSavingFlags(false);
+    }
+  };
+
+  const handleToggleAppearance = async (enabled: boolean) => {
+    setBrandedAppearanceEnabled(enabled);
+    setUseBrandedAppearance(enabled);
+    try {
+      // Agentforce applies appearance while configuring, so force the next launch to reconfigure.
+      await AgentforceService.closeConversation();
+    } catch (error) {
+      console.warn('Failed to close the active conversation after changing appearance:', error);
     }
   };
 
@@ -986,6 +1005,20 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         </View>
 
         <View style={styles.formContainer}>
+          <View style={[styles.flagRow, styles.flagRowBorder]}>
+            <View style={styles.flagLabelBlock}>
+              <Text style={styles.label}>Branded chat appearance</Text>
+              <Text style={styles.hint}>
+                Apply the sample colors and avatar when launching a new conversation.
+              </Text>
+            </View>
+            <Switch
+              value={useBrandedAppearance}
+              onValueChange={handleToggleAppearance}
+              trackColor={{ false: '#ced4da', true: '#0176D3' }}
+              thumbColor="#ffffff"
+            />
+          </View>
           {FLAG_KEYS.map((key, index) => (
             <View
               key={key}
