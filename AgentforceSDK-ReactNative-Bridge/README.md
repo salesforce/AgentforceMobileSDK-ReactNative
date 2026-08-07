@@ -98,8 +98,9 @@ await AgentforceService.configure({
   host `drawable` resources. Keep resources from being removed by Android resource shrinking.
 - Generic fonts support `default`, `sans-serif`, `serif`, `monospace`, and `cursive`. Bundled
   fonts use a registered iOS font name and Android `font` resource names per numeric weight.
-- Typography styles are the common cross-platform styles: `bodyScaleNeg2Regular` through
-  `displayScale8Light`. Each accepts `size`, `weight` (100-900), and an optional font family.
+- Typography style keys are native SDK token names. For example, Android uses
+  `bodyFontScaleNeg2Regular` through `displayFontScale8Light`; each accepts `size`, `weight`
+  (100-900), and an optional font family. Unsupported keys reject `configure()`.
 - `agentLabel` remains the Employee Agent chat-header override and takes precedence over
   appearance-managed header text.
 - The installed iOS SDK cannot combine a forced `themeMode` with sparse appearance overrides;

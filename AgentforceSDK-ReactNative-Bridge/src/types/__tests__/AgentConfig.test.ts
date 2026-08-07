@@ -20,7 +20,7 @@ const appearance: AgentforceAppearance = {
   },
   typography: {
     fontFamily: { type: 'generic', family: 'serif' },
-    styles: { bodyScale1Regular: { size: 14, weight: 400 } },
+    styles: { bodyFontScale1Regular: { size: 14, weight: 400 } },
   },
 };
 

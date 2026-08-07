@@ -100,6 +100,23 @@ const serviceConfig: AgentConfig = {
   },
 };
 
+const appearance = {
+  themeMode: 'dark' as const,
+  lightColors: { chatBackground: '#FFFFFF' },
+  darkColors: { chatBackground: '#181818' },
+  icons: {
+    aiAgent: {
+      ios: { light: 'BrandAgentLight', dark: 'BrandAgentDark' },
+      android: { light: 'brand_agent_light', dark: 'brand_agent_dark' },
+    },
+  },
+  displayNames: { inputTextPlaceholder: 'Ask Acme Assistant' },
+  typography: {
+    fontFamily: { type: 'generic' as const, family: 'serif' as const },
+    styles: { bodyFontScale1Regular: { size: 14, weight: 400 as const } },
+  },
+};
+
 describe('AgentforceService.configure', () => {
   it('routes to configureWithConfig on iOS', async () => {
     setPlatform('ios');
@@ -114,6 +131,29 @@ describe('AgentforceService.configure', () => {
     await AgentforceService.configure(serviceConfig);
     expect(nativeModule.configure).toHaveBeenCalledTimes(1);
     expect(nativeModule.configureWithConfig).not.toHaveBeenCalled();
+  });
+
+  it('passes Service Agent appearance through to the iOS native module', async () => {
+    setPlatform('ios');
+    await AgentforceService.configure({ ...serviceConfig, appearance });
+
+    expect(nativeModule.configureWithConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ appearance }),
+    );
+  });
+
+  it('passes Employee Agent appearance through to the Android native module', async () => {
+    setPlatform('android');
+    await AgentforceService.configure({
+      type: 'employee',
+      instanceUrl: 'https://myorg.my.salesforce.com',
+      organizationId: '00Dxx0000001234',
+      userId: '005xx0000001234',
+      accessToken: 'token',
+      appearance,
+    });
+
+    expect(nativeModule.configure).toHaveBeenCalledWith(expect.objectContaining({ appearance }));
   });
 
   it('returns false on unsupported platforms', async () => {
