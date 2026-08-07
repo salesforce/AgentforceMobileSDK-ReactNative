@@ -16,6 +16,36 @@ import {
 const STORAGE_KEY = '@agentforce/appearance-settings';
 let settings: AppearanceSettings = { ...DEFAULT_APPEARANCE_SETTINGS };
 let loaded = false;
+const PRESET_IDS: AppearancePresetId[] = ['default', 'ocean', 'forest', 'sunset', 'royal', 'custom'];
+const THEME_MODES: AgentforceThemeMode[] = ['system', 'light', 'dark'];
+const FONT_FAMILIES: AgentforceGenericFontFamily[] = [
+  'default',
+  'sans-serif',
+  'serif',
+  'monospace',
+  'cursive',
+];
+const COLOR_PATTERN = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/;
+
+function isValidStoredSettings(value: Partial<AppearanceSettings>): boolean {
+  return (
+    PRESET_IDS.includes(value.presetId as AppearancePresetId) &&
+    THEME_MODES.includes(value.themeMode as AgentforceThemeMode) &&
+    typeof value.useCustomAvatar === 'boolean' &&
+    FONT_FAMILIES.includes(value.fontFamily as AgentforceGenericFontFamily) &&
+    validColorMap(value.lightColors) &&
+    validColorMap(value.darkColors)
+  );
+}
+
+function validColorMap(value: unknown): value is Record<string, string> | undefined {
+  return (
+    value == null ||
+    (typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Object.values(value).every(color => typeof color === 'string' && COLOR_PATTERN.test(color)))
+  );
+}
 
 function snapshot(): AppearanceSettings {
   return {
@@ -37,12 +67,16 @@ export async function loadAppearanceSettings(): Promise<AppearanceSettings> {
     const stored = await AsyncStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<AppearanceSettings>;
-      settings = {
-        ...DEFAULT_APPEARANCE_SETTINGS,
-        ...parsed,
-        lightColors: parsed.lightColors ?? {},
-        darkColors: parsed.darkColors ?? {},
-      };
+      if (isValidStoredSettings(parsed)) {
+        settings = {
+          ...DEFAULT_APPEARANCE_SETTINGS,
+          ...parsed,
+          lightColors: parsed.lightColors ?? {},
+          darkColors: parsed.darkColors ?? {},
+        };
+      } else {
+        console.warn('Ignoring invalid persisted appearance settings');
+      }
     }
   } catch (error) {
     console.warn('Failed to load appearance settings:', error);
@@ -91,7 +125,7 @@ export async function updateAppearanceColor(
   token: string,
   value: string,
 ): Promise<AppearanceSettings> {
-  if (!/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(value)) {
+  if (!COLOR_PATTERN.test(value)) {
     return snapshot();
   }
   settings = { ...settings, presetId: 'custom', [scheme]: { ...settings[scheme], [token]: value } };

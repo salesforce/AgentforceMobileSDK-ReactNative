@@ -174,24 +174,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
 
     try {
-      // Query native to check current configuration.
-      // Only skip configure() if the SDK client is actually initialized.
+      // Service configuration closes the active MIAW session before replacing the
+      // client. Do not repeat it for an already initialized Service Agent: MIAW may
+      // still be sending delivery acknowledgements after the chat UI is dismissed.
       const configInfo = await AgentforceService.getConfigurationInfo();
-
       if (!configInfo?.configured || configInfo?.mode !== 'service') {
         const config = await AgentforceService.getConfiguration();
-        if (config) {
-          const featureFlags = await AgentforceService.getFeatureFlags();
-
-          await AgentforceService.configure({
-            type: 'service',
-            serviceApiURL: config.serviceApiURL,
-            organizationId: config.organizationId,
-            esDeveloperName: config.esDeveloperName,
-            featureFlags,
-            appearance: getAgentAppearance(),
-          });
+        if (!config) {
+          throw new Error('Service Agent configuration is unavailable');
         }
+        const featureFlags = await AgentforceService.getFeatureFlags();
+
+        await AgentforceService.configure({
+          type: 'service',
+          serviceApiURL: config.serviceApiURL,
+          organizationId: config.organizationId,
+          esDeveloperName: config.esDeveloperName,
+          featureFlags,
+          appearance: getAgentAppearance(),
+        });
       }
 
       await AgentforceService.launchConversation();

@@ -302,7 +302,7 @@ class AgentforceModule: RCTEventEmitter {
 
         if let mode = try AppearanceConfiguration.themeMode(from: configDict) {
             if AppearanceConfiguration.hasOverrides(from: configDict) {
-                throw AgentConfigError.invalidMode(
+                throw AppearanceError.invalid(
                     "iOS cannot combine appearance.themeMode with sparse appearance overrides in the installed AgentforceSDK"
                 )
             }
@@ -425,7 +425,7 @@ class AgentforceModule: RCTEventEmitter {
 
         if let mode = try AppearanceConfiguration.themeMode(from: configDict) {
             if AppearanceConfiguration.hasOverrides(from: configDict) {
-                throw AgentConfigError.invalidMode(
+                throw AppearanceError.invalid(
                     "iOS cannot combine appearance.themeMode with sparse appearance overrides in the installed AgentforceSDK"
                 )
             }

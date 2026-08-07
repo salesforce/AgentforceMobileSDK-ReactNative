@@ -26,6 +26,8 @@ import com.salesforce.android.agentforcesdk.components.theme.AgentforceTypograph
 import androidx.compose.ui.graphics.Color
 
 internal object AppearanceConfiguration {
+    private const val MAX_ICON_DIMENSION_PX = 1024
+
     fun theming(config: ReadableMap, context: Context): AgentforceTheming? {
         if (!config.hasKey("appearance") || config.getType("appearance") == ReadableType.Null) return null
         val raw = config.getMap("appearance") ?: throw IllegalArgumentException("appearance must be an object")
@@ -112,8 +114,7 @@ internal object AppearanceConfiguration {
     /** Vector drawables cannot be decoded by BitmapFactory, so rasterize them for Compose. */
     internal fun drawableBitmap(drawable: Drawable): Bitmap {
         val previousBounds = Rect(drawable.bounds)
-        val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 1
-        val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 1
+        val (width, height) = drawableSize(drawable.intrinsicWidth, drawable.intrinsicHeight)
         return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
             try {
                 drawable.setBounds(0, 0, width, height)
@@ -122,6 +123,14 @@ internal object AppearanceConfiguration {
                 drawable.bounds = previousBounds
             }
         }
+    }
+
+    internal fun drawableSize(intrinsicWidth: Int, intrinsicHeight: Int): Pair<Int, Int> {
+        val sourceWidth = intrinsicWidth.takeIf { it > 0 } ?: 1
+        val sourceHeight = intrinsicHeight.takeIf { it > 0 } ?: 1
+        val scale = minOf(1f, MAX_ICON_DIMENSION_PX.toFloat() / maxOf(sourceWidth, sourceHeight))
+        return (sourceWidth * scale).toInt().coerceAtLeast(1) to
+            (sourceHeight * scale).toInt().coerceAtLeast(1)
     }
 
     private fun themeMode(value: String?): AgentforceThemeMode? = when (value) {

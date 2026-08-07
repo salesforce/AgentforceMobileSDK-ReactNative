@@ -113,6 +113,14 @@ class AppearanceConfigurationTest {
         )
     }
 
+    @Test
+    fun `caps oversized drawable dimensions during rasterization`() {
+        val (width, height) = AppearanceConfiguration.drawableSize(4096, 2048)
+
+        assertEquals(1024, width)
+        assertEquals(512, height)
+    }
+
     private fun typographyStyle(name: String, doubles: Map<String, Double>): ReadableMap = readableMap(
         maps = mapOf("styles" to readableMap(maps = mapOf(name to readableMap(doubles = doubles)))),
     )

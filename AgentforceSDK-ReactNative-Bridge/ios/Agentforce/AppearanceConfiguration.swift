@@ -108,7 +108,7 @@ enum AppearanceConfiguration {
         let family = try fontFamily(raw["fontFamily"])
         guard let styles = raw["styles"] as? [String: [String: Any]] else { return (family, [:]) }
         let fonts = try styles.reduce(into: [AgentforceFontStyle: AgentforceFontOverride]()) { result, entry in
-            guard let style = AgentforceFontStyle(rawValue: entry.key) else {
+            guard let style = fontStyle(entry.key) else {
                 throw AppearanceError.invalid("Unsupported iOS typography style '\(entry.key)'")
             }
             let size = entry.value["size"] as? NSNumber
@@ -120,6 +120,14 @@ enum AppearanceConfiguration {
             result[style] = AgentforceFontOverride(size: size.map { CGFloat($0.doubleValue) }, weight: weight, fontFamilyName: styleFamily)
         }
         return (family, fonts)
+    }
+
+    private static func fontStyle(_ value: String) -> AgentforceFontStyle? {
+        // Android's public names include `Font` (for example,
+        // `bodyFontScale1Regular`), while the iOS SDK omits it. Accept both
+        // spellings so a shared JS appearance object maps to the same token.
+        AgentforceFontStyle(rawValue: value) ??
+            AgentforceFontStyle(rawValue: value.replacingOccurrences(of: "FontScale", with: "Scale"))
     }
 
     private static func fontFamily(_ value: Any?) throws -> String? {
@@ -154,7 +162,7 @@ enum AppearanceConfiguration {
     }
 }
 
-private enum AppearanceError: LocalizedError {
+enum AppearanceError: LocalizedError {
     case invalid(String)
     var errorDescription: String? { if case let .invalid(message) = self { return message }; return nil }
 }

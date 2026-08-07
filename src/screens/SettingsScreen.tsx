@@ -451,19 +451,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     }
   };
 
-  const closeConversationForAppearanceChange = async () => {
-    try {
-      // Agentforce applies appearance while configuring, so force the next launch to reconfigure.
-      await AgentforceService.closeConversation();
-    } catch (error) {
-      console.warn('Failed to close the active conversation after changing appearance:', error);
-    }
-  };
-
   const updateAppearance = async (change: Promise<AppearanceSettings>) => {
     const next = await change;
     setAppearanceSettings(next);
-    await closeConversationForAppearanceChange();
   };
 
   // Sync context variables to store whenever they change

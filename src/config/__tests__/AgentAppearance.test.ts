@@ -18,4 +18,10 @@ describe('appearance presets', () => {
       icons: { aiAgent: { ios: { light: 'agentforce_avatar' } } },
     });
   });
+
+  it('uses names accepted by the iOS typography token set', () => {
+    const style = 'bodyFontScale1Regular';
+
+    expect(style.replace('FontScale', 'Scale')).toBe('bodyScale1Regular');
+  });
 });

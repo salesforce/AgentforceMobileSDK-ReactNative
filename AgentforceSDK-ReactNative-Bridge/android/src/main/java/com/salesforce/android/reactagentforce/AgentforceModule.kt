@@ -183,6 +183,16 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             promise.reject("INVALID_CONFIG", "Missing required Service Agent configuration fields")
             return
         }
+
+        // Appearance parsing can fail for user-provided colors, assets, or fonts. Do it before
+        // clearing a healthy session so an invalid update is non-destructive.
+        val application = reactApplicationContext.applicationContext as Application
+        val theming = try {
+            AppearanceConfiguration.theming(config, application)
+        } catch (e: IllegalArgumentException) {
+            promise.reject("CONFIG_ERROR", e.message, e)
+            return
+        }
         
         Log.d(TAG, "Configuring Service Agent - Org: ${serviceConfig.organizationId}")
         
@@ -236,7 +246,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
-                val application = reactApplicationContext.applicationContext as Application
                 val permissions = AgentforceClientPermissions(application)
 
                 val agentforceConfigBuilder = AgentforceConfiguration
@@ -251,7 +260,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
-                AppearanceConfiguration.theming(config, application)?.let(agentforceConfigBuilder::setTheming)
+                theming?.let(agentforceConfigBuilder::setTheming)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
@@ -297,6 +306,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val employeeConfig = EmployeeAgentModeConfig.fromReadableMap(config)
         if (employeeConfig == null) {
             promise.reject("INVALID_CONFIG", "Missing required Employee Agent configuration fields")
+            return
+        }
+
+        // Validate appearance before deciding whether to reuse or destroy the current client.
+        val application = reactApplicationContext.applicationContext as Application
+        val theming = try {
+            AppearanceConfiguration.theming(config, application)
+        } catch (e: IllegalArgumentException) {
+            promise.reject("CONFIG_ERROR", e.message, e)
             return
         }
 
@@ -372,7 +390,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
-                val application = reactApplicationContext.applicationContext as Application
                 val permissions = AgentforceClientPermissions(application)
 
                 // Employee Agent uses BridgeNetwork with RestClient for authenticated requests
@@ -414,7 +431,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
-                AppearanceConfiguration.theming(config, application)?.let(agentforceConfigBuilder::setTheming)
+                theming?.let(agentforceConfigBuilder::setTheming)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
