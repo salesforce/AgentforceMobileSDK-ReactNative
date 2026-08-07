@@ -16,7 +16,14 @@ import {
 const STORAGE_KEY = '@agentforce/appearance-settings';
 let settings: AppearanceSettings = { ...DEFAULT_APPEARANCE_SETTINGS };
 let loaded = false;
-const PRESET_IDS: AppearancePresetId[] = ['default', 'ocean', 'forest', 'sunset', 'royal', 'custom'];
+const PRESET_IDS: AppearancePresetId[] = [
+  'default',
+  'ocean',
+  'forest',
+  'sunset',
+  'royal',
+  'custom',
+];
 const THEME_MODES: AgentforceThemeMode[] = ['system', 'light', 'dark'];
 const FONT_FAMILIES: AgentforceGenericFontFamily[] = [
   'default',
