@@ -1,7 +1,11 @@
 package com.salesforce.android.reactagentforce
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Rect
+import android.graphics.drawable.Drawable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.text.TextStyle
@@ -100,8 +104,24 @@ internal object AppearanceConfiguration {
         val id = context.resources.getIdentifier(resourceName, "drawable", context.packageName)
         if (id == 0) throw IllegalArgumentException("Android drawable '$resourceName' for $field was not found")
         val bitmap = BitmapFactory.decodeResource(context.resources, id)
+            ?: context.getDrawable(id)?.let(::drawableBitmap)
             ?: throw IllegalArgumentException("Android drawable '$resourceName' for $field could not be decoded")
         return BitmapPainter(bitmap.asImageBitmap())
+    }
+
+    /** Vector drawables cannot be decoded by BitmapFactory, so rasterize them for Compose. */
+    internal fun drawableBitmap(drawable: Drawable): Bitmap {
+        val previousBounds = Rect(drawable.bounds)
+        val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 1
+        val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 1
+        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+            try {
+                drawable.setBounds(0, 0, width, height)
+                drawable.draw(Canvas(bitmap))
+            } finally {
+                drawable.bounds = previousBounds
+            }
+        }
     }
 
     private fun themeMode(value: String?): AgentforceThemeMode? = when (value) {
