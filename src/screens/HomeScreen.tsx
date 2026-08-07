@@ -46,8 +46,7 @@ import {
   NavigationRequest,
 } from '@salesforce/react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
-import { BRANDED_AGENT_APPEARANCE } from '../config/AgentAppearance';
-import { isBrandedAppearanceEnabled } from '../store/AgentAppearanceStore';
+import { getAgentAppearance, loadAppearanceSettings } from '../store/AgentAppearanceStore';
 import { getContextVariables } from '../store/ContextVariablesStore';
 
 interface HomeScreenProps {
@@ -95,6 +94,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     // Register custom view provider if enabled, then check configurations.
     // Sequential to avoid a race where configure() runs before registration completes.
     const init = async () => {
+      await loadAppearanceSettings();
       await registerViewProviderIfEnabled();
       checkConfigurations();
     };
@@ -189,7 +189,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             organizationId: config.organizationId,
             esDeveloperName: config.esDeveloperName,
             featureFlags,
-            appearance: isBrandedAppearanceEnabled() ? BRANDED_AGENT_APPEARANCE : undefined,
+            appearance: getAgentAppearance(),
           });
         }
       }
@@ -235,7 +235,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             agentLabel: '', // optional: set a custom name to display in the chat header (overrides the server agent label)
             accessToken: creds.accessToken,
             featureFlags,
-            appearance: isBrandedAppearanceEnabled() ? BRANDED_AGENT_APPEARANCE : undefined,
+            appearance: getAgentAppearance(),
           }
         : // optional: set agentLabel to a custom name to display in the chat header (overrides the server agent label)
           {
@@ -243,7 +243,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             agentId: agentId,
             agentLabel: '',
             featureFlags,
-            appearance: isBrandedAppearanceEnabled() ? BRANDED_AGENT_APPEARANCE : undefined,
+            appearance: getAgentAppearance(),
           };
       await AgentforceService.configure(config);
 
