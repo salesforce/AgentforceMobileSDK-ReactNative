@@ -50,6 +50,21 @@ class AgentforceModule: RCTEventEmitter {
     /// supplied, so the SDK falls back to the server-provided agent label.
     private var navigationBarBuilder: BridgeNavigationBarBuilder?
 
+    /// Normalized voice options applied to the currently-live client. Compared
+    /// against a fresh snapshot on reconfigure so a voice-options change forces a
+    /// new client (the SDK reads voice options only at client creation). `nil`
+    /// when no client is live.
+    private var appliedVoiceOptions: VoiceOptionsSnapshot?
+
+    /// Value snapshot of the voice options that actually affect client behavior,
+    /// normalized the same way the SDK treats them: a missing, non-positive, or
+    /// non-finite timeout collapses to `nil` ("never auto-end"), so cosmetic
+    /// differences in the raw JS payload don't spuriously rebuild the client.
+    private struct VoiceOptionsSnapshot: Equatable {
+        let userSilenceTimeoutSeconds: Double?
+        let autoEndWhileMuted: Bool
+    }
+
 
     private let listenerLock = NSLock()
     private var _hasListeners = false
@@ -216,6 +231,20 @@ class AgentforceModule: RCTEventEmitter {
         )
     }
 
+    /// Build a normalized, comparable snapshot of the voice options from the JS
+    /// config map. A missing, non-positive, or non-finite `userSilenceTimeoutSeconds`
+    /// collapses to `nil` so it compares equal to an explicitly-disabled timeout —
+    /// matching how `parseVoiceSessionOptions` maps those to `.never`.
+    private static func voiceOptionsSnapshot(from configDict: [String: Any]) -> VoiceOptionsSnapshot {
+        guard let voiceOpts = configDict["voiceOptions"] as? [String: Any] else {
+            return VoiceOptionsSnapshot(userSilenceTimeoutSeconds: nil, autoEndWhileMuted: false)
+        }
+        let autoEndWhileMuted = (voiceOpts["autoEndWhileMuted"] as? NSNumber)?.boolValue ?? false
+        let seconds = (voiceOpts["userSilenceTimeoutSeconds"] as? NSNumber)?.doubleValue
+        let normalizedSeconds = seconds.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        return VoiceOptionsSnapshot(userSilenceTimeoutSeconds: normalizedSeconds, autoEndWhileMuted: autoEndWhileMuted)
+    }
+
     // MARK: - Service Agent Configuration
 
     private func configureServiceAgent(
@@ -341,14 +370,23 @@ class AgentforceModule: RCTEventEmitter {
             agentIdChanged = existingConfig.agentId != config.agentId
         }
         
-        let needsNewClient = switchingModes || agentIdChanged || agentforceClient == nil
+        // A live client only reads its voice options at creation, so a change to
+        // them must force a rebuild. Only meaningful when a client already exists.
+        let voiceOptionsSnapshot = Self.voiceOptionsSnapshot(from: configDict)
+        let voiceOptionsChanged = agentforceClient != nil && appliedVoiceOptions != voiceOptionsSnapshot
 
-        // Only cleanup if switching from Service mode or agentId changed
+        let needsNewClient = switchingModes || agentIdChanged || voiceOptionsChanged || agentforceClient == nil
+
+        // Only cleanup if switching from Service mode, agentId changed, or voice options changed
         if switchingModes {
             print("[AgentforceModule] ⚠️ Switching from Service to Employee mode - cleaning up")
             cleanupClient()
         } else if agentIdChanged {
             print("[AgentforceModule] ⚠️ AgentId changed - cleaning up conversation")
+            await closeCurrentConversation()
+            cleanupClient()
+        } else if voiceOptionsChanged {
+            print("[AgentforceModule] ⚠️ Voice options changed - cleaning up conversation to rebuild client")
             await closeCurrentConversation()
             cleanupClient()
         } else if agentforceClient != nil {
@@ -444,6 +482,7 @@ class AgentforceModule: RCTEventEmitter {
                 mode: .fullConfig(fullConfiguration),
                 viewProvider: bridgeViewProvider
             )
+            appliedVoiceOptions = voiceOptionsSnapshot
         } else {
             print("[AgentforceModule] Reusing existing AgentforceClient - credentials will be refreshed automatically")
         }
@@ -1241,6 +1280,7 @@ class AgentforceModule: RCTEventEmitter {
     private func cleanupClient() {
         currentConversation = nil
         agentforceClient = nil
+        appliedVoiceOptions = nil
         bridgeHiddenPreChat.setFields([:])
     }
 

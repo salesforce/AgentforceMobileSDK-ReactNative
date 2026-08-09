@@ -66,6 +66,12 @@ import {
   updateAppearanceThemeMode,
 } from '../store/AgentAppearanceStore';
 import { getContextVariables, setContextVariables } from '../store/ContextVariablesStore';
+import {
+  getVoiceOptions,
+  getVoiceTimeoutSettings,
+  setVoiceTimeoutSettings,
+} from '../store/VoiceTimeoutStore';
+import type { VoiceTimeoutSettings } from '../store/VoiceTimeoutStore';
 
 type TabType = 'service' | 'employee' | 'features' | 'theming';
 
@@ -167,6 +173,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
   const [utteranceText, setUtteranceText] = useState('');
   const [sendingUtterance, setSendingUtterance] = useState(false);
+
+  const [voiceTimeout, setVoiceTimeout] = useState<VoiceTimeoutSettings>(() =>
+    getVoiceTimeoutSettings(),
+  );
 
   useEffect(() => {
     loadSavedConfiguration();
@@ -320,6 +330,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         accessToken: creds.accessToken,
         featureFlags: currentFlags,
         appearance: getAgentAppearance(),
+        voiceOptions: getVoiceOptions(), // auto-end voice after user silence; edit under Voice Timeout below
       });
       setEmployeeLoggedIn(true);
       Alert.alert(
@@ -460,6 +471,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   useEffect(() => {
     setContextVariables(employeeContextVars);
   }, [employeeContextVars]);
+
+  // Sync voice-timeout settings to store whenever they change
+  useEffect(() => {
+    setVoiceTimeoutSettings(voiceTimeout);
+  }, [voiceTimeout]);
 
   const handleAddContextVariable = () => {
     const trimmedName = newEmployeeCtxName.trim();
@@ -900,6 +916,69 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     </ScrollView>
   );
 
+  const renderVoiceTimeoutSection = () => (
+    <View style={styles.formContainerWithMargin}>
+      <Text style={styles.label}>Voice Timeout</Text>
+      <Text style={styles.hint}>
+        Auto-end a voice conversation after the user is silent. Requires the Voice feature flag.
+        Changes apply the next time you launch Employee Agent (rebuilding the client ends the
+        active conversation).
+      </Text>
+
+      <View style={[styles.flagRow, styles.flagRowBorder]}>
+        <View style={styles.flagLabelBlock}>
+          <Text style={styles.label}>Auto-end on silence</Text>
+          <Text style={styles.hint}>When off, voice never auto-ends from silence.</Text>
+        </View>
+        <Switch
+          value={voiceTimeout.enabled}
+          onValueChange={enabled => setVoiceTimeout(prev => ({ ...prev, enabled }))}
+          trackColor={{ false: '#ced4da', true: '#28a745' }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      {voiceTimeout.enabled && (
+        <View style={[styles.voiceSecondsRow, styles.flagRowBorder]}>
+          <Text style={styles.label}>Silence timeout (seconds)</Text>
+          <TextInput
+            style={styles.input}
+            value={
+              voiceTimeout.userSilenceTimeoutSeconds > 0
+                ? String(voiceTimeout.userSilenceTimeoutSeconds)
+                : ''
+            }
+            onChangeText={text => {
+              const seconds = parseInt(text.replace(/[^0-9]/g, ''), 10);
+              setVoiceTimeout(prev => ({
+                ...prev,
+                userSilenceTimeoutSeconds: isNaN(seconds) ? 0 : seconds,
+              }));
+            }}
+            placeholder="30"
+            placeholderTextColor="#999"
+            keyboardType="number-pad"
+          />
+        </View>
+      )}
+
+      <View style={styles.flagRow}>
+        <View style={styles.flagLabelBlock}>
+          <Text style={styles.label}>Auto-end while muted</Text>
+          <Text style={styles.hint}>Also auto-end when the mic is muted.</Text>
+        </View>
+        <Switch
+          value={voiceTimeout.autoEndWhileMuted}
+          onValueChange={autoEndWhileMuted =>
+            setVoiceTimeout(prev => ({ ...prev, autoEndWhileMuted }))
+          }
+          trackColor={{ false: '#ced4da', true: '#28a745' }}
+          thumbColor="#ffffff"
+        />
+      </View>
+    </View>
+  );
+
   const renderEmployeeAgentTab = () => (
     <ScrollView
       style={styles.tabContent}
@@ -974,6 +1053,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           />
         </View>
       )}
+
+      {authSupported && renderVoiceTimeoutSection()}
 
       {authSupported && renderContextVariablesSection()}
 
@@ -1737,6 +1818,9 @@ const styles = StyleSheet.create({
   flagRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: '#f1f3f4',
+  },
+  voiceSecondsRow: {
+    paddingVertical: 14,
   },
   flagLabelBlock: {
     flex: 1,
