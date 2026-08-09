@@ -124,6 +124,11 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Defaults to all-off (`AgentforceVoiceSessionOptions()`).
     private var voiceSessionOptions: AgentforceVoiceSessionOptions = AgentforceVoiceSessionOptions()
 
+    // Normalized voice options applied to the currently-live client. Compared against a fresh
+    // snapshot on reconfigure so a voice-options change forces a new client (the SDK reads voice
+    // options only at client creation). `null` when no client is live. Mirrors the iOS bridge.
+    private var appliedVoiceOptions: VoiceOptionsSnapshot? = null
+
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -315,11 +320,20 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             activity != null &&
             !AgentforceConversationOverlay.isAttachedTo(activity)
 
-        val needsNewClient = switchingModes || agentIdChanged ||
+        // A live client only reads its voice options at creation, so a change to them must force a
+        // rebuild. Only meaningful when a client already exists. Mirrors the iOS bridge.
+        val currentVoiceOptions = voiceOptionsSnapshot(config)
+        val voiceOptionsChanged = AgentforceClientHolder.agentforceClient != null &&
+            appliedVoiceOptions != currentVoiceOptions
+
+        val needsNewClient = switchingModes || agentIdChanged || voiceOptionsChanged ||
             AgentforceClientHolder.agentforceClient == null || activityChanged
 
         if (activityChanged) {
             Log.d(TAG, "Host Activity changed since last attach - forcing fresh client to avoid re-launch hang")
+        }
+        if (voiceOptionsChanged) {
+            Log.d(TAG, "Voice options changed - forcing fresh client to apply them")
         }
 
         // Configure unified credential provider for Employee Agent mode
@@ -431,7 +445,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 
                 AgentforceClientHolder.setClient(client)
                 AgentforceClientHolder.setMode(LocalAgentMode.Employee(employeeConfig))
-                
+                appliedVoiceOptions = currentVoiceOptions
+
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                     putString("mode", "employee")
@@ -699,6 +714,39 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             userSilenceTimeout = timeout,
             autoEndWhileMuted = autoEndWhileMuted,
         )
+    }
+
+    /**
+     * Value snapshot of the voice options that actually affect client behavior,
+     * normalized the same way [parseVoiceSessionOptions] treats them: a missing,
+     * non-finite, or non-positive timeout collapses to `null` ("never auto-end"),
+     * so cosmetic differences in the raw JS payload don't spuriously rebuild the
+     * client. Mirrors the iOS bridge's VoiceOptionsSnapshot.
+     */
+    private data class VoiceOptionsSnapshot(
+        val userSilenceTimeoutSeconds: Double?,
+        val autoEndWhileMuted: Boolean,
+    )
+
+    private fun voiceOptionsSnapshot(config: ReadableMap): VoiceOptionsSnapshot {
+        if (!config.hasKey("voiceOptions")) return VoiceOptionsSnapshot(null, false)
+        val voiceOpts = config.getMap("voiceOptions") ?: return VoiceOptionsSnapshot(null, false)
+
+        val seconds = if (
+            voiceOpts.hasKey("userSilenceTimeoutSeconds") &&
+            !voiceOpts.isNull("userSilenceTimeoutSeconds")
+        ) {
+            val raw = voiceOpts.getDouble("userSilenceTimeoutSeconds")
+            if (raw.isFinite() && raw > 0) raw else null
+        } else {
+            null
+        }
+
+        val autoEndWhileMuted = voiceOpts.hasKey("autoEndWhileMuted") &&
+            !voiceOpts.isNull("autoEndWhileMuted") &&
+            voiceOpts.getBoolean("autoEndWhileMuted")
+
+        return VoiceOptionsSnapshot(seconds, autoEndWhileMuted)
     }
 
     private data class FeatureFlags(
@@ -986,6 +1034,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             AgentforceClientHolder.clear()
             viewModel?.resetConfiguration()
             currentMode = null
+            appliedVoiceOptions = null
             credentialProvider.reset()
             bridgeViewProvider.reset()
             bridgeHiddenPreChat.setFields(emptyMap())

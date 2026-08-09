@@ -52,6 +52,7 @@ import {
 } from '@salesforce/react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
 import { getContextVariables } from '../store/ContextVariablesStore';
+import { getVoiceOptions } from '../store/VoiceTimeoutStore';
 
 interface HomeScreenProps {
   navigation: any;
@@ -249,6 +250,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       const agentId = storedAgentId?.trim() || undefined; // Empty string becomes undefined
       const creds = await getEmployeeAgentCredentials();
       const featureFlags = await AgentforceService.getFeatureFlags();
+      // Read the latest voice-timeout settings (editable in Settings) at configure time
+      const voiceOptions = getVoiceOptions();
 
       // Always reconfigure Employee Agent to ensure fresh credentials and agentId
       const config = creds
@@ -261,9 +264,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             agentLabel: '', // optional: set a custom name to display in the chat header (overrides the server agent label)
             accessToken: creds.accessToken,
             featureFlags,
+            voiceOptions, // auto-end voice after user silence; edit in Settings > Employee > Voice Timeout
           }
         : // optional: set agentLabel to a custom name to display in the chat header (overrides the server agent label)
-          { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId, agentLabel: '', featureFlags };
+          {
+            ...EMPLOYEE_AGENT_CONFIG,
+            agentId: agentId,
+            agentLabel: '',
+            featureFlags,
+            voiceOptions,
+          };
       await AgentforceService.configure(config);
 
       await AgentforceService.launchConversation();
