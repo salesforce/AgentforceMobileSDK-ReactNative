@@ -12,10 +12,10 @@ import type { FeatureFlags, VoiceOptions } from '@salesforce/react-native-agentf
 
 async function startEmployeeAgent() {
   const featureFlags: FeatureFlags = {
-    enableMultiAgent: false,       // route across multiple agents in the org
-    enableMultiModalInput: false,  // image/attachment input
-    enablePDFUpload: false,        // PDF upload
-    enableVoice: true,             // REQUIRED for any voice conversation / mic UI
+    enableMultiAgent: false, // route across multiple agents in the org
+    enableMultiModalInput: false, // image/attachment input
+    enablePDFUpload: false, // PDF upload
+    enableVoice: true, // REQUIRED for any voice conversation / mic UI
     enableCustomViewProvider: false,
   };
 
@@ -36,11 +36,11 @@ async function startEmployeeAgent() {
     instanceUrl: 'https://myorg.my.salesforce.com',
     organizationId: '00Dxx0000001234',
     userId: '005xx0000001234',
-    agentId: '0Xxxx0000001234',   // omit / leave undefined for multi-agent mode
+    agentId: '0Xxxx0000001234', // omit / leave undefined for multi-agent mode
     // accessToken is optional — the native SDK fetches fresh tokens from the
     // Salesforce Mobile SDK automatically when auth is wired up.
-    featureFlags,                 // <-- sibling of `type`
-    voiceOptions,                 // <-- sibling of `type`
+    featureFlags, // <-- sibling of `type`
+    voiceOptions, // <-- sibling of `type`
   });
 
   await AgentforceService.launchConversation();
@@ -49,10 +49,10 @@ async function startEmployeeAgent() {
 
 ## What each voice field does
 
-| Field | Type | Default | Meaning |
-|---|---|---|---|
-| `userSilenceTimeoutSeconds` | `number` (seconds) | `undefined` → **never auto-end** | Auto-end after this much continuous user silence. `0` or negative = disabled. |
-| `autoEndWhileMuted` | `boolean` | `false` | Whether the silence timer keeps running while muted. No effect if `userSilenceTimeoutSeconds` is unset. |
+| Field                       | Type               | Default                          | Meaning                                                                                                 |
+| --------------------------- | ------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `userSilenceTimeoutSeconds` | `number` (seconds) | `undefined` → **never auto-end** | Auto-end after this much continuous user silence. `0` or negative = disabled.                           |
+| `autoEndWhileMuted`         | `boolean`          | `false`                          | Whether the silence timer keeps running while muted. No effect if `userSilenceTimeoutSeconds` is unset. |
 
 ## Pitfalls to flag
 
@@ -60,7 +60,7 @@ async function startEmployeeAgent() {
    any other object.** The bridge only reads `config.voiceOptions` and
    `config.featureFlags` at the top level. Anywhere else is silently ignored —
    no error, it just won't take effect.
-2. **`enableVoice: true` is required.** `voiceOptions` only govern *how* a voice
+2. **`enableVoice: true` is required.** `voiceOptions` only govern _how_ a voice
    conversation ends; if voice itself is off, they do nothing and the mic UI
    won't appear.
 3. **On v0.4.0, voice options are locked in when the voice client is first built

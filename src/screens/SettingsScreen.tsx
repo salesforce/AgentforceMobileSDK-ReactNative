@@ -921,8 +921,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       <Text style={styles.label}>Voice Timeout</Text>
       <Text style={styles.hint}>
         Auto-end a voice conversation after the user is silent. Requires the Voice feature flag.
-        Changes apply the next time you launch Employee Agent (rebuilding the client ends the
-        active conversation).
+        Changes apply the next time you launch Employee Agent (rebuilding the client ends the active
+        conversation).
       </Text>
 
       <View style={[styles.flagRow, styles.flagRowBorder]}>
