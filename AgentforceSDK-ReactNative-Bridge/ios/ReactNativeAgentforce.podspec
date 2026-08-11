@@ -34,7 +34,7 @@ Pod::Spec.new do |s|
     ]
     core.dependency "React-Core"
     core.dependency "AgentforceSDK"
-    core.dependency "AgentforceVoice", "2.8.2"
+    core.dependency "AgentforceVoice", "2.9.3-rc3"
     # AgentforceSDK 17.31.6 (262.1) depends on SharedUI ('~> 1'); declare it so
     # this target can resolve the design-system module.
     core.dependency "SharedUI", "1.3.1"

@@ -1,7 +1,7 @@
 # Configuring Feature Flags & Voice Options — Employee Agent
 
 **Applies to:** `@salesforce/react-native-agentforce@0.4.0`
-(iOS AgentforceSDK 18.26.8 / AgentforceVoice 2.8.2; Android agentforce-sdk 15.130.1; Agentforce Mobile SDK 262.1.2)
+(iOS AgentforceSDK 18.26.9-rc3 / AgentforceVoice 2.9.3-rc3; Android agentforce-sdk 15.130.3-rc1; Agentforce Mobile SDK 262.1.3 RC)
 
 Both `featureFlags` and `voiceOptions` are passed to a **single**
 `AgentforceService.configure(...)` call, as **top-level siblings of `type`**.
@@ -29,6 +29,10 @@ async function startEmployeeAgent() {
     // true: muted time counts as silence, so the conversation still auto-ends
     //   after the timeout even if the user muted and walked away.
     autoEndWhileMuted: false,
+
+    // Start closed captions on for first-time voice users. A user's saved
+    // caption preference always overrides this value on later sessions.
+    defaultClosedCaptionsEnabled: true,
   };
 
   await AgentforceService.configure({
@@ -49,10 +53,11 @@ async function startEmployeeAgent() {
 
 ## What each voice field does
 
-| Field                       | Type               | Default                          | Meaning                                                                                                 |
-| --------------------------- | ------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `userSilenceTimeoutSeconds` | `number` (seconds) | `undefined` → **never auto-end** | Auto-end after this much continuous user silence. `0` or negative = disabled.                           |
-| `autoEndWhileMuted`         | `boolean`          | `false`                          | Whether the silence timer keeps running while muted. No effect if `userSilenceTimeoutSeconds` is unset. |
+| Field                          | Type               | Default                          | Meaning                                                                                                 |
+| ------------------------------ | ------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `userSilenceTimeoutSeconds`    | `number` (seconds) | `undefined` → **never auto-end** | Auto-end after this much continuous user silence. `0` or negative = disabled.                           |
+| `autoEndWhileMuted`            | `boolean`          | `false`                          | Whether the silence timer keeps running while muted. No effect if `userSilenceTimeoutSeconds` is unset. |
+| `defaultClosedCaptionsEnabled` | `boolean`          | `false`                          | Initial closed-caption state for a user with no saved caption preference.                               |
 
 ## Pitfalls to flag
 
@@ -63,14 +68,29 @@ async function startEmployeeAgent() {
 2. **`enableVoice: true` is required.** `voiceOptions` only govern _how_ a voice
    conversation ends; if voice itself is off, they do nothing and the mic UI
    won't appear.
-3. **On v0.4.0, voice options are locked in when the voice client is first built
-   for a session.** Reconfiguring an already-configured session with the **same
-   `agentId`** reuses the existing client and will **not** pick up changed
-   `voiceOptions`. They take effect on: the first `configure()` of a session, an
-   `agentId` change, or a cold start / sign-out-and-back-in. **Practical rule:**
-   set the values you want at the initial `configure()` before
-   `launchConversation()`; to change them at runtime, change the `agentId` or
-   have the user sign out and in again.
+3. **Voice options are locked in when the voice client is built.** Reconfigure
+   with changed voice options before launching the next conversation; the bridge
+   rebuilds the client so the next voice session uses them. An active voice
+   session always keeps its original options.
 4. **`featureFlags` is optional but sticky.** If omitted, the SDK reuses
    previously stored flags (or defaults). Pass the full object explicitly to be
    deterministic.
+5. **Caption defaults only affect first-time users.** Once a user enables or
+   disables captions in the native Voice UI, the SDK persists that choice and
+   ignores later `defaultClosedCaptionsEnabled` values for that user. The native
+   SDK's closed-caption feature gate must also be enabled.
+
+## iOS Voice Close Behavior
+
+Use `launchConversation` to select what closing Voice does on iOS:
+
+```typescript
+await AgentforceService.launchConversation({
+  initialMode: 'voice',
+  voiceCloseBehavior: 'dismissContainer',
+});
+```
+
+`'returnToChat'` is the default and returns the user to the chat transcript.
+`'dismissContainer'` dismisses the complete Agentforce presentation when Voice
+ends or the user closes it. Android retains its existing Voice close behavior.

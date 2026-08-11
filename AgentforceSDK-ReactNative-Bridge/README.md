@@ -332,4 +332,31 @@ await AgentforceService.configure({
   no-op — the value is stored and forwarded, but that SDK ignores unknown keys. Consult the
   native AgentforceSDK's internal-flag documentation for the keys valid on each platform.
 
+## Voice Options
+
+Configure voice-session behavior alongside the agent configuration:
+
+```typescript
+await AgentforceService.configure({
+  type: 'service',
+  serviceApiURL: 'https://service.salesforce.com',
+  organizationId: '00Dxx0000001234',
+  esDeveloperName: 'MyServiceAgent',
+  voiceOptions: {
+    userSilenceTimeoutSeconds: 30,
+    autoEndWhileMuted: false,
+    defaultClosedCaptionsEnabled: true,
+  },
+});
+```
+
+`defaultClosedCaptionsEnabled` applies only when the user has not previously
+chosen a closed-caption state. The native SDK persists a user's explicit caption
+choice, which always takes precedence over the configured default.
+
+On iOS, `launchConversation` also accepts `voiceCloseBehavior: 'returnToChat' |
+'dismissContainer'`. The default, `'returnToChat'`, preserves the existing
+integrated Voice behavior. `'dismissContainer'` dismisses the entire Agentforce
+presentation when Voice closes. Android retains its existing Voice close behavior.
+
 ---

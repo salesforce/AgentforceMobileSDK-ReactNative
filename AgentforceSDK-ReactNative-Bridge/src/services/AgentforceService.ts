@@ -866,10 +866,12 @@ class AgentforceService {
         this.validateAdditionalContext(additionalContext);
       }
 
-      const launchOptions = additionalContext
-        ? { initialMode, additionalContext }
-        : { initialMode };
-      const result = await AgentforceModule.launchConversation(launchOptions);
+      const voiceCloseBehavior = options?.voiceCloseBehavior ?? 'returnToChat';
+      const result = await AgentforceModule.launchConversation({
+        initialMode,
+        voiceCloseBehavior,
+        ...(additionalContext && { additionalContext }),
+      });
       console.log(`[AgentforceService] Conversation launched successfully (mode: ${initialMode})`);
       return result?.success ?? true;
     } catch (error) {

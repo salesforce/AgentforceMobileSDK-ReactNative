@@ -31,7 +31,10 @@ describe('AgentforceService.launchConversation with initialMode', () => {
     it('accepts chat mode', async () => {
       await AgentforceService.launchConversation({ initialMode: 'chat' });
 
-      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({ initialMode: 'chat' });
+      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
+        initialMode: 'chat',
+        voiceCloseBehavior: 'returnToChat',
+      });
     });
 
     it('accepts voice mode', async () => {
@@ -39,6 +42,7 @@ describe('AgentforceService.launchConversation with initialMode', () => {
 
       expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
         initialMode: 'voice',
+        voiceCloseBehavior: 'returnToChat',
       });
     });
   });
@@ -47,13 +51,30 @@ describe('AgentforceService.launchConversation with initialMode', () => {
     it('defaults to chat when no options provided', async () => {
       await AgentforceService.launchConversation();
 
-      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({ initialMode: 'chat' });
+      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
+        initialMode: 'chat',
+        voiceCloseBehavior: 'returnToChat',
+      });
     });
 
     it('defaults to chat when empty options object provided', async () => {
       await AgentforceService.launchConversation({});
 
-      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({ initialMode: 'chat' });
+      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
+        initialMode: 'chat',
+        voiceCloseBehavior: 'returnToChat',
+      });
+    });
+  });
+
+  describe('voiceCloseBehavior', () => {
+    it('forwards dismissContainer to the native module', async () => {
+      await AgentforceService.launchConversation({ voiceCloseBehavior: 'dismissContainer' });
+
+      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
+        initialMode: 'chat',
+        voiceCloseBehavior: 'dismissContainer',
+      });
     });
   });
 
@@ -67,6 +88,7 @@ describe('AgentforceService.launchConversation with initialMode', () => {
 
       expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
         initialMode: 'chat',
+        voiceCloseBehavior: 'returnToChat',
         additionalContext,
       });
     });
@@ -110,7 +132,10 @@ describe('AgentforceService.launchConversation with initialMode', () => {
       await AgentforceService.launchConversation();
 
       expect(mockAgentforceModule.launchConversation).toHaveBeenCalledTimes(1);
-      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({ initialMode: 'chat' });
+      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
+        initialMode: 'chat',
+        voiceCloseBehavior: 'returnToChat',
+      });
     });
   });
 });

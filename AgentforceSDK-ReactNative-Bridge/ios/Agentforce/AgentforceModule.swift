@@ -63,6 +63,7 @@ class AgentforceModule: RCTEventEmitter {
     private struct VoiceOptionsSnapshot: Equatable {
         let userSilenceTimeoutSeconds: Double?
         let autoEndWhileMuted: Bool
+        let defaultClosedCaptionsEnabled: Bool
     }
 
 
@@ -237,12 +238,29 @@ class AgentforceModule: RCTEventEmitter {
     /// matching how `parseVoiceSessionOptions` maps those to `.never`.
     private static func voiceOptionsSnapshot(from configDict: [String: Any]) -> VoiceOptionsSnapshot {
         guard let voiceOpts = configDict["voiceOptions"] as? [String: Any] else {
-            return VoiceOptionsSnapshot(userSilenceTimeoutSeconds: nil, autoEndWhileMuted: false)
+            return VoiceOptionsSnapshot(
+                userSilenceTimeoutSeconds: nil,
+                autoEndWhileMuted: false,
+                defaultClosedCaptionsEnabled: false
+            )
         }
         let autoEndWhileMuted = (voiceOpts["autoEndWhileMuted"] as? NSNumber)?.boolValue ?? false
+        let defaultClosedCaptionsEnabled =
+            (voiceOpts["defaultClosedCaptionsEnabled"] as? NSNumber)?.boolValue ?? false
         let seconds = (voiceOpts["userSilenceTimeoutSeconds"] as? NSNumber)?.doubleValue
         let normalizedSeconds = seconds.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
-        return VoiceOptionsSnapshot(userSilenceTimeoutSeconds: normalizedSeconds, autoEndWhileMuted: autoEndWhileMuted)
+        return VoiceOptionsSnapshot(
+            userSilenceTimeoutSeconds: normalizedSeconds,
+            autoEndWhileMuted: autoEndWhileMuted,
+            defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled
+        )
+    }
+
+    private static func defaultClosedCaptionsEnabled(from configDict: [String: Any]) -> Bool {
+        guard let voiceOpts = configDict["voiceOptions"] as? [String: Any] else {
+            return false
+        }
+        return (voiceOpts["defaultClosedCaptionsEnabled"] as? NSNumber)?.boolValue ?? false
     }
 
     // MARK: - Service Agent Configuration
@@ -305,6 +323,7 @@ class AgentforceModule: RCTEventEmitter {
         // (LiveKit/MIAW) internally once the flag is on. shouldBlockMicrophone stays
         // false so the mic isn't gated; other public flags carry through too.
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        let defaultClosedCaptionsEnabled = Self.defaultClosedCaptionsEnabled(from: configDict)
         saveFeatureFlagsToUserDefaults(flags)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
@@ -313,6 +332,7 @@ class AgentforceModule: RCTEventEmitter {
             shouldBlockMicrophone: false,
             enableVoice: flags.enableVoice,
             enableOnboarding: false,
+            defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled,
             internalFlags: internalFlagsForSDK(configDict)
         )
 
@@ -434,6 +454,7 @@ class AgentforceModule: RCTEventEmitter {
         )
 
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        let defaultClosedCaptionsEnabled = Self.defaultClosedCaptionsEnabled(from: configDict)
         saveFeatureFlagsToUserDefaults(flags)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
@@ -442,6 +463,7 @@ class AgentforceModule: RCTEventEmitter {
             shouldBlockMicrophone: false,
             enableVoice: flags.enableVoice,
             enableOnboarding: false,
+            defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled,
             internalFlags: internalFlagsForSDK(configDict)
         )
 
@@ -584,6 +606,10 @@ class AgentforceModule: RCTEventEmitter {
                 // Parse initialMode from options (defaults to chat)
                 let initialModeString = options["initialMode"] as? String ?? "chat"
                 let initialMode: AgentforceViewMode = (initialModeString == "voice") ? .voice : .chat
+                let voiceCloseBehavior: AgentforceVoiceCloseBehavior =
+                    (options["voiceCloseBehavior"] as? String == "dismissContainer")
+                    ? .dismissContainer
+                    : .returnToChat
 
                 // Validate Voice is enabled if voice mode requested
                 if initialMode == .voice {
@@ -601,6 +627,7 @@ class AgentforceModule: RCTEventEmitter {
                     initialMode: initialMode,
                     delegate: bridgeUIDelegate,
                     showTopBar: true,
+                    voiceCloseBehavior: voiceCloseBehavior,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
                             self?.dismissConversation()
