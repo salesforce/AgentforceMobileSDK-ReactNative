@@ -770,10 +770,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val autoEndWhileMuted = voiceOpts.hasKey("autoEndWhileMuted") &&
             !voiceOpts.isNull("autoEndWhileMuted") &&
             voiceOpts.getBoolean("autoEndWhileMuted")
+        val defaultClosedCaptionsEnabled = voiceOpts.hasKey("defaultClosedCaptionsEnabled") &&
+            !voiceOpts.isNull("defaultClosedCaptionsEnabled") &&
+            voiceOpts.getBoolean("defaultClosedCaptionsEnabled")
 
         return AgentforceVoiceSessionOptions(
             userSilenceTimeout = timeout,
             autoEndWhileMuted = autoEndWhileMuted,
+            defaultClosedCaptionsEnabled = defaultClosedCaptionsEnabled,
         )
     }
 
@@ -787,11 +791,12 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     private data class VoiceOptionsSnapshot(
         val userSilenceTimeoutSeconds: Double?,
         val autoEndWhileMuted: Boolean,
+        val defaultClosedCaptionsEnabled: Boolean,
     )
 
     private fun voiceOptionsSnapshot(config: ReadableMap): VoiceOptionsSnapshot {
-        if (!config.hasKey("voiceOptions")) return VoiceOptionsSnapshot(null, false)
-        val voiceOpts = config.getMap("voiceOptions") ?: return VoiceOptionsSnapshot(null, false)
+        if (!config.hasKey("voiceOptions")) return VoiceOptionsSnapshot(null, false, false)
+        val voiceOpts = config.getMap("voiceOptions") ?: return VoiceOptionsSnapshot(null, false, false)
 
         val seconds = if (
             voiceOpts.hasKey("userSilenceTimeoutSeconds") &&
@@ -806,8 +811,11 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val autoEndWhileMuted = voiceOpts.hasKey("autoEndWhileMuted") &&
             !voiceOpts.isNull("autoEndWhileMuted") &&
             voiceOpts.getBoolean("autoEndWhileMuted")
+        val defaultClosedCaptionsEnabled = voiceOpts.hasKey("defaultClosedCaptionsEnabled") &&
+            !voiceOpts.isNull("defaultClosedCaptionsEnabled") &&
+            voiceOpts.getBoolean("defaultClosedCaptionsEnabled")
 
-        return VoiceOptionsSnapshot(seconds, autoEndWhileMuted)
+        return VoiceOptionsSnapshot(seconds, autoEndWhileMuted, defaultClosedCaptionsEnabled)
     }
 
     private data class FeatureFlags(

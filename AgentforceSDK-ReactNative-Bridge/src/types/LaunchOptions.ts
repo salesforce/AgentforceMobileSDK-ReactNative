@@ -25,6 +25,19 @@ export interface LaunchOptions {
   initialMode?: 'chat' | 'voice';
 
   /**
+    * Behavior when a user closes the Voice UI.
+   *
+   * - `'returnToChat'` (default) returns to the chat transcript.
+   * - `'dismissContainer'` dismisses the entire native Agentforce UI.
+   *
+   * This is currently supported on iOS only. Android retains its existing
+   * Voice close behavior.
+   *
+    * @default 'returnToChat'
+    */
+  voiceCloseBehavior?: 'returnToChat' | 'dismissContainer';
+
+  /**
    * Context to apply before the native conversation UI is shown.
    *
    * Use this when the initial agent response needs the context. Call
