@@ -843,6 +843,9 @@ class AgentforceService {
    *
    * // Launch directly in Voice mode
    * await AgentforceService.launchConversation({ initialMode: 'voice' });
+   *
+   * // Apply context before the native UI begins session initialization
+   * await AgentforceService.launchConversation({ additionalContext: { variables: [] } });
    * ```
    */
   async launchConversation(options?: LaunchOptions): Promise<boolean> {
@@ -858,7 +861,15 @@ class AgentforceService {
 
     try {
       const initialMode = options?.initialMode ?? 'chat';
-      const result = await AgentforceModule.launchConversation({ initialMode });
+      const additionalContext = options?.additionalContext;
+      if (additionalContext) {
+        this.validateAdditionalContext(additionalContext);
+      }
+
+      const launchOptions = additionalContext
+        ? { initialMode, additionalContext }
+        : { initialMode };
+      const result = await AgentforceModule.launchConversation(launchOptions);
       console.log(`[AgentforceService] Conversation launched successfully (mode: ${initialMode})`);
       return result?.success ?? true;
     } catch (error) {
@@ -1191,7 +1202,8 @@ class AgentforceService {
    * such as user ID, account ID, case number, or any other relevant data.
    * This helps the agent provide more personalized and relevant responses.
    *
-   * **Must be called after launching a conversation.**
+   * Call this after launching a conversation to update its context. To make context
+   * available to the initial agent response, pass it to `launchConversation()`.
    *
    * @param context - The additional context with variables to set
    * @returns Promise<boolean> indicating success
@@ -1221,28 +1233,7 @@ class AgentforceService {
       return false;
     }
 
-    // Validate context structure
-    if (!context || !Array.isArray(context.variables)) {
-      throw new Error('Invalid context: must have "variables" array');
-    }
-
-    // Validate each variable
-    for (let i = 0; i < context.variables.length; i++) {
-      const variable = context.variables[i];
-      if (!variable.name || typeof variable.name !== 'string') {
-        throw new Error(`Invalid context variable at index ${i}: missing or invalid "name"`);
-      }
-      if (!variable.type || typeof variable.type !== 'string') {
-        throw new Error(`Invalid context variable at index ${i}: missing or invalid "type"`);
-      }
-      // Validate type against known types
-      if (!VALID_CONTEXT_TYPES.has(variable.type as AgentforceContextVariableType)) {
-        throw new Error(
-          `Invalid context variable at index ${i}: unknown type "${variable.type}". ` +
-            `Valid types: ${Array.from(VALID_CONTEXT_TYPES).join(', ')}`,
-        );
-      }
-    }
+    this.validateAdditionalContext(context);
 
     try {
       const result = await AgentforceModule.setAdditionalContext(context);
@@ -1253,6 +1244,28 @@ class AgentforceService {
     } catch (error) {
       console.error('[AgentforceService] Failed to set additional context:', error);
       throw error;
+    }
+  }
+
+  private validateAdditionalContext(context: AgentforceAdditionalContext): void {
+    if (!context || !Array.isArray(context.variables)) {
+      throw new Error('Invalid context: must have "variables" array');
+    }
+
+    for (let i = 0; i < context.variables.length; i++) {
+      const variable = context.variables[i];
+      if (!variable.name || typeof variable.name !== 'string') {
+        throw new Error(`Invalid context variable at index ${i}: missing or invalid "name"`);
+      }
+      if (!variable.type || typeof variable.type !== 'string') {
+        throw new Error(`Invalid context variable at index ${i}: missing or invalid "type"`);
+      }
+      if (!VALID_CONTEXT_TYPES.has(variable.type as AgentforceContextVariableType)) {
+        throw new Error(
+          `Invalid context variable at index ${i}: unknown type "${variable.type}". ` +
+            `Valid types: ${Array.from(VALID_CONTEXT_TYPES).join(', ')}`,
+        );
+      }
     }
   }
 

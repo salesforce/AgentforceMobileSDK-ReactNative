@@ -57,6 +57,33 @@ describe('AgentforceService.launchConversation with initialMode', () => {
     });
   });
 
+  describe('additionalContext', () => {
+    it('forwards context with the launch request', async () => {
+      const additionalContext = {
+        variables: [{ name: 'userId', type: 'Text' as const, value: '005' }],
+      };
+
+      await AgentforceService.launchConversation({ additionalContext });
+
+      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
+        initialMode: 'chat',
+        additionalContext,
+      });
+    });
+
+    it('validates context before launching', async () => {
+      await expect(
+        AgentforceService.launchConversation({ additionalContext: { variables: [] } }),
+      ).resolves.toBe(true);
+
+      await expect(
+        AgentforceService.launchConversation({
+          additionalContext: { variables: [{ name: 'userId', type: 'Unknown' as any }] },
+        }),
+      ).rejects.toThrow(/unknown type/);
+    });
+  });
+
   describe('SC-6: Error returned when Voice disabled/unavailable', () => {
     it('throws when Voice mode launch fails', async () => {
       const error = new Error('Voice is not enabled');

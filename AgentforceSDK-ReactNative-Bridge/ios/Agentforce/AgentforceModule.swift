@@ -576,6 +576,11 @@ class AgentforceModule: RCTEventEmitter {
 
                 let conversation = try getOrCreateConversation(client: client, mode: mode)
 
+                if let contextDict = options["additionalContext"] as? NSDictionary {
+                    let context = try additionalContextVariables(from: contextDict)
+                    try await conversation.setAdditionalContext(context: context)
+                }
+
                 // Parse initialMode from options (defaults to chat)
                 let initialModeString = options["initialMode"] as? String ?? "chat"
                 let initialMode: AgentforceViewMode = (initialModeString == "voice") ? .voice : .chat
@@ -1384,6 +1389,38 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
 
+    private func additionalContextVariables(from contextDict: NSDictionary) throws -> [AgentforceVariable] {
+        guard let variables = contextDict["variables"] as? [[String: Any]] else {
+            throw NSError(
+                domain: "AgentforceModule",
+                code: 1002,
+                userInfo: [NSLocalizedDescriptionKey: "Missing or invalid 'variables' array"]
+            )
+        }
+
+        var context: [AgentforceVariable] = []
+        for (index, variable) in variables.enumerated() {
+            guard let name = variable["name"] as? String,
+                  let type = variable["type"] as? String else {
+                throw NSError(
+                    domain: "AgentforceModule",
+                    code: 1002,
+                    userInfo: [NSLocalizedDescriptionKey: "Variable at index \(index) missing 'name' or 'type'"]
+                )
+            }
+
+            context.append(
+                AgentforceVariable(
+                    name: name,
+                    type: type,
+                    value: variable["value"].flatMap(convertToJSEncodableValue)
+                )
+            )
+        }
+
+        return context
+    }
+
     /// Set additional context for the current conversation.
     /// Must be called after launching a conversation.
     ///
@@ -1401,12 +1438,6 @@ class AgentforceModule: RCTEventEmitter {
             // don't run bridge work or resolve promises into a dead JS runtime.
             guard !isInvalidated else { return }
             do {
-                // Validate context structure
-                guard let variables = contextDict["variables"] as? [[String: Any]] else {
-                    reject("INVALID_CONTEXT", "Missing or invalid 'variables' array", nil)
-                    return
-                }
-
                 // Check if conversation exists
                 guard let conversation = currentConversation else {
                     reject(
@@ -1417,44 +1448,10 @@ class AgentforceModule: RCTEventEmitter {
                     return
                 }
 
-                // Convert to AgentforceVariable array
-                var agentforceVariables: [AgentforceVariable] = []
-                for (index, varDict) in variables.enumerated() {
-                    guard let name = varDict["name"] as? String,
-                          let type = varDict["type"] as? String else {
-                        reject(
-                            "INVALID_CONTEXT",
-                            "Variable at index \(index) missing 'name' or 'type'",
-                            nil
-                        )
-                        return
-                    }
+                let context = try additionalContextVariables(from: contextDict)
+                try await conversation.setAdditionalContext(context: context)
 
-                    // Convert value to JSEncodableValue enum using recursive helper
-                    let value: JSEncodableValue?
-                    if let rawValue = varDict["value"] {
-                        value = convertToJSEncodableValue(rawValue)
-                        if value == nil {
-                            print("[AgentforceModule] ⚠️ Unsupported value type at index \(index)")
-                        }
-                    } else {
-                        value = nil
-                    }
-
-                    // Create AgentforceVariable
-                    // Note: iOS AgentforceVariable doesn't support description field (Android only)
-                    let variable = AgentforceVariable(
-                        name: name,
-                        type: type,
-                        value: value
-                    )
-                    agentforceVariables.append(variable)
-                }
-
-                // Set context on conversation
-                try await conversation.setAdditionalContext(context: agentforceVariables)
-
-                print("[AgentforceModule] ✓ Additional context set: \(agentforceVariables.count) variables")
+                print("[AgentforceModule] ✓ Additional context set: \(context.count) variables")
                 resolve(["success": true])
 
             } catch {
