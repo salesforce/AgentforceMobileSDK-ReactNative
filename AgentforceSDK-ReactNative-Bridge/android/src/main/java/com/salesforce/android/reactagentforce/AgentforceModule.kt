@@ -559,6 +559,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 try {
                     viewModel?.initializeAgentforce()
 
+                    if (AgentforceClientHolder.currentConversation == null) {
+                        if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
+                    }
+                    options?.getMap("additionalContext")?.let { context ->
+                        val conversation = AgentforceClientHolder.currentConversation
+                            ?: throw IllegalStateException("Conversation was not created")
+                        conversation.setAdditionalContext(parseAdditionalContext(context))
+                    }
+
                     AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
@@ -579,6 +588,12 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 // can find it immediately after the promise resolves (matches iOS behavior).
                 if (AgentforceClientHolder.currentConversation == null) {
                     if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
+                }
+
+                options?.getMap("additionalContext")?.let { context ->
+                    val conversation = AgentforceClientHolder.currentConversation
+                        ?: throw IllegalStateException("Conversation was not created")
+                    conversation.setAdditionalContext(parseAdditionalContext(context))
                 }
 
                 AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
@@ -1178,6 +1193,44 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // region Additional Context
 
+    private fun parseAdditionalContext(context: ReadableMap): CopilotAdditionalContext {
+        val variablesArray = context.getArray("variables")
+            ?: throw IllegalArgumentException("Missing 'variables' array in context")
+        val contextVariables = mutableListOf<CopilotContextVariable>()
+
+        for (i in 0 until variablesArray.size()) {
+            val varMap = variablesArray.getMap(i)
+                ?: throw IllegalArgumentException("Invalid variable at index $i")
+            val name = varMap.getString("name")
+            val type = varMap.getString("type")
+            if (name == null || type == null) {
+                throw IllegalArgumentException("Variable at index $i missing 'name' or 'type'")
+            }
+
+            val value = when {
+                varMap.hasKey("value") && !varMap.isNull("value") -> when (varMap.getType("value")) {
+                    ReadableType.String -> varMap.getString("value")
+                    ReadableType.Number -> varMap.getDouble("value")
+                    ReadableType.Boolean -> varMap.getBoolean("value")
+                    ReadableType.Map -> varMap.getMap("value")?.toHashMap()
+                    ReadableType.Array -> varMap.getArray("value")?.toArrayList()
+                    else -> null
+                }
+                else -> null
+            }
+            contextVariables.add(
+                CopilotContextVariable(
+                    name = name,
+                    type = type,
+                    description = varMap.getString("description"),
+                    value = value
+                )
+            )
+        }
+
+        return CopilotAdditionalContext(variables = contextVariables)
+    }
+
     /**
      * Set additional context for the current conversation.
      * Must be called after launching a conversation.
@@ -1190,62 +1243,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         Log.d(TAG, "setAdditionalContext() called")
 
         try {
-            // Validate context structure
-            val variablesArray = context.getArray("variables")
-            if (variablesArray == null) {
-                promise.reject("INVALID_CONTEXT", "Missing 'variables' array in context")
-                return
-            }
-
-            // Convert to CopilotContextVariable list (do this synchronously)
-            val contextVariables = mutableListOf<CopilotContextVariable>()
-            for (i in 0 until variablesArray.size()) {
-                val varMap = variablesArray.getMap(i)
-                if (varMap == null) {
-                    promise.reject("INVALID_CONTEXT", "Invalid variable at index $i")
-                    return
-                }
-
-                val name = varMap.getString("name")
-                val type = varMap.getString("type")
-
-                if (name == null || type == null) {
-                    promise.reject(
-                        "INVALID_CONTEXT",
-                        "Variable at index $i missing 'name' or 'type'"
-                    )
-                    return
-                }
-
-                // Extract optional fields
-                val description = varMap.getString("description")
-                val value = when {
-                    varMap.hasKey("value") && !varMap.isNull("value") -> {
-                        // Read value based on type
-                        when (varMap.getType("value")) {
-                            ReadableType.String -> varMap.getString("value")
-                            ReadableType.Number -> varMap.getDouble("value")
-                            ReadableType.Boolean -> varMap.getBoolean("value")
-                            ReadableType.Map -> varMap.getMap("value")?.toHashMap()
-                            ReadableType.Array -> varMap.getArray("value")?.toArrayList()
-                            else -> null
-                        }
-                    }
-                    else -> null
-                }
-
-                // Create CopilotContextVariable
-                val variable = CopilotContextVariable(
-                    name = name,
-                    type = type,
-                    description = description,
-                    value = value
-                )
-                contextVariables.add(variable)
-            }
-
-            // Create CopilotAdditionalContext
-            val additionalContext = CopilotAdditionalContext(variables = contextVariables)
+            val additionalContext = parseAdditionalContext(context)
 
             // Apply context to conversation (async) - check conversation inside coroutine
             scope.launch {
@@ -1262,7 +1260,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     }
 
                     conversation.setAdditionalContext(additionalContext)
-                    Log.d(TAG, "Additional context set: ${contextVariables.size} variables")
+                    Log.d(TAG, "Additional context set: ${additionalContext.variables.size} variables")
 
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)

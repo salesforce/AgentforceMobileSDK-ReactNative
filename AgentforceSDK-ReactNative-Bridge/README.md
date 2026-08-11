@@ -118,20 +118,24 @@ await AgentforceService.launchConversation();
 ```
 
 **Additional Context:**
-Provide contextual data to personalize agent responses (must be called after launching conversation):
+Provide context at launch when the initial agent response needs it:
 
 ```typescript
-await AgentforceService.setAdditionalContext({
-  variables: [
-    { name: ‘userId’, type: ‘Text’, value: ‘005xx0000001234’ },
-    { name: ‘accountId’, type: ‘Text’, value: ‘001xx0000001234’ },
-    { name: ‘priority’, type: ‘Text’, value: ‘high’ },
-    { name: ‘score’, type: ‘Number’, value: 95.5 },
-    { name: ‘isVIP’, type: ‘Boolean’, value: true },
-    { name: ‘createdDate’, type: ‘DateTime’, value: ‘2026-03-06T10:00:00Z’ }
-  ]
+await AgentforceService.launchConversation({
+  additionalContext: {
+    variables: [
+      { name: 'userId', type: 'Text', value: '005xx0000001234' },
+      { name: 'accountId', type: 'Text', value: '001xx0000001234' },
+      { name: 'priority', type: 'Text', value: 'high' },
+      { name: 'score', type: 'Number', value: 95.5 },
+      { name: 'isVIP', type: 'Boolean', value: true },
+      { name: 'createdDate', type: 'DateTime', value: '2026-03-06T10:00:00Z' },
+    ],
+  },
 });
 ```
+
+Call `setAdditionalContext()` after launch to update context on an active conversation.
 
 **Supported types:**
 

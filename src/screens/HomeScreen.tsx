@@ -253,16 +253,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           };
       await AgentforceService.configure(config);
 
-      await AgentforceService.launchConversation();
-
       const contextVars = getContextVariables();
-      if (contextVars.length > 0) {
-        try {
-          await AgentforceService.setAdditionalContext({ variables: contextVars });
-        } catch (ctxError) {
-          console.warn('Failed to set employee agent context variables:', ctxError);
-        }
-      }
+      await AgentforceService.launchConversation({
+        additionalContext: contextVars.length > 0 ? { variables: contextVars } : undefined,
+      });
     } catch (error: any) {
       Alert.alert(
         'Error',

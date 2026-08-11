@@ -2,6 +2,8 @@
  * Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
  */
 
+import type { AgentforceAdditionalContext } from './AgentforceContext';
+
 /**
  * Optional parameters for launching Agentforce conversation.
  *
@@ -21,4 +23,12 @@ export interface LaunchOptions {
    * @default 'chat'
    */
   initialMode?: 'chat' | 'voice';
+
+  /**
+   * Context to apply before the native conversation UI is shown.
+   *
+   * Use this when the initial agent response needs the context. Call
+   * `setAdditionalContext()` to update context after launch.
+   */
+  additionalContext?: AgentforceAdditionalContext;
 }
