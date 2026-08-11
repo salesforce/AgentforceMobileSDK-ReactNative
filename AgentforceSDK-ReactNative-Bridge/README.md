@@ -117,6 +117,26 @@ await AgentforceService.configure(config);
 await AgentforceService.launchConversation();
 ```
 
+**Launch modes:**
+
+`launchConversation()` accepts an optional `initialMode` controlling how the UI opens:
+
+```typescript
+// Chat (text) — the default
+await AgentforceService.launchConversation();
+
+// Voice: opens directly in Voice mode. iOS shows the combined voice + text
+// view (the user can switch back to text); Android shows the Voice view.
+await AgentforceService.launchConversation({ initialMode: 'voice' });
+
+// Voice-only: the dedicated Voice view with no text/interaction content
+// (iOS `AgentforceVoiceView`, Android `AgentforceVoiceContainer`).
+await AgentforceService.launchConversation({ initialMode: 'voiceOnly' });
+```
+
+Both `'voice'` and `'voiceOnly'` require the `enableVoice` feature flag; the
+launch promise rejects when Voice is disabled or unavailable.
+
 **Additional Context:**
 Provide contextual data to personalize agent responses (must be called after launching conversation):
 

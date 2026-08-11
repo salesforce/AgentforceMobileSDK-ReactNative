@@ -27,7 +27,7 @@ describe('AgentforceService.launchConversation with initialMode', () => {
     mockAgentforceModule.launchConversation.mockResolvedValue({ success: true });
   });
 
-  describe('SC-1: initialMode parameter accepts chat and voice', () => {
+  describe('SC-1: initialMode parameter accepts chat, voice, and voiceOnly', () => {
     it('accepts chat mode', async () => {
       await AgentforceService.launchConversation({ initialMode: 'chat' });
 
@@ -39,6 +39,14 @@ describe('AgentforceService.launchConversation with initialMode', () => {
 
       expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
         initialMode: 'voice',
+      });
+    });
+
+    it('accepts voiceOnly mode', async () => {
+      await AgentforceService.launchConversation({ initialMode: 'voiceOnly' });
+
+      expect(mockAgentforceModule.launchConversation).toHaveBeenCalledWith({
+        initialMode: 'voiceOnly',
       });
     });
   });
@@ -75,6 +83,14 @@ describe('AgentforceService.launchConversation with initialMode', () => {
       await expect(AgentforceService.launchConversation({ initialMode: 'voice' })).rejects.toThrow(
         'Voice feature is disabled',
       );
+    });
+
+    it('throws when voiceOnly launch fails because Voice is disabled', async () => {
+      mockAgentforceModule.launchConversation.mockRejectedValue(new Error('Voice is not enabled'));
+
+      await expect(
+        AgentforceService.launchConversation({ initialMode: 'voiceOnly' }),
+      ).rejects.toThrow('Voice is not enabled');
     });
   });
 

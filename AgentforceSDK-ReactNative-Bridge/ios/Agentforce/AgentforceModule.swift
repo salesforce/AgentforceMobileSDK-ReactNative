@@ -576,12 +576,14 @@ class AgentforceModule: RCTEventEmitter {
 
                 let conversation = try getOrCreateConversation(client: client, mode: mode)
 
-                // Parse initialMode from options (defaults to chat)
+                // Parse initialMode from options (defaults to chat).
+                // - "chat":      combined chat view in text mode
+                // - "voice":     combined chat view launched in Voice mode (text still reachable)
+                // - "voiceOnly": dedicated Voice-only view, no combined text/interaction content
                 let initialModeString = options["initialMode"] as? String ?? "chat"
-                let initialMode: AgentforceViewMode = (initialModeString == "voice") ? .voice : .chat
 
-                // Validate Voice is enabled if voice mode requested
-                if initialMode == .voice {
+                // Validate Voice is enabled if any voice experience requested
+                if initialModeString == "voice" || initialModeString == "voiceOnly" {
                     guard getFeatureFlagsFromConfigOrUserDefaults([:]).enableVoice else {
                         throw NSError(
                             domain: "AgentforceModule",
@@ -591,20 +593,37 @@ class AgentforceModule: RCTEventEmitter {
                     }
                 }
 
-                let chatView = try client.createAgentforceChatView(
-                    conversation: conversation,
-                    initialMode: initialMode,
-                    delegate: bridgeUIDelegate,
-                    showTopBar: true,
-                    onContainerClose: { [weak self] in
-                        Task { @MainActor in
-                            self?.dismissConversation()
+                if initialModeString == "voiceOnly" {
+                    // Dedicated Voice-only view (AgentforceVoiceView). We intentionally use
+                    // createAgentforceVoiceView — the SDK deprecates it in favor of
+                    // createAgentforceChatView(initialMode: .voice), but that path is the
+                    // COMBINED voice + text view (exposed here as initialMode "voice").
+                    // This standalone view is the only way to present voice with no text UI.
+                    let voiceView = try client.createAgentforceVoiceView(
+                        conversation: conversation,
+                        onContainerClose: { [weak self] in
+                            Task { @MainActor in
+                                self?.dismissConversation()
+                            }
                         }
-                    },
-                    navigationBarBuilder: navigationBarBuilder
-                )
-
-                presentConversationView(chatView)
+                    )
+                    presentConversationView(voiceView)
+                } else {
+                    let initialMode: AgentforceViewMode = (initialModeString == "voice") ? .voice : .chat
+                    let chatView = try client.createAgentforceChatView(
+                        conversation: conversation,
+                        initialMode: initialMode,
+                        delegate: bridgeUIDelegate,
+                        showTopBar: true,
+                        onContainerClose: { [weak self] in
+                            Task { @MainActor in
+                                self?.dismissConversation()
+                            }
+                        },
+                        navigationBarBuilder: navigationBarBuilder
+                    )
+                    presentConversationView(chatView)
+                }
                 resolve(["success": true])
             } catch {
                 print("[AgentforceModule] ❌ Launch failed: \(error)")

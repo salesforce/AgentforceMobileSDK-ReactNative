@@ -841,8 +841,11 @@ class AgentforceService {
    * // Launch in default Chat mode
    * await AgentforceService.launchConversation();
    *
-   * // Launch directly in Voice mode
+   * // Launch directly in Voice mode (combined voice + text on iOS)
    * await AgentforceService.launchConversation({ initialMode: 'voice' });
+   *
+   * // Launch the dedicated Voice-only view (no text UI)
+   * await AgentforceService.launchConversation({ initialMode: 'voiceOnly' });
    * ```
    */
   async launchConversation(options?: LaunchOptions): Promise<boolean> {

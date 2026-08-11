@@ -521,7 +521,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     /**
      * Launch the Agentforce conversation UI - works for both Service and Employee agents
      *
-     * @param options Optional map with "initialMode": "chat" | "voice"
+     * @param options Optional map with "initialMode": "chat" | "voice" | "voiceOnly"
      * @param promise Promise to resolve/reject
      */
     @ReactMethod
@@ -531,14 +531,21 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val initialMode = options?.getString("initialMode") ?: "chat"
         Log.d(TAG, "launchConversation: initialMode=$initialMode")
 
+        // Both "voice" and "voiceOnly" open the dedicated AgentforceVoiceContainer. Android's
+        // SDK exposes a single voice UI per launch (the combined launch-in-voice chat is a
+        // config-time setting, not a per-launch container option), so the two modes resolve to
+        // the same view here — the distinction only matters on iOS, where "voice" is the
+        // combined chat-in-voice view and "voiceOnly" is the standalone voice view.
+        val isVoiceView = initialMode == "voice" || initialMode == "voiceOnly"
+
         val activity = currentActivity
         if (activity == null) {
             promise.reject("ERROR", "Activity not available")
             return
         }
 
-        // Validate Voice feature flag if Voice mode requested
-        if (initialMode == "voice" && !getFeatureFlagsFromConfigOrPrefs(Arguments.createMap()).enableVoice) {
+        // Validate Voice feature flag if a voice view was requested
+        if (isVoiceView && !getFeatureFlagsFromConfigOrPrefs(Arguments.createMap()).enableVoice) {
             Log.e(TAG, "Voice mode requested but enableVoice feature flag is disabled")
             promise.reject("VOICE_DISABLED", "Voice is not enabled for this Agentforce configuration")
             return
@@ -559,7 +566,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 try {
                     viewModel?.initializeAgentforce()
 
-                    AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
+                    AgentforceConversationOverlay.show(activity, voiceMode = isVoiceView)
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
@@ -581,7 +588,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
                 }
 
-                AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
+                AgentforceConversationOverlay.show(activity, voiceMode = isVoiceView)
                 Log.d(TAG, "Conversation shown (initialMode=$initialMode)")
 
                 promise.resolve(Arguments.createMap().apply {
