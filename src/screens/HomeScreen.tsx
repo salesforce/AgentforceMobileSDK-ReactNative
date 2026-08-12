@@ -51,7 +51,9 @@ import {
   ModifyUtteranceRequest,
 } from '@salesforce/react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
+import { getAgentAppearance, loadAppearanceSettings } from '../store/AgentAppearanceStore';
 import { getContextVariables } from '../store/ContextVariablesStore';
+import { getVoiceOptions } from '../store/VoiceTimeoutStore';
 
 interface HomeScreenProps {
   navigation: any;
@@ -121,6 +123,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     // Register custom view provider if enabled, then check configurations.
     // Sequential to avoid a race where configure() runs before registration completes.
     const init = async () => {
+      await loadAppearanceSettings();
       await registerViewProviderIfEnabled();
       checkConfigurations();
     };
@@ -201,23 +204,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
 
     try {
-      // Query native to check current configuration.
-      // Only skip configure() if the SDK client is actually initialized.
+      // Service configuration closes the active MIAW session before replacing the
+      // client. Do not repeat it for an already initialized Service Agent: MIAW may
+      // still be sending delivery acknowledgements after the chat UI is dismissed.
       const configInfo = await AgentforceService.getConfigurationInfo();
-
       if (!configInfo?.configured || configInfo?.mode !== 'service') {
         const config = await AgentforceService.getConfiguration();
-        if (config) {
-          const featureFlags = await AgentforceService.getFeatureFlags();
-
-          await AgentforceService.configure({
-            type: 'service',
-            serviceApiURL: config.serviceApiURL,
-            organizationId: config.organizationId,
-            esDeveloperName: config.esDeveloperName,
-            featureFlags,
-          });
+        if (!config) {
+          throw new Error('Service Agent configuration is unavailable');
         }
+        const featureFlags = await AgentforceService.getFeatureFlags();
+
+        await AgentforceService.configure({
+          type: 'service',
+          serviceApiURL: config.serviceApiURL,
+          organizationId: config.organizationId,
+          esDeveloperName: config.esDeveloperName,
+          featureFlags,
+          appearance: getAgentAppearance(),
+        });
       }
 
       await AgentforceService.launchConversation();
@@ -249,6 +254,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       const agentId = storedAgentId?.trim() || undefined; // Empty string becomes undefined
       const creds = await getEmployeeAgentCredentials();
       const featureFlags = await AgentforceService.getFeatureFlags();
+      // Read the latest voice-timeout settings (editable in Settings) at configure time
+      const voiceOptions = getVoiceOptions();
 
       // Always reconfigure Employee Agent to ensure fresh credentials and agentId
       const config = creds
@@ -261,21 +268,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             agentLabel: '', // optional: set a custom name to display in the chat header (overrides the server agent label)
             accessToken: creds.accessToken,
             featureFlags,
+            appearance: getAgentAppearance(),
+            voiceOptions, // auto-end voice after user silence; edit in Settings > Employee > Voice Timeout
           }
         : // optional: set agentLabel to a custom name to display in the chat header (overrides the server agent label)
-          { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId, agentLabel: '', featureFlags };
+          {
+            ...EMPLOYEE_AGENT_CONFIG,
+            agentId: agentId,
+            agentLabel: '',
+            featureFlags,
+            appearance: getAgentAppearance(),
+            voiceOptions,
+          };
       await AgentforceService.configure(config);
 
-      await AgentforceService.launchConversation();
-
       const contextVars = getContextVariables();
-      if (contextVars.length > 0) {
-        try {
-          await AgentforceService.setAdditionalContext({ variables: contextVars });
-        } catch (ctxError) {
-          console.warn('Failed to set employee agent context variables:', ctxError);
-        }
-      }
+      await AgentforceService.launchConversation({
+        additionalContext: contextVars.length > 0 ? { variables: contextVars } : undefined,
+      });
     } catch (error: any) {
       Alert.alert(
         'Error',
