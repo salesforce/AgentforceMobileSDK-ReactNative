@@ -140,6 +140,7 @@ targets:
       PRODUCT_NAME: ServiceAgent
       INFOPLIST_FILE: ServiceAgent/Info.plist
       CODE_SIGN_ENTITLEMENTS: ServiceAgent/ServiceAgent.entitlements
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     sources:
       - path: Shared
         type: group
@@ -154,6 +155,7 @@ targets:
       PRODUCT_NAME: EmployeeAgent
       INFOPLIST_FILE: EmployeeAgent/Info.plist
       CODE_SIGN_ENTITLEMENTS: EmployeeAgent/EmployeeAgent.entitlements
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     sources:
       - path: Shared
         type: group

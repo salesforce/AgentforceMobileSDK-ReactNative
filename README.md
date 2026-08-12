@@ -501,18 +501,18 @@ npm start -- --reset-cache
 
 ### setAdditionalContext
 
-Provide contextual data (user ID, account ID, etc.) to personalize agent responses. Pass context to `launchConversation()` when the first agent response needs it. Use `setAdditionalContext()` after launch to update an active conversation.
+Provide contextual data (user ID, account ID, etc.) to personalize agent responses. Must be called after launching a conversation.
 
 ```typescript
-await AgentforceService.launchConversation({
-  additionalContext: {
-    variables: [
-      { name: 'userId', type: 'Text', value: '005xx0000001234' },
-      { name: 'accountId', type: 'Text', value: '001xx0000001234' },
-      { name: 'score', type: 'Number', value: 95.5 },
-      { name: 'isVIP', type: 'Boolean', value: true },
-    ],
-  },
+await AgentforceService.launchConversation();
+
+await AgentforceService.setAdditionalContext({
+  variables: [
+    { name: 'userId', type: 'Text', value: '005xx0000001234' },
+    { name: 'accountId', type: 'Text', value: '001xx0000001234' },
+    { name: 'score', type: 'Number', value: 95.5 },
+    { name: 'isVIP', type: 'Boolean', value: true },
+  ],
 });
 ```
 

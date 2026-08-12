@@ -39,15 +39,4 @@ export interface VoiceOptions {
    * Has no effect when {@link userSilenceTimeoutSeconds} is unset.
    */
   autoEndWhileMuted?: boolean;
-
-  /**
-   * Whether closed captions start enabled for a first-time voice user.
-   *
-   * `false` (default) preserves the existing off-by-default behavior. Once a
-   * user has changed the closed-captions setting, their saved choice takes
-   * precedence over this default on future voice sessions.
-   *
-   * Has no effect when the native SDK's closed-captions feature gate is off.
-   */
-  defaultClosedCaptionsEnabled?: boolean;
 }
