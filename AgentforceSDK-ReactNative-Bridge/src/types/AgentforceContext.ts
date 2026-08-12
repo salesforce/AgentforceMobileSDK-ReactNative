@@ -63,7 +63,8 @@ export interface AgentforceContextVariable {
  *   ]
  * };
  *
- * await AgentforceService.launchConversation({ additionalContext: context });
+ * await AgentforceService.launchConversation();
+ * await AgentforceService.setAdditionalContext(context);
  * ```
  */
 export interface AgentforceAdditionalContext {

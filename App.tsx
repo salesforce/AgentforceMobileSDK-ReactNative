@@ -31,7 +31,7 @@ import FeatureFlagsScreen from './src/screens/FeatureFlagsScreen';
 
 export type RootStackParamList = {
   Home: undefined;
-  Settings: { tab?: 'service' | 'employee' | 'features' | 'theming' };
+  Settings: { tab?: 'service' | 'employee' | 'features' };
   FeatureFlags: undefined;
 };
 

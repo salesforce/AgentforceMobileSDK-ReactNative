@@ -17,8 +17,6 @@ export interface AgentResponseEvent {
   type: string;
   /** Conversation that produced this response (UUID string) */
   conversationId: string;
-  /** Agentforce session that produced this response, if assigned */
-  sessionId: string | null;
   /** ISO 8601 timestamp */
   timestamp?: string;
 }

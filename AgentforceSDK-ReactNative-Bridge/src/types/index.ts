@@ -36,25 +36,11 @@ export {
 // View provider delegate types
 export { ViewProviderDelegate, ViewProviderComponentData } from './ViewProviderDelegate';
 
-// Splash screen delegate types
-export type { SplashScreenDelegate, SplashScreenComponentProps } from './SplashScreenDelegate';
-
 // Hidden prechat field types
 export type { HiddenPreChatFields } from './HiddenPreChatFields';
 
 // Voice configuration types
 export type { VoiceOptions } from './VoiceOptions';
-
-// Appearance customization types
-export type {
-  AgentforceAppearance,
-  AgentforceThemeMode,
-  AgentforceFontWeight,
-  AgentforceGenericFontFamily,
-  AgentforceFontFamily,
-  AgentforceIconSource,
-  AgentforceFontOverride,
-} from './AgentforceAppearance';
 
 // UI delegate types
 export type {

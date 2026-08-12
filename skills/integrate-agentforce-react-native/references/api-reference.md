@@ -14,8 +14,11 @@ AgentforceService.setNavigationDelegate(myNavigation);
 // 2. Configure
 await AgentforceService.configure({ type: 'service', ... });
 
-// 3. Launch with context required by the initial agent response
-await AgentforceService.launchConversation({ additionalContext: { variables: [...] } });
+// 3. Launch the native conversation UI
+await AgentforceService.launchConversation();
+
+// 4. (Optional) attach context to the live conversation
+await AgentforceService.setAdditionalContext({ variables: [...] });
 
 // 5. On app shutdown — clean up event listeners
 AgentforceService.destroy();
@@ -36,10 +39,9 @@ await AgentforceService.configure({
 });
 ```
 
-### `launchConversation({ additionalContext? })`
+### `launchConversation()`
 
 Open the native chat UI. **Preserves** any existing conversation — users continue where they left off. Throws if `configure()` hasn't been called.
-Pass `additionalContext` to apply variables before the chat UI begins session initialization.
 
 ### `startNewConversation()`
 
@@ -55,7 +57,7 @@ Check current state. `getConfigurationInfo()` returns `{ configured, mode, descr
 
 ### `setAdditionalContext({ variables })`
 
-Attach contextual data to the **current** conversation after launch. Use `launchConversation({ additionalContext })` when the initial response needs the variables.
+Attach contextual data to the **current** conversation. Must be called **after** `launchConversation()`.
 
 ```ts
 await AgentforceService.setAdditionalContext({

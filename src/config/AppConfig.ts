@@ -29,39 +29,10 @@
  * See src/config/README.md for detailed documentation.
  */
 
-import type { VoiceOptions } from '@salesforce/react-native-agentforce';
-
 import { APP_MODE } from './AppConfig.generated';
 
 // Widen the type for comparison - APP_MODE can be 'service', 'employee', or 'all'
 const appMode: 'service' | 'employee' | 'all' = APP_MODE as any;
-
-/**
- * Example voice-session options for the Employee Agent.
- *
- * Auto-ends a voice conversation after `userSilenceTimeoutSeconds` seconds of
- * continuous user silence. Pass this as `voiceOptions` on the config object —
- * it must be a top-level sibling of `type`, not nested inside `featureFlags`.
- * The native bridge only reads `config.voiceOptions`; anywhere else is ignored.
- *
- * Voice options are applied when the voice session's client is created. The
- * native bridge tracks the last-applied options and rebuilds the client when
- * they change, so an edit takes effect on the next `configure()` (e.g. the next
- * launch from Home) — at the cost of ending the active conversation. A
- * reconfigure with unchanged options reuses the existing client.
- *
- * `autoEndWhileMuted: false` (the default) pauses the silence timer while the
- * mic is muted, so a muted user is never auto-ended. Set `true` to count muted
- * time as silence.
- */
-export const EMPLOYEE_VOICE_OPTIONS: VoiceOptions = {
-  userSilenceTimeoutSeconds: 30,
-  autoEndWhileMuted: false,
-};
-// These values seed the runtime-editable VoiceTimeoutStore (Settings > Employee
-// > Voice Timeout). configure() sends the store's current values, not this
-// constant directly. Note: the store defaults auto-end-on-silence *off* and uses
-// these only as the pre-filled values when the user enables the toggle.
 
 /**
  * Feature flags derived from APP_MODE

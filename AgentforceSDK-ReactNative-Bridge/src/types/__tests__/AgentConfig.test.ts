@@ -6,23 +6,6 @@ import {
   EmployeeAgentConfig,
   LegacyServiceAgentConfig,
 } from '../AgentConfig';
-import type { AgentforceAppearance } from '../AgentforceAppearance';
-
-const appearance: AgentforceAppearance = {
-  themeMode: 'system',
-  lightColors: { chatBackground: '#FFFFFF' },
-  darkColors: { chatBackground: '#181818' },
-  icons: {
-    aiAgent: {
-      ios: { light: 'BrandAgent' },
-      android: { light: 'brand_agent' },
-    },
-  },
-  typography: {
-    fontFamily: { type: 'generic', family: 'serif' },
-    styles: { bodyFontScale1Regular: { size: 14, weight: 400 } },
-  },
-};
 
 const serviceConfig: ServiceAgentConfig = {
   type: 'service',
@@ -82,16 +65,6 @@ describe('AgentConfig type guards', () => {
 
     it('returns false for an employee config', () => {
       expect(isLegacyConfig(employeeConfig)).toBe(false);
-    });
-  });
-
-  it('permits appearance configuration in both agent modes', () => {
-    expect({ ...serviceConfig, appearance }.appearance?.icons?.aiAgent.android.light).toBe(
-      'brand_agent',
-    );
-    expect({ ...employeeConfig, appearance }.appearance?.typography?.fontFamily).toEqual({
-      type: 'generic',
-      family: 'serif',
     });
   });
 });

@@ -71,8 +71,7 @@ RCT_EXTERN_METHOD(setInternalFlags:(NSDictionary *)flags
 
 // MARK: - Conversation Methods
 
-RCT_EXTERN_METHOD(launchConversation:(NSDictionary *)options
-                  resolver:(RCTPromiseResolveBlock)resolve
+RCT_EXTERN_METHOD(launchConversation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(closeConversation:(RCTPromiseResolveBlock)resolve
@@ -133,20 +132,6 @@ RCT_EXTERN_METHOD(registerViewProvider:(NSDictionary *)config
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(clearViewProvider:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
-
-// MARK: - Splash Screen Provider
-
-RCT_EXTERN_METHOD(registerSplashScreenProvider:(NSDictionary *)config
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
-
-RCT_EXTERN_METHOD(clearSplashScreenProvider:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
-
-RCT_EXTERN_METHOD(selectSplashScreenUtterance:(NSString *)agentId
-                  utterance:(NSString *)utterance
-                  resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 // MARK: - UI Delegate
