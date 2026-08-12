@@ -129,4 +129,14 @@ describe('voiceOptions round-trip via configure()', () => {
     const payload = nativeModule.configureWithConfig.mock.calls[0][0];
     expect(payload.voiceOptions).not.toHaveProperty('autoEndWhileMuted');
   });
+
+  it('forwards defaultClosedCaptionsEnabled to the native module', async () => {
+    await AgentforceService.configure({
+      ...baseServiceConfig,
+      voiceOptions: { defaultClosedCaptionsEnabled: true },
+    });
+
+    const payload = nativeModule.configureWithConfig.mock.calls[0][0];
+    expect(payload.voiceOptions).toEqual({ defaultClosedCaptionsEnabled: true });
+  });
 });

@@ -27,6 +27,7 @@ import type {
   AgentforceContextVariableType,
 } from '../types/AgentforceContext';
 import { ViewProviderDelegate } from '../types/ViewProviderDelegate';
+import type { SplashScreenDelegate } from '../types/SplashScreenDelegate';
 import type { HiddenPreChatFields } from '../types/HiddenPreChatFields';
 import type {
   UIDelegate,
@@ -36,6 +37,7 @@ import type {
   ModifyUtteranceRequest,
 } from '../types/UIDelegate';
 import type { VoiceOptions } from '../types/VoiceOptions';
+import type { LaunchOptions } from '../types/LaunchOptions';
 
 const { AgentforceModule } = NativeModules;
 
@@ -45,6 +47,7 @@ export type { LoggerDelegate, LogLevel };
 export type { NavigationDelegate, NavigationRequest };
 export type { AgentforceAdditionalContext, AgentforceContextVariable };
 export type { ViewProviderDelegate };
+export type { SplashScreenDelegate };
 export type { HiddenPreChatFields };
 export type {
   UIDelegate,
@@ -54,6 +57,7 @@ export type {
   ModifyUtteranceRequest,
 };
 export type { VoiceOptions };
+export type { LaunchOptions };
 
 /**
  * Native module event names
@@ -145,6 +149,11 @@ class AgentforceService {
    * View provider delegate configuration (registered component types + React component name)
    */
   private viewProviderDelegate: ViewProviderDelegate | null = null;
+
+  /**
+   * Splash screen delegate configuration (agent ID -> React component name)
+   */
+  private splashScreenDelegate: SplashScreenDelegate | null = null;
 
   /**
    * UI delegate for receiving agent response, utterance, and switch events
@@ -350,6 +359,124 @@ class AgentforceService {
     } catch (error) {
       console.warn('[AgentforceService] Failed to clear view provider:', error);
     }
+  }
+
+  /**
+   * Register a splash screen delegate to supply a custom welcome ("splash")
+   * screen — a React Native component shown on top of the conversation before the
+   * user has interacted with an agent.
+   *
+   * The chat UI is fully native, so the splash content is a React Native component
+   * hosted inside the native conversation view (like the View Provider). Register
+   * each component with `AppRegistry.registerComponent()` and map agent IDs to the
+   * registered component names via `delegate.componentMap`.
+   *
+   * The native SDK asks for a splash screen when the chat view is first shown and
+   * again whenever the active agent changes, so a host can show a splash for only
+   * some agents. Use the wildcard key `'*'` to supply a default for every agent.
+   *
+   * Can be called before or after `configure()` — the native provider is always
+   * attached and checks the component map dynamically.
+   *
+   * When the user chooses a starter utterance, the splash component must report it
+   * with `selectSplashScreenUtterance(agentId, utterance)`; the SDK then animates
+   * the splash away and sends the utterance into the conversation. The splash also
+   * dismisses when the user sends text from the input bar.
+   *
+   * @param delegate - Splash screen delegate configuration
+   *
+   * @example
+   * ```typescript
+   * AgentforceService.setSplashScreenDelegate({
+   *   componentMap: {
+   *     '0XxABC0000001234': 'WelcomeSplash',
+   *   },
+   * });
+   * ```
+   */
+  async setSplashScreenDelegate(delegate: SplashScreenDelegate): Promise<void> {
+    this.splashScreenDelegate = delegate;
+
+    if (!AgentforceModule?.registerSplashScreenProvider) {
+      console.warn(
+        '[AgentforceService] registerSplashScreenProvider not available on native module',
+      );
+      return;
+    }
+
+    try {
+      await AgentforceModule.registerSplashScreenProvider({
+        componentMap: delegate.componentMap,
+      });
+      console.log(
+        `[AgentforceService] Splash screen registered for ${
+          Object.keys(delegate.componentMap).length
+        } agent(s)`,
+      );
+    } catch (error) {
+      console.error('[AgentforceService] Failed to register splash screen provider:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear the registered splash screen delegate.
+   * After clearing, the native SDK shows the standard conversation UI for all agents.
+   */
+  async clearSplashScreenDelegate(): Promise<void> {
+    this.splashScreenDelegate = null;
+
+    if (!AgentforceModule?.clearSplashScreenProvider) {
+      return;
+    }
+
+    try {
+      await AgentforceModule.clearSplashScreenProvider();
+      console.log('[AgentforceService] Splash screen delegate cleared');
+    } catch (error) {
+      console.warn('[AgentforceService] Failed to clear splash screen provider:', error);
+    }
+  }
+
+  /**
+   * Report that the user chose a starter utterance on a custom splash screen.
+   *
+   * Call this from your splash screen component (registered via
+   * `setSplashScreenDelegate`) when the user taps a suggested utterance. The SDK
+   * animates the splash screen away, reveals the conversation behind it, and sends
+   * the utterance into the conversation.
+   *
+   * @param agentId - The agent ID the splash screen was shown for (received as an
+   *   initial prop by the splash component).
+   * @param utterance - The utterance the user chose.
+   *
+   * @example
+   * ```typescript
+   * function WelcomeSplash({ agentId }: { agentId: string }) {
+   *   return (
+   *     <Button
+   *       title="Track my order"
+   *       onPress={() =>
+   *         AgentforceService.selectSplashScreenUtterance(agentId, 'Track my order')
+   *       }
+   *     />
+   *   );
+   * }
+   * ```
+   */
+  selectSplashScreenUtterance(agentId: string, utterance: string): void {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return;
+    }
+
+    if (!AgentforceModule?.selectSplashScreenUtterance) {
+      console.warn(
+        '[AgentforceService] selectSplashScreenUtterance not available on native module',
+      );
+      return;
+    }
+
+    AgentforceModule.selectSplashScreenUtterance(agentId ?? '', utterance ?? '');
   }
 
   /**
@@ -705,20 +832,23 @@ class AgentforceService {
    * Preserves existing conversation if available, allowing users to continue
    * where they left off. Works for both Service Agent and Employee Agent modes.
    *
+   * @param options - Optional launch configuration
    * @returns Promise<boolean> indicating success
    * @throws Error if SDK is not configured or launch fails
    *
    * @example
    * ```typescript
-   * try {
-   *   await AgentforceService.launchConversation();
-   *   console.log('Conversation launched');
-   * } catch (error) {
-   *   console.error('Failed to launch:', error);
-   * }
+   * // Launch in default Chat mode
+   * await AgentforceService.launchConversation();
+   *
+   * // Launch directly in Voice mode
+   * await AgentforceService.launchConversation({ initialMode: 'voice' });
+   *
+   * // Apply context before the native UI begins session initialization
+   * await AgentforceService.launchConversation({ additionalContext: { variables: [] } });
    * ```
    */
-  async launchConversation(): Promise<boolean> {
+  async launchConversation(options?: LaunchOptions): Promise<boolean> {
     if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
       console.warn('Agentforce only supported on Android and iOS');
       return false;
@@ -730,8 +860,19 @@ class AgentforceService {
     }
 
     try {
-      const result = await AgentforceModule.launchConversation();
-      console.log('[AgentforceService] Conversation launched successfully');
+      const initialMode = options?.initialMode ?? 'chat';
+      const additionalContext = options?.additionalContext;
+      if (additionalContext) {
+        this.validateAdditionalContext(additionalContext);
+      }
+
+      const voiceCloseBehavior = options?.voiceCloseBehavior ?? 'returnToChat';
+      const result = await AgentforceModule.launchConversation({
+        initialMode,
+        voiceCloseBehavior,
+        ...(additionalContext && { additionalContext }),
+      });
+      console.log(`[AgentforceService] Conversation launched successfully (mode: ${initialMode})`);
       return result?.success ?? true;
     } catch (error) {
       console.error('[AgentforceService] Failed to launch conversation:', error);
@@ -1063,7 +1204,8 @@ class AgentforceService {
    * such as user ID, account ID, case number, or any other relevant data.
    * This helps the agent provide more personalized and relevant responses.
    *
-   * **Must be called after launching a conversation.**
+   * Call this after launching a conversation to update its context. To make context
+   * available to the initial agent response, pass it to `launchConversation()`.
    *
    * @param context - The additional context with variables to set
    * @returns Promise<boolean> indicating success
@@ -1093,28 +1235,7 @@ class AgentforceService {
       return false;
     }
 
-    // Validate context structure
-    if (!context || !Array.isArray(context.variables)) {
-      throw new Error('Invalid context: must have "variables" array');
-    }
-
-    // Validate each variable
-    for (let i = 0; i < context.variables.length; i++) {
-      const variable = context.variables[i];
-      if (!variable.name || typeof variable.name !== 'string') {
-        throw new Error(`Invalid context variable at index ${i}: missing or invalid "name"`);
-      }
-      if (!variable.type || typeof variable.type !== 'string') {
-        throw new Error(`Invalid context variable at index ${i}: missing or invalid "type"`);
-      }
-      // Validate type against known types
-      if (!VALID_CONTEXT_TYPES.has(variable.type as AgentforceContextVariableType)) {
-        throw new Error(
-          `Invalid context variable at index ${i}: unknown type "${variable.type}". ` +
-            `Valid types: ${Array.from(VALID_CONTEXT_TYPES).join(', ')}`,
-        );
-      }
-    }
+    this.validateAdditionalContext(context);
 
     try {
       const result = await AgentforceModule.setAdditionalContext(context);
@@ -1125,6 +1246,28 @@ class AgentforceService {
     } catch (error) {
       console.error('[AgentforceService] Failed to set additional context:', error);
       throw error;
+    }
+  }
+
+  private validateAdditionalContext(context: AgentforceAdditionalContext): void {
+    if (!context || !Array.isArray(context.variables)) {
+      throw new Error('Invalid context: must have "variables" array');
+    }
+
+    for (let i = 0; i < context.variables.length; i++) {
+      const variable = context.variables[i];
+      if (!variable.name || typeof variable.name !== 'string') {
+        throw new Error(`Invalid context variable at index ${i}: missing or invalid "name"`);
+      }
+      if (!variable.type || typeof variable.type !== 'string') {
+        throw new Error(`Invalid context variable at index ${i}: missing or invalid "type"`);
+      }
+      if (!VALID_CONTEXT_TYPES.has(variable.type as AgentforceContextVariableType)) {
+        throw new Error(
+          `Invalid context variable at index ${i}: unknown type "${variable.type}". ` +
+            `Valid types: ${Array.from(VALID_CONTEXT_TYPES).join(', ')}`,
+        );
+      }
     }
   }
 
@@ -1252,6 +1395,12 @@ class AgentforceService {
       this.clearViewProviderDelegate().catch(() => {});
     }
     this.viewProviderDelegate = null;
+
+    // Clear native splash screen registration before nulling the JS reference
+    if (this.splashScreenDelegate) {
+      this.clearSplashScreenDelegate().catch(() => {});
+    }
+    this.splashScreenDelegate = null;
 
     this.eventEmitter = null;
     this.initialized = false;

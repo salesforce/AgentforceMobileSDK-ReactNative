@@ -50,6 +50,22 @@ class AgentforceModule: RCTEventEmitter {
     /// supplied, so the SDK falls back to the server-provided agent label.
     private var navigationBarBuilder: BridgeNavigationBarBuilder?
 
+    /// Normalized voice options applied to the currently-live client. Compared
+    /// against a fresh snapshot on reconfigure so a voice-options change forces a
+    /// new client (the SDK reads voice options only at client creation). `nil`
+    /// when no client is live.
+    private var appliedVoiceOptions: VoiceOptionsSnapshot?
+
+    /// Value snapshot of the voice options that actually affect client behavior,
+    /// normalized the same way the SDK treats them: a missing, non-positive, or
+    /// non-finite timeout collapses to `nil` ("never auto-end"), so cosmetic
+    /// differences in the raw JS payload don't spuriously rebuild the client.
+    private struct VoiceOptionsSnapshot: Equatable {
+        let userSilenceTimeoutSeconds: Double?
+        let autoEndWhileMuted: Bool
+        let defaultClosedCaptionsEnabled: Bool
+    }
+
 
     private let listenerLock = NSLock()
     private var _hasListeners = false
@@ -86,11 +102,21 @@ class AgentforceModule: RCTEventEmitter {
         return BridgeViewProvider(bridge: self.bridge)
     }()
 
+    // MARK: - Splash Screen Provider
+
+    /// Bridge splash screen provider for hosting a React Native welcome screen on
+    /// top of the conversation. Initialized lazily so the RCT bridge is available.
+    private lazy var bridgeSplashScreenProvider: BridgeSplashScreenProvider = {
+        return BridgeSplashScreenProvider(bridge: self.bridge)
+    }()
+
     // MARK: - UI Delegate
 
     /// Bridge UI delegate for forwarding SDK UI events to JavaScript.
+    /// Wired to the splash screen provider so the SDK's splash-screen request is
+    /// satisfied by a registered React Native component.
     private lazy var bridgeUIDelegate: BridgeUIDelegate = {
-        return BridgeUIDelegate(module: self)
+        return BridgeUIDelegate(module: self, splashScreenProvider: bridgeSplashScreenProvider)
     }()
 
     /// Pending modify-utterance continuations keyed by requestId.
@@ -206,6 +232,37 @@ class AgentforceModule: RCTEventEmitter {
         )
     }
 
+    /// Build a normalized, comparable snapshot of the voice options from the JS
+    /// config map. A missing, non-positive, or non-finite `userSilenceTimeoutSeconds`
+    /// collapses to `nil` so it compares equal to an explicitly-disabled timeout —
+    /// matching how `parseVoiceSessionOptions` maps those to `.never`.
+    private static func voiceOptionsSnapshot(from configDict: [String: Any]) -> VoiceOptionsSnapshot {
+        guard let voiceOpts = configDict["voiceOptions"] as? [String: Any] else {
+            return VoiceOptionsSnapshot(
+                userSilenceTimeoutSeconds: nil,
+                autoEndWhileMuted: false,
+                defaultClosedCaptionsEnabled: false
+            )
+        }
+        let autoEndWhileMuted = (voiceOpts["autoEndWhileMuted"] as? NSNumber)?.boolValue ?? false
+        let defaultClosedCaptionsEnabled =
+            (voiceOpts["defaultClosedCaptionsEnabled"] as? NSNumber)?.boolValue ?? false
+        let seconds = (voiceOpts["userSilenceTimeoutSeconds"] as? NSNumber)?.doubleValue
+        let normalizedSeconds = seconds.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        return VoiceOptionsSnapshot(
+            userSilenceTimeoutSeconds: normalizedSeconds,
+            autoEndWhileMuted: autoEndWhileMuted,
+            defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled
+        )
+    }
+
+    private static func defaultClosedCaptionsEnabled(from configDict: [String: Any]) -> Bool {
+        guard let voiceOpts = configDict["voiceOptions"] as? [String: Any] else {
+            return false
+        }
+        return (voiceOpts["defaultClosedCaptionsEnabled"] as? NSNumber)?.boolValue ?? false
+    }
+
     // MARK: - Service Agent Configuration
 
     private func configureServiceAgent(
@@ -266,6 +323,8 @@ class AgentforceModule: RCTEventEmitter {
         // (LiveKit/MIAW) internally once the flag is on. shouldBlockMicrophone stays
         // false so the mic isn't gated; other public flags carry through too.
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        let defaultClosedCaptionsEnabled = Self.defaultClosedCaptionsEnabled(from: configDict)
+        saveFeatureFlagsToUserDefaults(flags)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
@@ -273,11 +332,12 @@ class AgentforceModule: RCTEventEmitter {
             shouldBlockMicrophone: false,
             enableVoice: flags.enableVoice,
             enableOnboarding: false,
+            defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled,
             internalFlags: internalFlagsForSDK(configDict)
         )
 
         // Use .serviceAgent() mode with overrides for logger and navigation.
-        let serviceConfig = ServiceAgentConfiguration(
+        var serviceConfig = ServiceAgentConfiguration(
             esDeveloperName: config.esDeveloperName,
             organizationId: config.organizationId,
             serviceApiURL: config.serviceApiURL,
@@ -288,6 +348,17 @@ class AgentforceModule: RCTEventEmitter {
         .withLogger(bridgeLogger)
         .withNavigation(bridgeNavigation)
         .withVoiceSessionOptions(voiceSessionOptions)
+
+        if let mode = try AppearanceConfiguration.themeMode(from: configDict) {
+            if AppearanceConfiguration.hasOverrides(from: configDict) {
+                throw AppearanceError.invalid(
+                    "iOS cannot combine appearance.themeMode with sparse appearance overrides in the installed AgentforceSDK"
+                )
+            }
+            serviceConfig = serviceConfig.setTheming(.customManager(AppearanceConfiguration.themeManager(for: mode)))
+        } else if let theming = try AppearanceConfiguration.theming(from: configDict) {
+            serviceConfig = serviceConfig.setTheming(theming)
+        }
 
         // Always pass bridgeViewProvider so late registrations take effect.
         // canHandle() returns false when the map is empty, matching nil behavior.
@@ -319,14 +390,23 @@ class AgentforceModule: RCTEventEmitter {
             agentIdChanged = existingConfig.agentId != config.agentId
         }
         
-        let needsNewClient = switchingModes || agentIdChanged || agentforceClient == nil
+        // A live client only reads its voice options at creation, so a change to
+        // them must force a rebuild. Only meaningful when a client already exists.
+        let voiceOptionsSnapshot = Self.voiceOptionsSnapshot(from: configDict)
+        let voiceOptionsChanged = agentforceClient != nil && appliedVoiceOptions != voiceOptionsSnapshot
 
-        // Only cleanup if switching from Service mode or agentId changed
+        let needsNewClient = switchingModes || agentIdChanged || voiceOptionsChanged || agentforceClient == nil
+
+        // Only cleanup if switching from Service mode, agentId changed, or voice options changed
         if switchingModes {
             print("[AgentforceModule] ⚠️ Switching from Service to Employee mode - cleaning up")
             cleanupClient()
         } else if agentIdChanged {
             print("[AgentforceModule] ⚠️ AgentId changed - cleaning up conversation")
+            await closeCurrentConversation()
+            cleanupClient()
+        } else if voiceOptionsChanged {
+            print("[AgentforceModule] ⚠️ Voice options changed - cleaning up conversation to rebuild client")
             await closeCurrentConversation()
             cleanupClient()
         } else if agentforceClient != nil {
@@ -374,6 +454,8 @@ class AgentforceModule: RCTEventEmitter {
         )
 
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        let defaultClosedCaptionsEnabled = Self.defaultClosedCaptionsEnabled(from: configDict)
+        saveFeatureFlagsToUserDefaults(flags)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
@@ -381,6 +463,7 @@ class AgentforceModule: RCTEventEmitter {
             shouldBlockMicrophone: false,
             enableVoice: flags.enableVoice,
             enableOnboarding: false,
+            defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled,
             internalFlags: internalFlagsForSDK(configDict)
         )
 
@@ -388,7 +471,7 @@ class AgentforceModule: RCTEventEmitter {
         let network = createAuthenticatedNetwork()
         let dataProvider = createDataProvider(network: network)
 
-        let fullConfiguration = AgentforceConfiguration(
+        var fullConfiguration = AgentforceConfiguration(
             user: user,
             agentforceCopier: BridgeCopier(),
             forceConfigEndpoint: config.instanceUrl,
@@ -400,6 +483,17 @@ class AgentforceModule: RCTEventEmitter {
             voiceSessionOptions: voiceSessionOptions
         )
 
+        if let mode = try AppearanceConfiguration.themeMode(from: configDict) {
+            if AppearanceConfiguration.hasOverrides(from: configDict) {
+                throw AppearanceError.invalid(
+                    "iOS cannot combine appearance.themeMode with sparse appearance overrides in the installed AgentforceSDK"
+                )
+            }
+            fullConfiguration = fullConfiguration.setTheming(.customManager(AppearanceConfiguration.themeManager(for: mode)))
+        } else if let theming = try AppearanceConfiguration.theming(from: configDict) {
+            fullConfiguration = fullConfiguration.setTheming(theming)
+        }
+
         // Only create new client if needed (otherwise reuse existing to preserve conversation)
         if needsNewClient {
             print("[AgentforceModule] Creating new AgentforceClient for Employee Agent")
@@ -410,6 +504,7 @@ class AgentforceModule: RCTEventEmitter {
                 mode: .fullConfig(fullConfiguration),
                 viewProvider: bridgeViewProvider
             )
+            appliedVoiceOptions = voiceOptionsSnapshot
         } else {
             print("[AgentforceModule] Reusing existing AgentforceClient - credentials will be refreshed automatically")
         }
@@ -488,7 +583,8 @@ class AgentforceModule: RCTEventEmitter {
     /// Launch the conversation UI - works for both Service and Employee agents
     @objc
     func launchConversation(
-        _ resolve: @escaping RCTPromiseResolveBlock,
+        _ options: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         Task { @MainActor in
@@ -502,10 +598,36 @@ class AgentforceModule: RCTEventEmitter {
 
                 let conversation = try getOrCreateConversation(client: client, mode: mode)
 
+                if let contextDict = options["additionalContext"] as? NSDictionary {
+                    let context = try additionalContextVariables(from: contextDict)
+                    try await conversation.setAdditionalContext(context: context)
+                }
+
+                // Parse initialMode from options (defaults to chat)
+                let initialModeString = options["initialMode"] as? String ?? "chat"
+                let initialMode: AgentforceViewMode = (initialModeString == "voice") ? .voice : .chat
+                let voiceCloseBehavior: AgentforceVoiceCloseBehavior =
+                    (options["voiceCloseBehavior"] as? String == "dismissContainer")
+                    ? .dismissContainer
+                    : .returnToChat
+
+                // Validate Voice is enabled if voice mode requested
+                if initialMode == .voice {
+                    guard getFeatureFlagsFromConfigOrUserDefaults([:]).enableVoice else {
+                        throw NSError(
+                            domain: "AgentforceModule",
+                            code: 1001,
+                            userInfo: [NSLocalizedDescriptionKey: "Voice is not enabled. Set enableVoice: true in feature flags."]
+                        )
+                    }
+                }
+
                 let chatView = try client.createAgentforceChatView(
                     conversation: conversation,
+                    initialMode: initialMode,
                     delegate: bridgeUIDelegate,
                     showTopBar: true,
+                    voiceCloseBehavior: voiceCloseBehavior,
                     onContainerClose: { [weak self] in
                         Task { @MainActor in
                             self?.dismissConversation()
@@ -1098,6 +1220,55 @@ class AgentforceModule: RCTEventEmitter {
         resolve(["success": true])
     }
 
+    // MARK: - Splash Screen Provider
+
+    /// Register a React Native component as the splash (welcome) screen for one or
+    /// more agents. Can be called before or after configure() — the provider is
+    /// always attached via the UI delegate and checks the map dynamically.
+    @objc
+    func registerSplashScreenProvider(
+        _ config: NSDictionary,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard let dict = config as? [String: Any],
+              let componentMap = dict["componentMap"] as? [String: String],
+              !componentMap.isEmpty else {
+            reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary", nil)
+            return
+        }
+        bridgeSplashScreenProvider.register(componentMap: componentMap)
+        resolve(["success": true, "registeredAgents": Array(componentMap.keys)])
+    }
+
+    /// Clear the splash screen registration.
+    @objc
+    func clearSplashScreenProvider(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            bridgeSplashScreenProvider.reset()
+            resolve(["success": true])
+        }
+    }
+
+    /// Report that the user chose a starter utterance on a React Native splash
+    /// screen. Routes the utterance back into the SDK's splash utterance delegate,
+    /// which animates the splash away and sends the utterance into the conversation.
+    @objc
+    func selectSplashScreenUtterance(
+        _ agentId: String,
+        utterance: String,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            bridgeSplashScreenProvider.selectUtterance(agentId: agentId, utterance: utterance)
+            resolve(true)
+        }
+    }
+
     // MARK: - Teardown
 
     /// Called by the RN bridge when it tears this module down — the exact
@@ -1141,6 +1312,7 @@ class AgentforceModule: RCTEventEmitter {
     private func cleanupClient() {
         currentConversation = nil
         agentforceClient = nil
+        appliedVoiceOptions = nil
         bridgeHiddenPreChat.setFields([:])
     }
 
@@ -1244,6 +1416,38 @@ class AgentforceModule: RCTEventEmitter {
         }
     }
 
+    private func additionalContextVariables(from contextDict: NSDictionary) throws -> [AgentforceVariable] {
+        guard let variables = contextDict["variables"] as? [[String: Any]] else {
+            throw NSError(
+                domain: "AgentforceModule",
+                code: 1002,
+                userInfo: [NSLocalizedDescriptionKey: "Missing or invalid 'variables' array"]
+            )
+        }
+
+        var context: [AgentforceVariable] = []
+        for (index, variable) in variables.enumerated() {
+            guard let name = variable["name"] as? String,
+                  let type = variable["type"] as? String else {
+                throw NSError(
+                    domain: "AgentforceModule",
+                    code: 1002,
+                    userInfo: [NSLocalizedDescriptionKey: "Variable at index \(index) missing 'name' or 'type'"]
+                )
+            }
+
+            context.append(
+                AgentforceVariable(
+                    name: name,
+                    type: type,
+                    value: variable["value"].flatMap(convertToJSEncodableValue)
+                )
+            )
+        }
+
+        return context
+    }
+
     /// Set additional context for the current conversation.
     /// Must be called after launching a conversation.
     ///
@@ -1261,12 +1465,6 @@ class AgentforceModule: RCTEventEmitter {
             // don't run bridge work or resolve promises into a dead JS runtime.
             guard !isInvalidated else { return }
             do {
-                // Validate context structure
-                guard let variables = contextDict["variables"] as? [[String: Any]] else {
-                    reject("INVALID_CONTEXT", "Missing or invalid 'variables' array", nil)
-                    return
-                }
-
                 // Check if conversation exists
                 guard let conversation = currentConversation else {
                     reject(
@@ -1277,44 +1475,10 @@ class AgentforceModule: RCTEventEmitter {
                     return
                 }
 
-                // Convert to AgentforceVariable array
-                var agentforceVariables: [AgentforceVariable] = []
-                for (index, varDict) in variables.enumerated() {
-                    guard let name = varDict["name"] as? String,
-                          let type = varDict["type"] as? String else {
-                        reject(
-                            "INVALID_CONTEXT",
-                            "Variable at index \(index) missing 'name' or 'type'",
-                            nil
-                        )
-                        return
-                    }
+                let context = try additionalContextVariables(from: contextDict)
+                try await conversation.setAdditionalContext(context: context)
 
-                    // Convert value to JSEncodableValue enum using recursive helper
-                    let value: JSEncodableValue?
-                    if let rawValue = varDict["value"] {
-                        value = convertToJSEncodableValue(rawValue)
-                        if value == nil {
-                            print("[AgentforceModule] ⚠️ Unsupported value type at index \(index)")
-                        }
-                    } else {
-                        value = nil
-                    }
-
-                    // Create AgentforceVariable
-                    // Note: iOS AgentforceVariable doesn't support description field (Android only)
-                    let variable = AgentforceVariable(
-                        name: name,
-                        type: type,
-                        value: value
-                    )
-                    agentforceVariables.append(variable)
-                }
-
-                // Set context on conversation
-                try await conversation.setAdditionalContext(context: agentforceVariables)
-
-                print("[AgentforceModule] ✓ Additional context set: \(agentforceVariables.count) variables")
+                print("[AgentforceModule] ✓ Additional context set: \(context.count) variables")
                 resolve(["success": true])
 
             } catch {
@@ -1372,6 +1536,7 @@ class AgentforceModule: RCTEventEmitter {
             currentMode = nil
             credentialProvider.reset()
             bridgeViewProvider.reset()
+            bridgeSplashScreenProvider.reset()
             UserDefaults.standard.removeObject(forKey: "ServiceAgentSiteUrl")
             UserDefaults.standard.removeObject(forKey: "ServiceAgentOrgUrl")
             UserDefaults.standard.removeObject(forKey: "ServiceAgentDevName")

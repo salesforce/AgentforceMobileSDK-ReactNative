@@ -61,6 +61,51 @@ Include the Salesforce Mobile SDK pods in your Podfile and perform **bootconfig*
 
 ## API Reference
 
+### Appearance Customization
+
+Pass an optional serializable `appearance` object to `configure()` to override Agentforce's
+native colors, icons, visible labels, typography, and theme mode. Unspecified values preserve
+the native SDK's defaults (or server branding when enabled).
+
+```typescript
+await AgentforceService.configure({
+  type: 'service',
+  serviceApiURL: 'https://example.salesforce.com',
+  organizationId: '00Dxx0000001234',
+  esDeveloperName: 'MyServiceAgent',
+  appearance: {
+    themeMode: 'system',
+    lightColors: { chatBackground: '#FFFFFF', accent1: '#0176D3' },
+    darkColors: { chatBackground: '#181818', accent1: '#78B9FF' },
+    icons: {
+      aiAgent: {
+        ios: { light: 'BrandAgentLight', dark: 'BrandAgentDark' },
+        android: { light: 'brand_agent_light', dark: 'brand_agent_dark' },
+      },
+    },
+    displayNames: { inputTextPlaceholder: 'Ask Acme Assistant' },
+    typography: { fontFamily: { type: 'generic', family: 'serif' } },
+  },
+});
+```
+
+- Colors must be `#RRGGBB` or `#AARRGGBB`.
+- Icon keys and display-name keys are native Agentforce token names such as `aiAgent`,
+  `actionSend`, `inputTextPlaceholder`, and `preChatTitle`. Unsupported keys reject
+  `configure()` with a platform-specific error.
+- `aiAgent` is the SDK's avatar/logo slot. Omit it to keep the default Agentforce asset.
+- iOS icon values name image assets in the host application's asset catalog. Android values name
+  host `drawable` resources. Keep resources from being removed by Android resource shrinking.
+- Generic fonts support `default`, `sans-serif`, `serif`, `monospace`, and `cursive`. Bundled
+  fonts use a registered iOS font name and Android `font` resource names per numeric weight.
+- Typography style keys are native SDK token names. For example, Android uses
+  `bodyFontScaleNeg2Regular` through `displayFontScale8Light`; each accepts `size`, `weight`
+  (100-900), and an optional font family. Unsupported keys reject `configure()`.
+- `agentLabel` remains the Employee Agent chat-header override and takes precedence over
+  appearance-managed header text.
+- The installed iOS SDK cannot combine a forced `themeMode` with sparse appearance overrides;
+  use one or the other on iOS. Android supports both together.
+
 ### Core Methods
 
 **Configure and launch:**
@@ -73,20 +118,24 @@ await AgentforceService.launchConversation();
 ```
 
 **Additional Context:**
-Provide contextual data to personalize agent responses (must be called after launching conversation):
+Provide context at launch when the initial agent response needs it:
 
 ```typescript
-await AgentforceService.setAdditionalContext({
-  variables: [
-    { name: ‘userId’, type: ‘Text’, value: ‘005xx0000001234’ },
-    { name: ‘accountId’, type: ‘Text’, value: ‘001xx0000001234’ },
-    { name: ‘priority’, type: ‘Text’, value: ‘high’ },
-    { name: ‘score’, type: ‘Number’, value: 95.5 },
-    { name: ‘isVIP’, type: ‘Boolean’, value: true },
-    { name: ‘createdDate’, type: ‘DateTime’, value: ‘2026-03-06T10:00:00Z’ }
-  ]
+await AgentforceService.launchConversation({
+  additionalContext: {
+    variables: [
+      { name: 'userId', type: 'Text', value: '005xx0000001234' },
+      { name: 'accountId', type: 'Text', value: '001xx0000001234' },
+      { name: 'priority', type: 'Text', value: 'high' },
+      { name: 'score', type: 'Number', value: 95.5 },
+      { name: 'isVIP', type: 'Boolean', value: true },
+      { name: 'createdDate', type: 'DateTime', value: '2026-03-06T10:00:00Z' },
+    ],
+  },
 });
 ```
+
+Call `setAdditionalContext()` after launch to update context on an active conversation.
 
 **Supported types:**
 
@@ -103,6 +152,56 @@ await AgentforceService.setAdditionalContext({
 - Android: Uses `AgentforceContextVariable` with case-sensitive type names
 - iOS: Uses `AgentforceVariable` with `JSEncodableValue` enum; type is just a label
 - Context persists for the current conversation session
+
+### Custom Splash Screen
+
+Supply a custom welcome ("splash") screen shown on top of the conversation before
+the user has interacted with an agent. The chat UI is fully native, so the splash
+content is a React Native component hosted inside the native conversation view.
+The SDK asks for a splash when the chat view is first shown and again whenever the
+active agent changes, so you can show a splash for only some agents.
+
+The splash renders in the conversation content region — below the top bar and above
+the input bar (both stay interactive) — and moves up with the keyboard. It is
+dismissed (animated away to reveal the conversation) when the user either chooses a
+starter utterance or sends text from the input bar.
+
+```typescript
+import { AppRegistry, View, Text, Button } from 'react-native';
+import { AgentforceService } from 'react-native-agentforce';
+
+// 1. A splash component. It receives { agentId } as an initial prop and reports
+//    the chosen utterance back to the SDK.
+function WelcomeSplash({ agentId }: { agentId: string }) {
+  return (
+    <View>
+      <Text>Welcome! How can I help?</Text>
+      <Button
+        title="Track my order"
+        onPress={() => AgentforceService.selectSplashScreenUtterance(agentId, 'Track my order')}
+      />
+    </View>
+  );
+}
+
+// 2. Register it with a unique component name.
+AppRegistry.registerComponent('WelcomeSplash', () => WelcomeSplash);
+
+// 3. Map agent IDs to that component name. Use '*' for a default that applies to
+//    every agent without an explicit entry.
+AgentforceService.setSplashScreenDelegate({
+  componentMap: {
+    '0XxABC0000001234': 'WelcomeSplash',
+    '*': 'WelcomeSplash',
+  },
+});
+```
+
+When the user taps a suggested utterance, call
+`AgentforceService.selectSplashScreenUtterance(agentId, utterance)` — the SDK
+animates the splash away and sends the utterance into the conversation (running it
+through `modifyUtterance` if a UI delegate is set). Call
+`AgentforceService.clearSplashScreenDelegate()` to remove it.
 
 ---
 
@@ -232,5 +331,32 @@ await AgentforceService.configure({
   **different set**. Setting a key the running platform's SDK doesn't recognize is a silent
   no-op — the value is stored and forwarded, but that SDK ignores unknown keys. Consult the
   native AgentforceSDK's internal-flag documentation for the keys valid on each platform.
+
+## Voice Options
+
+Configure voice-session behavior alongside the agent configuration:
+
+```typescript
+await AgentforceService.configure({
+  type: 'service',
+  serviceApiURL: 'https://service.salesforce.com',
+  organizationId: '00Dxx0000001234',
+  esDeveloperName: 'MyServiceAgent',
+  voiceOptions: {
+    userSilenceTimeoutSeconds: 30,
+    autoEndWhileMuted: false,
+    defaultClosedCaptionsEnabled: true,
+  },
+});
+```
+
+`defaultClosedCaptionsEnabled` applies only when the user has not previously
+chosen a closed-caption state. The native SDK persists a user's explicit caption
+choice, which always takes precedence over the configured default.
+
+On iOS, `launchConversation` also accepts `voiceCloseBehavior: 'returnToChat' |
+'dismissContainer'`. The default, `'returnToChat'`, preserves the existing
+integrated Voice behavior. `'dismissContainer'` dismisses the entire Agentforce
+presentation when Voice closes. Android retains its existing Voice close behavior.
 
 ---

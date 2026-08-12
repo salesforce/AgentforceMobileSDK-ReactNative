@@ -1,6 +1,6 @@
 {
   "name": "@salesforce/react-native-agentforce",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Agentforce React Native bridge: JS API and native module for Service Agent and Employee Agent (auth bridge included; host app adds Mobile SDK).",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

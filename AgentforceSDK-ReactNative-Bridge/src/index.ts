@@ -36,6 +36,8 @@ export type {
   AgentforceContextVariableType,
   ViewProviderDelegate,
   ViewProviderComponentData,
+  SplashScreenDelegate,
+  SplashScreenComponentProps,
   HiddenPreChatFields,
   UIDelegate,
   AgentResponseEvent,
@@ -43,6 +45,13 @@ export type {
   AgentSwitchEvent,
   ModifyUtteranceRequest,
   VoiceOptions,
+  AgentforceAppearance,
+  AgentforceThemeMode,
+  AgentforceFontWeight,
+  AgentforceGenericFontFamily,
+  AgentforceFontFamily,
+  AgentforceIconSource,
+  AgentforceFontOverride,
 } from './types';
 export { isServiceAgentConfig, isEmployeeAgentConfig, isLegacyConfig } from './types';
 
