@@ -95,6 +95,7 @@ describe('UIDelegate forwarding', () => {
       message: 'Hello',
       type: 'agent',
       conversationId: 'conv-1',
+      sessionId: null,
       timestamp: '2026-05-14T00:00:00Z',
     };
 
