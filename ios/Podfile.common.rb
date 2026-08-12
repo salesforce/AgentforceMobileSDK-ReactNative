@@ -24,7 +24,7 @@ def shared_pods
   # The SDK RC podspec has a broad `~> 6` service dependency, which otherwise
   # resolves to stable 6.11.2 instead of the tested 262.1.3 RC service binary.
   pod 'AgentforceService', '6.11.3-rc1'
-  pod 'AgentforceVoice', '2.9.3-rc4'
+  pod 'AgentforceVoice', '2.8.2'
   pod 'Messaging-InApp-Core', '> 1.10.0'
   # Messaging-Multimedia-Core vends SMIMultimediaCore.framework, which
   # AgentforceVoice 2.5.2 links at runtime (@rpath/SMIMultimediaCore.framework).
