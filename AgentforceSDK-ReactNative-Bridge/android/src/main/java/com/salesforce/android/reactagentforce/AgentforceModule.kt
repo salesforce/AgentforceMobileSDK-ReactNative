@@ -40,6 +40,7 @@ import kotlin.time.Duration.Companion.seconds
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
+import com.salesforce.android.reactagentforce.providers.BridgeSplashScreenBuilder
 import com.salesforce.android.reactagentforce.providers.BridgeViewProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
 import com.salesforce.android.agentforcesdkimpl.data.AgentforceDataProviderImpl
@@ -110,6 +111,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Bridge view provider for delegating native SDK views to React Native components
     private val bridgeViewProvider = BridgeViewProvider(reactContext)
 
+    // Bridge splash screen builder for hosting a React Native welcome screen
+    private val bridgeSplashScreenBuilder = BridgeSplashScreenBuilder(reactContext)
+
     // Bridge hidden prechat fields (Service Agent only)
     private val bridgeHiddenPreChat = BridgeHiddenPreChat()
 
@@ -123,6 +127,11 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // configuration when starting a session.
     // Defaults to all-off (`AgentforceVoiceSessionOptions()`).
     private var voiceSessionOptions: AgentforceVoiceSessionOptions = AgentforceVoiceSessionOptions()
+
+    // Normalized voice options applied to the currently-live client. Compared against a fresh
+    // snapshot on reconfigure so a voice-options change forces a new client (the SDK reads voice
+    // options only at client creation). `null` when no client is live. Mirrors the iOS bridge.
+    private var appliedVoiceOptions: VoiceOptionsSnapshot? = null
 
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -179,6 +188,16 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             promise.reject("INVALID_CONFIG", "Missing required Service Agent configuration fields")
             return
         }
+
+        // Appearance parsing can fail for user-provided colors, assets, or fonts. Do it before
+        // clearing a healthy session so an invalid update is non-destructive.
+        val application = reactApplicationContext.applicationContext as Application
+        val theming = try {
+            AppearanceConfiguration.theming(config, application)
+        } catch (e: IllegalArgumentException) {
+            promise.reject("CONFIG_ERROR", e.message, e)
+            return
+        }
         
         Log.d(TAG, "Configuring Service Agent - Org: ${serviceConfig.organizationId}")
         
@@ -222,6 +241,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 // enableVoice flag like the Employee path; the MIAW voice provider is
                 // registered below via setBridgeVoiceModule().
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
+                saveFeatureFlagsToPrefs(flags)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
@@ -231,7 +251,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
-                val application = reactApplicationContext.applicationContext as Application
                 val permissions = AgentforceClientPermissions(application)
 
                 val agentforceConfigBuilder = AgentforceConfiguration
@@ -246,10 +265,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
+                theming?.let(agentforceConfigBuilder::setTheming)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
                 agentforceConfigBuilder.setDelegate(bridgeUIDelegate)
+                // Always attach the splash screen builder so late registrations take
+                // effect. hasSplashScreen() returns false when the map is empty,
+                // matching no-splash behavior.
+                agentforceConfigBuilder.setSplashScreenBuilder(bridgeSplashScreenBuilder)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 val sdkMode = AgentforceMode.ServiceAgent(
@@ -290,6 +314,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             return
         }
 
+        // Validate appearance before deciding whether to reuse or destroy the current client.
+        val application = reactApplicationContext.applicationContext as Application
+        val theming = try {
+            AppearanceConfiguration.theming(config, application)
+        } catch (e: IllegalArgumentException) {
+            promise.reject("CONFIG_ERROR", e.message, e)
+            return
+        }
+
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
 
         // Rebuild the client only when switching from Service mode, the agentId changed, or no
@@ -315,11 +348,20 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             activity != null &&
             !AgentforceConversationOverlay.isAttachedTo(activity)
 
-        val needsNewClient = switchingModes || agentIdChanged ||
+        // A live client only reads its voice options at creation, so a change to them must force a
+        // rebuild. Only meaningful when a client already exists. Mirrors the iOS bridge.
+        val currentVoiceOptions = voiceOptionsSnapshot(config)
+        val voiceOptionsChanged = AgentforceClientHolder.agentforceClient != null &&
+            appliedVoiceOptions != currentVoiceOptions
+
+        val needsNewClient = switchingModes || agentIdChanged || voiceOptionsChanged ||
             AgentforceClientHolder.agentforceClient == null || activityChanged
 
         if (activityChanged) {
             Log.d(TAG, "Host Activity changed since last attach - forcing fresh client to avoid re-launch hang")
+        }
+        if (voiceOptionsChanged) {
+            Log.d(TAG, "Voice options changed - forcing fresh client to apply them")
         }
 
         // Configure unified credential provider for Employee Agent mode
@@ -331,6 +373,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
 
         scope.launch(Dispatchers.Main) {
+            val flags = getFeatureFlagsFromConfigOrPrefs(config)
+            saveFeatureFlagsToPrefs(flags)
+
             if (!needsNewClient) {
                 // Reuse the existing client and its conversation (credentials refresh automatically
                 // via UnifiedCredentialProvider). Preserves conversation history across re-launch.
@@ -350,7 +395,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             AgentforceClientHolder.clear()
             try {
                 // Create AgentforceConfiguration for FullConfig mode
-                val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
@@ -360,7 +404,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
-                val application = reactApplicationContext.applicationContext as Application
                 val permissions = AgentforceClientPermissions(application)
 
                 // Employee Agent uses BridgeNetwork with RestClient for authenticated requests
@@ -402,6 +445,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
+                theming?.let(agentforceConfigBuilder::setTheming)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
                 agentforceConfigBuilder.setViewProvider(bridgeViewProvider)
@@ -415,6 +459,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 } else {
                     agentforceConfigBuilder.setTopAppBarBuilder(DefaultTopAppBarBuilder)
                 }
+                // Always attach the splash screen builder so late registrations take
+                // effect. hasSplashScreen() returns false when the map is empty,
+                // matching no-splash behavior.
+                agentforceConfigBuilder.setSplashScreenBuilder(bridgeSplashScreenBuilder)
                 val agentforceConfig = agentforceConfigBuilder.build()
 
                 // Use FullConfig mode for Employee Agent
@@ -431,7 +479,8 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 
                 AgentforceClientHolder.setClient(client)
                 AgentforceClientHolder.setMode(LocalAgentMode.Employee(employeeConfig))
-                
+                appliedVoiceOptions = currentVoiceOptions
+
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                     putString("mode", "employee")
@@ -471,14 +520,27 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     /**
      * Launch the Agentforce conversation UI - works for both Service and Employee agents
+     *
+     * @param options Optional map with "initialMode": "chat" | "voice"
+     * @param promise Promise to resolve/reject
      */
     @ReactMethod
-    fun launchConversation(promise: Promise) {
+    fun launchConversation(options: ReadableMap?, promise: Promise) {
         Log.d(TAG, "launchConversation() called")
+
+        val initialMode = options?.getString("initialMode") ?: "chat"
+        Log.d(TAG, "launchConversation: initialMode=$initialMode")
 
         val activity = currentActivity
         if (activity == null) {
             promise.reject("ERROR", "Activity not available")
+            return
+        }
+
+        // Validate Voice feature flag if Voice mode requested
+        if (initialMode == "voice" && !getFeatureFlagsFromConfigOrPrefs(Arguments.createMap()).enableVoice) {
+            Log.e(TAG, "Voice mode requested but enableVoice feature flag is disabled")
+            promise.reject("VOICE_DISABLED", "Voice is not enabled for this Agentforce configuration")
             return
         }
 
@@ -497,7 +559,16 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 try {
                     viewModel?.initializeAgentforce()
 
-                    AgentforceConversationOverlay.show(activity)
+                    if (AgentforceClientHolder.currentConversation == null) {
+                        if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
+                    }
+                    options?.getMap("additionalContext")?.let { context ->
+                        val conversation = AgentforceClientHolder.currentConversation
+                            ?: throw IllegalStateException("Conversation was not created")
+                        conversation.setAdditionalContext(parseAdditionalContext(context))
+                    }
+
+                    AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
@@ -519,10 +590,15 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     if (!createConversation(promise, "LAUNCH_ERROR")) return@launch
                 }
 
-                // Show conversation as overlay on current Activity (preserves ViewModel across show/hide)
-                AgentforceConversationOverlay.show(activity)
+                options?.getMap("additionalContext")?.let { context ->
+                    val conversation = AgentforceClientHolder.currentConversation
+                        ?: throw IllegalStateException("Conversation was not created")
+                    conversation.setAdditionalContext(parseAdditionalContext(context))
+                }
 
-                Log.d(TAG, "Conversation overlay shown")
+                AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
+                Log.d(TAG, "Conversation shown (initialMode=$initialMode)")
+
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
                 })
@@ -694,11 +770,52 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val autoEndWhileMuted = voiceOpts.hasKey("autoEndWhileMuted") &&
             !voiceOpts.isNull("autoEndWhileMuted") &&
             voiceOpts.getBoolean("autoEndWhileMuted")
+        val defaultClosedCaptionsEnabled = voiceOpts.hasKey("defaultClosedCaptionsEnabled") &&
+            !voiceOpts.isNull("defaultClosedCaptionsEnabled") &&
+            voiceOpts.getBoolean("defaultClosedCaptionsEnabled")
 
         return AgentforceVoiceSessionOptions(
             userSilenceTimeout = timeout,
             autoEndWhileMuted = autoEndWhileMuted,
+            defaultClosedCaptionsEnabled = defaultClosedCaptionsEnabled,
         )
+    }
+
+    /**
+     * Value snapshot of the voice options that actually affect client behavior,
+     * normalized the same way [parseVoiceSessionOptions] treats them: a missing,
+     * non-finite, or non-positive timeout collapses to `null` ("never auto-end"),
+     * so cosmetic differences in the raw JS payload don't spuriously rebuild the
+     * client. Mirrors the iOS bridge's VoiceOptionsSnapshot.
+     */
+    private data class VoiceOptionsSnapshot(
+        val userSilenceTimeoutSeconds: Double?,
+        val autoEndWhileMuted: Boolean,
+        val defaultClosedCaptionsEnabled: Boolean,
+    )
+
+    private fun voiceOptionsSnapshot(config: ReadableMap): VoiceOptionsSnapshot {
+        if (!config.hasKey("voiceOptions")) return VoiceOptionsSnapshot(null, false, false)
+        val voiceOpts = config.getMap("voiceOptions") ?: return VoiceOptionsSnapshot(null, false, false)
+
+        val seconds = if (
+            voiceOpts.hasKey("userSilenceTimeoutSeconds") &&
+            !voiceOpts.isNull("userSilenceTimeoutSeconds")
+        ) {
+            val raw = voiceOpts.getDouble("userSilenceTimeoutSeconds")
+            if (raw.isFinite() && raw > 0) raw else null
+        } else {
+            null
+        }
+
+        val autoEndWhileMuted = voiceOpts.hasKey("autoEndWhileMuted") &&
+            !voiceOpts.isNull("autoEndWhileMuted") &&
+            voiceOpts.getBoolean("autoEndWhileMuted")
+        val defaultClosedCaptionsEnabled = voiceOpts.hasKey("defaultClosedCaptionsEnabled") &&
+            !voiceOpts.isNull("defaultClosedCaptionsEnabled") &&
+            voiceOpts.getBoolean("defaultClosedCaptionsEnabled")
+
+        return VoiceOptionsSnapshot(seconds, autoEndWhileMuted, defaultClosedCaptionsEnabled)
     }
 
     private data class FeatureFlags(
@@ -944,6 +1061,58 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // endregion
 
+    // region Splash Screen Provider
+
+    @ReactMethod
+    fun registerSplashScreenProvider(config: ReadableMap, promise: Promise) {
+        val mapData = config.getMap("componentMap")
+
+        if (mapData == null) {
+            promise.reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary")
+            return
+        }
+
+        val componentMap = mutableMapOf<String, String>()
+        val iterator = mapData.keySetIterator()
+        while (iterator.hasNextKey()) {
+            val key = iterator.nextKey()
+            mapData.getString(key)?.let { componentMap[key] = it }
+        }
+
+        if (componentMap.isEmpty()) {
+            promise.reject("INVALID_CONFIG", "Must provide a non-empty componentMap dictionary")
+            return
+        }
+
+        bridgeSplashScreenBuilder.register(componentMap)
+        val keysArray = Arguments.createArray().apply {
+            componentMap.keys.forEach { pushString(it) }
+        }
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+            putArray("registeredAgents", keysArray)
+        })
+    }
+
+    @ReactMethod
+    fun clearSplashScreenProvider(promise: Promise) {
+        bridgeSplashScreenBuilder.reset()
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+        })
+    }
+
+    @ReactMethod
+    fun selectSplashScreenUtterance(agentId: String, utterance: String, promise: Promise) {
+        // onSelectUtterance updates Compose state, so invoke it on the main thread.
+        scope.launch(Dispatchers.Main) {
+            val handled = bridgeSplashScreenBuilder.selectUtterance(agentId, utterance)
+            promise.resolve(handled)
+        }
+    }
+
+    // endregion
+
     // region Cleanup
 
     @ReactMethod
@@ -986,8 +1155,10 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             AgentforceClientHolder.clear()
             viewModel?.resetConfiguration()
             currentMode = null
+            appliedVoiceOptions = null
             credentialProvider.reset()
             bridgeViewProvider.reset()
+            bridgeSplashScreenBuilder.reset()
             bridgeHiddenPreChat.setFields(emptyMap())
             employeePrefs.edit().remove(KEY_EMPLOYEE_AGENT_ID).apply()
             promise.resolve(Arguments.createMap().apply {
@@ -1030,6 +1201,44 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // region Additional Context
 
+    private fun parseAdditionalContext(context: ReadableMap): CopilotAdditionalContext {
+        val variablesArray = context.getArray("variables")
+            ?: throw IllegalArgumentException("Missing 'variables' array in context")
+        val contextVariables = mutableListOf<CopilotContextVariable>()
+
+        for (i in 0 until variablesArray.size()) {
+            val varMap = variablesArray.getMap(i)
+                ?: throw IllegalArgumentException("Invalid variable at index $i")
+            val name = varMap.getString("name")
+            val type = varMap.getString("type")
+            if (name == null || type == null) {
+                throw IllegalArgumentException("Variable at index $i missing 'name' or 'type'")
+            }
+
+            val value = when {
+                varMap.hasKey("value") && !varMap.isNull("value") -> when (varMap.getType("value")) {
+                    ReadableType.String -> varMap.getString("value")
+                    ReadableType.Number -> varMap.getDouble("value")
+                    ReadableType.Boolean -> varMap.getBoolean("value")
+                    ReadableType.Map -> varMap.getMap("value")?.toHashMap()
+                    ReadableType.Array -> varMap.getArray("value")?.toArrayList()
+                    else -> null
+                }
+                else -> null
+            }
+            contextVariables.add(
+                CopilotContextVariable(
+                    name = name,
+                    type = type,
+                    description = varMap.getString("description"),
+                    value = value
+                )
+            )
+        }
+
+        return CopilotAdditionalContext(variables = contextVariables)
+    }
+
     /**
      * Set additional context for the current conversation.
      * Must be called after launching a conversation.
@@ -1042,62 +1251,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         Log.d(TAG, "setAdditionalContext() called")
 
         try {
-            // Validate context structure
-            val variablesArray = context.getArray("variables")
-            if (variablesArray == null) {
-                promise.reject("INVALID_CONTEXT", "Missing 'variables' array in context")
-                return
-            }
-
-            // Convert to CopilotContextVariable list (do this synchronously)
-            val contextVariables = mutableListOf<CopilotContextVariable>()
-            for (i in 0 until variablesArray.size()) {
-                val varMap = variablesArray.getMap(i)
-                if (varMap == null) {
-                    promise.reject("INVALID_CONTEXT", "Invalid variable at index $i")
-                    return
-                }
-
-                val name = varMap.getString("name")
-                val type = varMap.getString("type")
-
-                if (name == null || type == null) {
-                    promise.reject(
-                        "INVALID_CONTEXT",
-                        "Variable at index $i missing 'name' or 'type'"
-                    )
-                    return
-                }
-
-                // Extract optional fields
-                val description = varMap.getString("description")
-                val value = when {
-                    varMap.hasKey("value") && !varMap.isNull("value") -> {
-                        // Read value based on type
-                        when (varMap.getType("value")) {
-                            ReadableType.String -> varMap.getString("value")
-                            ReadableType.Number -> varMap.getDouble("value")
-                            ReadableType.Boolean -> varMap.getBoolean("value")
-                            ReadableType.Map -> varMap.getMap("value")?.toHashMap()
-                            ReadableType.Array -> varMap.getArray("value")?.toArrayList()
-                            else -> null
-                        }
-                    }
-                    else -> null
-                }
-
-                // Create CopilotContextVariable
-                val variable = CopilotContextVariable(
-                    name = name,
-                    type = type,
-                    description = description,
-                    value = value
-                )
-                contextVariables.add(variable)
-            }
-
-            // Create CopilotAdditionalContext
-            val additionalContext = CopilotAdditionalContext(variables = contextVariables)
+            val additionalContext = parseAdditionalContext(context)
 
             // Apply context to conversation (async) - check conversation inside coroutine
             scope.launch {
@@ -1114,7 +1268,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     }
 
                     conversation.setAdditionalContext(additionalContext)
-                    Log.d(TAG, "Additional context set: ${contextVariables.size} variables")
+                    Log.d(TAG, "Additional context set: ${additionalContext.variables.size} variables")
 
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)

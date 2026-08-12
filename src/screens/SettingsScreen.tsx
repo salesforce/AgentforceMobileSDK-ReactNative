@@ -50,11 +50,30 @@ import type {
   HiddenPreChatFields,
   AgentforceContextVariable,
   AgentforceContextVariableType,
+  AgentforceGenericFontFamily,
+  AgentforceThemeMode,
 } from '@salesforce/react-native-agentforce';
 import { UI_FEATURES } from '../config/AppConfig';
+import { COLOR_GROUPS, THEME_PRESETS, type AppearanceSettings } from '../config/AgentAppearance';
+import {
+  applyAppearancePreset,
+  getAgentAppearance,
+  loadAppearanceSettings,
+  resetAppearanceSettings,
+  updateAppearanceAvatar,
+  updateAppearanceColor,
+  updateAppearanceFontFamily,
+  updateAppearanceThemeMode,
+} from '../store/AgentAppearanceStore';
 import { getContextVariables, setContextVariables } from '../store/ContextVariablesStore';
+import {
+  getVoiceOptions,
+  getVoiceTimeoutSettings,
+  setVoiceTimeoutSettings,
+} from '../store/VoiceTimeoutStore';
+import type { VoiceTimeoutSettings } from '../store/VoiceTimeoutStore';
 
-type TabType = 'service' | 'employee' | 'features';
+type TabType = 'service' | 'employee' | 'features' | 'theming';
 
 // Preset utterances offered as quick-fill chips in the Send Utterance section.
 // A real host app would source these from suggested-prompt chips, deep links,
@@ -138,6 +157,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
   const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(null);
   const [savingFlags, setSavingFlags] = useState(false);
+  const [appearanceSettings, setAppearanceSettings] = useState<AppearanceSettings | null>(null);
 
   const [hiddenPreChatFields, setHiddenPreChatFields] = useState<HiddenPreChatFields>({});
   const [newFieldName, setNewFieldName] = useState('');
@@ -154,12 +174,17 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   const [utteranceText, setUtteranceText] = useState('');
   const [sendingUtterance, setSendingUtterance] = useState(false);
 
+  const [voiceTimeout, setVoiceTimeout] = useState<VoiceTimeoutSettings>(() =>
+    getVoiceTimeoutSettings(),
+  );
+
   useEffect(() => {
     loadSavedConfiguration();
     loadStoredEmployeeAgentId();
     checkAuthStatus();
     loadFeatureFlags();
     loadHiddenPreChatFields();
+    loadAppearanceSettings().then(setAppearanceSettings);
   }, []);
 
   useEffect(() => {
@@ -251,6 +276,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         organizationId: organizationId.trim(),
         esDeveloperName: esDeveloperName.trim(),
         featureFlags: currentFlags,
+        appearance: getAgentAppearance(),
       });
       Alert.alert('Success', 'Service Agent configured successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() },
@@ -303,6 +329,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         agentId: agentIdToUse || undefined,
         accessToken: creds.accessToken,
         featureFlags: currentFlags,
+        appearance: getAgentAppearance(),
+        voiceOptions: getVoiceOptions(), // auto-end voice after user silence; edit under Voice Timeout below
       });
       setEmployeeLoggedIn(true);
       Alert.alert(
@@ -434,10 +462,20 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     }
   };
 
+  const updateAppearance = async (change: Promise<AppearanceSettings>) => {
+    const next = await change;
+    setAppearanceSettings(next);
+  };
+
   // Sync context variables to store whenever they change
   useEffect(() => {
     setContextVariables(employeeContextVars);
   }, [employeeContextVars]);
+
+  // Sync voice-timeout settings to store whenever they change
+  useEffect(() => {
+    setVoiceTimeoutSettings(voiceTimeout);
+  }, [voiceTimeout]);
 
   const handleAddContextVariable = () => {
     const trimmedName = newEmployeeCtxName.trim();
@@ -573,6 +611,13 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         onPress={() => setActiveTab('features')}>
         <Text style={[styles.tabText, activeTab === 'features' && styles.activeTabTextFeatures]}>
           Flags
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'theming' && styles.activeTabTheming]}
+        onPress={() => setActiveTab('theming')}>
+        <Text style={[styles.tabText, activeTab === 'theming' && styles.activeTabTextTheming]}>
+          Theme
         </Text>
       </TouchableOpacity>
     </View>
@@ -871,6 +916,69 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     </ScrollView>
   );
 
+  const renderVoiceTimeoutSection = () => (
+    <View style={styles.formContainerWithMargin}>
+      <Text style={styles.label}>Voice Timeout</Text>
+      <Text style={styles.hint}>
+        Auto-end a voice conversation after the user is silent. Requires the Voice feature flag.
+        Changes apply the next time you launch Employee Agent (rebuilding the client ends the active
+        conversation).
+      </Text>
+
+      <View style={[styles.flagRow, styles.flagRowBorder]}>
+        <View style={styles.flagLabelBlock}>
+          <Text style={styles.label}>Auto-end on silence</Text>
+          <Text style={styles.hint}>When off, voice never auto-ends from silence.</Text>
+        </View>
+        <Switch
+          value={voiceTimeout.enabled}
+          onValueChange={enabled => setVoiceTimeout(prev => ({ ...prev, enabled }))}
+          trackColor={{ false: '#ced4da', true: '#28a745' }}
+          thumbColor="#ffffff"
+        />
+      </View>
+
+      {voiceTimeout.enabled && (
+        <View style={[styles.voiceSecondsRow, styles.flagRowBorder]}>
+          <Text style={styles.label}>Silence timeout (seconds)</Text>
+          <TextInput
+            style={styles.input}
+            value={
+              voiceTimeout.userSilenceTimeoutSeconds > 0
+                ? String(voiceTimeout.userSilenceTimeoutSeconds)
+                : ''
+            }
+            onChangeText={text => {
+              const seconds = parseInt(text.replace(/[^0-9]/g, ''), 10);
+              setVoiceTimeout(prev => ({
+                ...prev,
+                userSilenceTimeoutSeconds: isNaN(seconds) ? 0 : seconds,
+              }));
+            }}
+            placeholder="30"
+            placeholderTextColor="#999"
+            keyboardType="number-pad"
+          />
+        </View>
+      )}
+
+      <View style={styles.flagRow}>
+        <View style={styles.flagLabelBlock}>
+          <Text style={styles.label}>Auto-end while muted</Text>
+          <Text style={styles.hint}>Also auto-end when the mic is muted.</Text>
+        </View>
+        <Switch
+          value={voiceTimeout.autoEndWhileMuted}
+          onValueChange={autoEndWhileMuted =>
+            setVoiceTimeout(prev => ({ ...prev, autoEndWhileMuted }))
+          }
+          trackColor={{ false: '#ced4da', true: '#28a745' }}
+          thumbColor="#ffffff"
+        />
+      </View>
+    </View>
+  );
+
   const renderEmployeeAgentTab = () => (
     <ScrollView
       style={styles.tabContent}
@@ -946,6 +1054,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         </View>
       )}
 
+      {authSupported && renderVoiceTimeoutSection()}
+
       {authSupported && renderContextVariablesSection()}
 
       {authSupported && employeeLoggedIn && renderSendUtteranceSection('Employee')}
@@ -1008,6 +1118,198 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
     );
   };
 
+  const renderThemingTab = () => {
+    if (appearanceSettings == null) {
+      return (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#6B3AA3" />
+        </View>
+      );
+    }
+    const setMode = (mode: AgentforceThemeMode) =>
+      updateAppearance(updateAppearanceThemeMode(mode));
+    const setFont = (font: AgentforceGenericFontFamily) =>
+      updateAppearance(updateAppearanceFontFamily(font));
+    return (
+      <ScrollView
+        style={styles.tabContent}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled">
+        <View style={styles.header}>
+          <Text style={styles.title}>Theming</Text>
+          <Text style={styles.description}>
+            Choose a preset, then fine-tune the native Agentforce chat UI. Changes apply to the next
+            conversation.
+          </Text>
+        </View>
+
+        <View style={styles.formContainer}>
+          <Text style={styles.label}>Appearance mode</Text>
+          {Platform.OS === 'ios' && (
+            <Text style={styles.hint}>
+              The installed iOS SDK follows the system appearance while custom overrides are active.
+            </Text>
+          )}
+          <View style={styles.segmentedControl}>
+            {(['system', 'light', 'dark'] as AgentforceThemeMode[]).map(mode => (
+              <TouchableOpacity
+                key={mode}
+                style={[
+                  styles.segmentButton,
+                  appearanceSettings.themeMode === mode && styles.segmentButtonActive,
+                ]}
+                onPress={() => setMode(mode)}>
+                <Text
+                  style={[
+                    styles.segmentButtonText,
+                    appearanceSettings.themeMode === mode && styles.segmentButtonTextActive,
+                  ]}>
+                  {mode[0].toUpperCase() + mode.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.formContainer}>
+          <Text style={styles.label}>Theme presets</Text>
+          <Text style={styles.hint}>
+            Apply coordinated light and dark color tokens, then customize individual colors below.
+          </Text>
+          {THEME_PRESETS.map(preset => (
+            <TouchableOpacity
+              key={preset.id}
+              style={[
+                styles.presetCard,
+                appearanceSettings.presetId === preset.id && styles.presetCardActive,
+              ]}
+              onPress={() => updateAppearance(applyAppearancePreset(preset.id))}>
+              <View style={styles.presetText}>
+                <Text style={styles.presetName}>{preset.name}</Text>
+                <Text style={styles.presetDescription}>{preset.description}</Text>
+              </View>
+              <View style={styles.swatches}>
+                {preset.swatches.map(color => (
+                  <View key={color} style={[styles.swatch, { backgroundColor: color }]} />
+                ))}
+              </View>
+            </TouchableOpacity>
+          ))}
+          {appearanceSettings.presetId === 'custom' && (
+            <Text style={styles.customLabel}>Custom colors</Text>
+          )}
+        </View>
+
+        {COLOR_GROUPS.map(group => (
+          <View key={group.title} style={styles.formContainer}>
+            <Text style={styles.label}>{group.title}</Text>
+            {group.tokens.map(token => (
+              <View key={token} style={styles.colorRow}>
+                <Text style={styles.colorToken}>{token}</Text>
+                <TextInput
+                  style={styles.colorInput}
+                  value={appearanceSettings.lightColors[token] ?? ''}
+                  placeholder="Light #RRGGBB"
+                  placeholderTextColor="#999"
+                  autoCapitalize="characters"
+                  onChangeText={value =>
+                    setAppearanceSettings(
+                      current =>
+                        current && {
+                          ...current,
+                          presetId: 'custom',
+                          lightColors: { ...current.lightColors, [token]: value },
+                        },
+                    )
+                  }
+                  onEndEditing={event =>
+                    updateAppearance(
+                      updateAppearanceColor('lightColors', token, event.nativeEvent.text),
+                    )
+                  }
+                />
+                <TextInput
+                  style={styles.colorInput}
+                  value={appearanceSettings.darkColors[token] ?? ''}
+                  placeholder="Dark #RRGGBB"
+                  placeholderTextColor="#999"
+                  autoCapitalize="characters"
+                  onChangeText={value =>
+                    setAppearanceSettings(
+                      current =>
+                        current && {
+                          ...current,
+                          presetId: 'custom',
+                          darkColors: { ...current.darkColors, [token]: value },
+                        },
+                    )
+                  }
+                  onEndEditing={event =>
+                    updateAppearance(
+                      updateAppearanceColor('darkColors', token, event.nativeEvent.text),
+                    )
+                  }
+                />
+              </View>
+            ))}
+          </View>
+        ))}
+
+        <View style={styles.formContainer}>
+          <View style={styles.flagRow}>
+            <View style={styles.flagLabelBlock}>
+              <Text style={styles.label}>Custom agent avatar</Text>
+              <Text style={styles.hint}>Use the sample host-native agentforce_avatar asset.</Text>
+            </View>
+            <Switch
+              value={appearanceSettings.useCustomAvatar}
+              onValueChange={value => updateAppearance(updateAppearanceAvatar(value))}
+              trackColor={{ false: '#ced4da', true: '#6B3AA3' }}
+              thumbColor="#ffffff"
+            />
+          </View>
+        </View>
+
+        <View style={styles.formContainer}>
+          <Text style={styles.label}>Typography</Text>
+          <View style={styles.fontChoices}>
+            {(
+              [
+                'default',
+                'sans-serif',
+                'serif',
+                'monospace',
+                'cursive',
+              ] as AgentforceGenericFontFamily[]
+            ).map(font => (
+              <TouchableOpacity
+                key={font}
+                style={[
+                  styles.fontChoice,
+                  appearanceSettings.fontFamily === font && styles.fontChoiceActive,
+                ]}
+                onPress={() => setFont(font)}>
+                <Text
+                  style={[
+                    styles.fontChoiceText,
+                    appearanceSettings.fontFamily === font && styles.fontChoiceTextActive,
+                  ]}>
+                  {font}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.resetThemeButton}
+          onPress={() => updateAppearance(resetAppearanceSettings())}>
+          <Text style={styles.resetThemeButtonText}>Reset theme customizations</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -1016,6 +1318,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       {UI_FEATURES.SHOW_SERVICE_AGENT && activeTab === 'service' && renderServiceAgentTab()}
       {UI_FEATURES.SHOW_EMPLOYEE_AGENT && activeTab === 'employee' && renderEmployeeAgentTab()}
       {activeTab === 'features' && renderFeatureFlagsTab()}
+      {activeTab === 'theming' && renderThemingTab()}
     </KeyboardAvoidingView>
   );
 };
@@ -1050,6 +1353,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#28a745',
     backgroundColor: '#e8f5e9',
   },
+  activeTabTheming: {
+    borderBottomColor: '#6B3AA3',
+    backgroundColor: '#f2ebfb',
+  },
   tabText: {
     fontSize: 15,
     fontWeight: '500',
@@ -1067,12 +1374,142 @@ const styles = StyleSheet.create({
     color: '#28a745',
     fontWeight: '600',
   },
+  activeTabTextTheming: {
+    color: '#6B3AA3',
+    fontWeight: '600',
+  },
   tabContent: {
     flex: 1,
   },
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    marginTop: 12,
+    borderRadius: 8,
+    backgroundColor: '#f1f3f5',
+    padding: 3,
+  },
+  segmentButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 9,
+    borderRadius: 6,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#ffffff',
+  },
+  segmentButtonText: {
+    color: '#6c757d',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  segmentButtonTextActive: {
+    color: '#6B3AA3',
+  },
+  presetCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+  },
+  presetCardActive: {
+    borderColor: '#6B3AA3',
+    backgroundColor: '#f8f3ff',
+  },
+  presetText: {
+    flex: 1,
+  },
+  presetName: {
+    color: '#212529',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  presetDescription: {
+    color: '#6c757d',
+    fontSize: 12,
+    marginTop: 3,
+  },
+  swatches: {
+    flexDirection: 'row',
+    marginLeft: 8,
+  },
+  swatch: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    marginLeft: 4,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  customLabel: {
+    color: '#6B3AA3',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 10,
+  },
+  colorRow: {
+    marginTop: 12,
+  },
+  colorToken: {
+    color: '#495057',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  colorInput: {
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: '#212529',
+    fontSize: 13,
+    marginTop: 6,
+  },
+  fontChoices: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10,
+  },
+  fontChoice: {
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  fontChoiceActive: {
+    borderColor: '#6B3AA3',
+    backgroundColor: '#f2ebfb',
+  },
+  fontChoiceText: {
+    color: '#495057',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  fontChoiceTextActive: {
+    color: '#6B3AA3',
+  },
+  resetThemeButton: {
+    borderWidth: 1,
+    borderColor: '#c23934',
+    borderRadius: 8,
+    padding: 14,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  resetThemeButtonText: {
+    color: '#c23934',
+    fontSize: 15,
+    fontWeight: '600',
   },
   header: {
     marginBottom: 20,
@@ -1381,6 +1818,9 @@ const styles = StyleSheet.create({
   flagRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: '#f1f3f4',
+  },
+  voiceSecondsRow: {
+    paddingVertical: 14,
   },
   flagLabelBlock: {
     flex: 1,
