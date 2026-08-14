@@ -49,6 +49,7 @@ import { UI_FEATURES } from '../config/AppConfig';
 import { getAgentAppearance, loadAppearanceSettings } from '../store/AgentAppearanceStore';
 import { getContextVariables } from '../store/ContextVariablesStore';
 import { getVoiceOptions } from '../store/VoiceTimeoutStore';
+import { getVoiceCloseBehavior } from '../store/VoiceCloseBehaviorStore';
 
 interface HomeScreenProps {
   navigation: any;
@@ -254,8 +255,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       await AgentforceService.configure(config);
 
       const contextVars = getContextVariables();
+      // Read the latest close-behavior setting (editable in Settings > Employee > Voice Close
+      // Behavior) at launch time. iOS only; Android ignores this option.
+      const voiceCloseBehavior = getVoiceCloseBehavior();
       await AgentforceService.launchConversation({
         additionalContext: contextVars.length > 0 ? { variables: contextVars } : undefined,
+        voiceCloseBehavior,
       });
     } catch (error: any) {
       Alert.alert(
