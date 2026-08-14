@@ -53,10 +53,15 @@ const appMode: 'service' | 'employee' | 'all' = APP_MODE as any;
  * `autoEndWhileMuted: false` (the default) pauses the silence timer while the
  * mic is muted, so a muted user is never auto-ended. Set `true` to count muted
  * time as silence.
+ *
+ * `defaultClosedCaptionsEnabled: false` (the default) preserves the existing
+ * off-by-default caption behavior for first-time voice users. Once a user
+ * changes their caption preference, their saved choice takes precedence.
  */
 export const EMPLOYEE_VOICE_OPTIONS: VoiceOptions = {
   userSilenceTimeoutSeconds: 30,
   autoEndWhileMuted: false,
+  defaultClosedCaptionsEnabled: false,
 };
 // These values seed the runtime-editable VoiceTimeoutStore (Settings > Employee
 // > Voice Timeout). configure() sends the store's current values, not this

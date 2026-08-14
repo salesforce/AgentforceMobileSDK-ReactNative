@@ -94,3 +94,18 @@ await AgentforceService.launchConversation({
 `'returnToChat'` is the default and returns the user to the chat transcript.
 `'dismissContainer'` dismisses the complete Agentforce presentation when Voice
 ends or the user closes it. Android retains its existing Voice close behavior.
+
+## Testing in the sample app
+
+Both options are wired into the Employee tab of the sample app's Settings
+screen (`src/screens/SettingsScreen.tsx`):
+
+- **Voice Options** section — toggles `autoEndWhileMuted` and
+  `defaultClosedCaptionsEnabled` (persisted in `src/store/VoiceTimeoutStore.ts`,
+  applied on the next `configure()` call from Home).
+- **Voice Close Behavior** section — a segmented control for
+  `voiceCloseBehavior` (persisted in `src/store/VoiceCloseBehaviorStore.ts`,
+  applied on the next `launchConversation()` call from Home).
+
+Both stores are in-memory only and reset on process restart, matching the
+existing Voice Timeout settings pattern.
