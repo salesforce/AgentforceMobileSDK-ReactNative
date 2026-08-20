@@ -72,6 +72,8 @@ import {
   setVoiceTimeoutSettings,
 } from '../store/VoiceTimeoutStore';
 import type { VoiceTimeoutSettings } from '../store/VoiceTimeoutStore';
+import { getVoiceCloseBehavior, setVoiceCloseBehavior } from '../store/VoiceCloseBehaviorStore';
+import type { VoiceCloseBehavior } from '../store/VoiceCloseBehaviorStore';
 
 type TabType = 'service' | 'employee' | 'features' | 'theming';
 
@@ -176,6 +178,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
   const [voiceTimeout, setVoiceTimeout] = useState<VoiceTimeoutSettings>(() =>
     getVoiceTimeoutSettings(),
+  );
+  const [voiceCloseBehavior, setVoiceCloseBehaviorState] = useState<VoiceCloseBehavior>(() =>
+    getVoiceCloseBehavior(),
   );
 
   useEffect(() => {
@@ -476,6 +481,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
   useEffect(() => {
     setVoiceTimeoutSettings(voiceTimeout);
   }, [voiceTimeout]);
+
+  // Sync Voice close behavior to store whenever it changes
+  useEffect(() => {
+    setVoiceCloseBehavior(voiceCloseBehavior);
+  }, [voiceCloseBehavior]);
 
   const handleAddContextVariable = () => {
     const trimmedName = newEmployeeCtxName.trim();
@@ -918,11 +928,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
 
   const renderVoiceTimeoutSection = () => (
     <View style={styles.formContainerWithMargin}>
-      <Text style={styles.label}>Voice Timeout</Text>
+      <Text style={styles.label}>Voice Options</Text>
       <Text style={styles.hint}>
-        Auto-end a voice conversation after the user is silent. Requires the Voice feature flag.
-        Changes apply the next time you launch Employee Agent (rebuilding the client ends the active
-        conversation).
+        Auto-end a voice conversation after the user is silent, and set the default caption state.
+        Requires the Voice feature flag. Changes apply the next time you launch Employee Agent
+        (rebuilding the client ends the active conversation).
       </Text>
 
       <View style={[styles.flagRow, styles.flagRowBorder]}>
@@ -962,7 +972,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
         </View>
       )}
 
-      <View style={styles.flagRow}>
+      <View style={[styles.flagRow, styles.flagRowBorder]}>
         <View style={styles.flagLabelBlock}>
           <Text style={styles.label}>Auto-end while muted</Text>
           <Text style={styles.hint}>Also auto-end when the mic is muted.</Text>
@@ -975,6 +985,54 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
           trackColor={{ false: '#ced4da', true: '#28a745' }}
           thumbColor="#ffffff"
         />
+      </View>
+
+      <View style={styles.flagRow}>
+        <View style={styles.flagLabelBlock}>
+          <Text style={styles.label}>Closed captions by default</Text>
+          <Text style={styles.hint}>
+            Starts captions on for first-time voice users. A user's saved caption preference always
+            overrides this once they've changed it.
+          </Text>
+        </View>
+        <Switch
+          value={voiceTimeout.defaultClosedCaptionsEnabled}
+          onValueChange={defaultClosedCaptionsEnabled =>
+            setVoiceTimeout(prev => ({ ...prev, defaultClosedCaptionsEnabled }))
+          }
+          trackColor={{ false: '#ced4da', true: '#28a745' }}
+          thumbColor="#ffffff"
+        />
+      </View>
+    </View>
+  );
+
+  const renderVoiceCloseBehaviorSection = () => (
+    <View style={styles.formContainerWithMargin}>
+      <Text style={styles.label}>Voice Close Behavior</Text>
+      <Text style={styles.hint}>
+        What happens when the user closes the Voice UI. iOS only — Android retains its existing
+        Voice close behavior regardless of this setting. Applies to the next `launchConversation()`
+        call.
+      </Text>
+      <View style={styles.segmentedControl}>
+        {(['returnToChat', 'dismissContainer'] as VoiceCloseBehavior[]).map(behavior => (
+          <TouchableOpacity
+            key={behavior}
+            style={[
+              styles.segmentButton,
+              voiceCloseBehavior === behavior && styles.segmentButtonActive,
+            ]}
+            onPress={() => setVoiceCloseBehaviorState(behavior)}>
+            <Text
+              style={[
+                styles.segmentButtonText,
+                voiceCloseBehavior === behavior && styles.segmentButtonTextActive,
+              ]}>
+              {behavior === 'returnToChat' ? 'Return to Chat' : 'Dismiss Container'}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
     </View>
   );
@@ -1055,6 +1113,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation, route }) =>
       )}
 
       {authSupported && renderVoiceTimeoutSection()}
+
+      {authSupported && renderVoiceCloseBehaviorSection()}
 
       {authSupported && renderContextVariablesSection()}
 

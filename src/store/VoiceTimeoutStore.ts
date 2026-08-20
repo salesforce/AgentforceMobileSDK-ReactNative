@@ -16,6 +16,7 @@ export interface VoiceTimeoutSettings {
   enabled: boolean;
   userSilenceTimeoutSeconds: number;
   autoEndWhileMuted: boolean;
+  defaultClosedCaptionsEnabled: boolean;
 }
 
 // Auto-end on silence is opt-in: default the toggle off, but pre-seed the
@@ -25,6 +26,7 @@ export const DEFAULT_VOICE_TIMEOUT_SETTINGS: VoiceTimeoutSettings = {
   enabled: false,
   userSilenceTimeoutSeconds: EMPLOYEE_VOICE_OPTIONS.userSilenceTimeoutSeconds ?? 30,
   autoEndWhileMuted: EMPLOYEE_VOICE_OPTIONS.autoEndWhileMuted ?? false,
+  defaultClosedCaptionsEnabled: EMPLOYEE_VOICE_OPTIONS.defaultClosedCaptionsEnabled ?? false,
 };
 
 let settings: VoiceTimeoutSettings = { ...DEFAULT_VOICE_TIMEOUT_SETTINGS };
@@ -46,14 +48,19 @@ export function resetVoiceTimeoutSettings(): void {
  * `voiceOptions` on the Employee Agent `configure()` call.
  *
  * When disabled, `userSilenceTimeoutSeconds` is omitted so the native layer maps
- * it to "never auto-end"; `autoEndWhileMuted` is always forwarded.
+ * it to "never auto-end"; `autoEndWhileMuted` and `defaultClosedCaptionsEnabled`
+ * are always forwarded since they're independent of the auto-end toggle.
  */
 export function getVoiceOptions(): VoiceOptions {
   if (!settings.enabled) {
-    return { autoEndWhileMuted: settings.autoEndWhileMuted };
+    return {
+      autoEndWhileMuted: settings.autoEndWhileMuted,
+      defaultClosedCaptionsEnabled: settings.defaultClosedCaptionsEnabled,
+    };
   }
   return {
     userSilenceTimeoutSeconds: settings.userSilenceTimeoutSeconds,
     autoEndWhileMuted: settings.autoEndWhileMuted,
+    defaultClosedCaptionsEnabled: settings.defaultClosedCaptionsEnabled,
   };
 }

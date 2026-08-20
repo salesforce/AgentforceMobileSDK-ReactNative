@@ -45,6 +45,9 @@ export type { HiddenPreChatFields } from './HiddenPreChatFields';
 // Voice configuration types
 export type { VoiceOptions } from './VoiceOptions';
 
+// Conversation launch option types
+export type { LaunchOptions } from './LaunchOptions';
+
 // Appearance customization types
 export type {
   AgentforceAppearance,
