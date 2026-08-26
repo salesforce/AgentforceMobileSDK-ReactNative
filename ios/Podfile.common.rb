@@ -20,11 +20,11 @@ def shared_pods
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  pod 'AgentforceSDK', '18.26.17'
+  pod 'AgentforceSDK', '18.33.14'
   # AgentforceSDK declares a broad `~> 6` service dependency; pin explicitly to
-  # the exact 262.1.3 service binary this SDK build was tested against.
-  pod 'AgentforceService', '6.11.4'
-  pod 'AgentforceVoice', '2.8.2'
+  # the exact 262.2 service binary this SDK build was tested against.
+  pod 'AgentforceService', '6.11.5'
+  pod 'AgentforceVoice', '2.8.4'
   pod 'Messaging-InApp-Core', '> 1.10.0'
   # Messaging-Multimedia-Core vends SMIMultimediaCore.framework, which
   # AgentforceVoice 2.5.2 links at runtime (@rpath/SMIMultimediaCore.framework).
