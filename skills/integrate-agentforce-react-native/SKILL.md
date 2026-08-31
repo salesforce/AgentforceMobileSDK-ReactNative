@@ -1,11 +1,11 @@
 ---
 name: integrate-agentforce-react-native
-description: Integrate the Agentforce Mobile SDK into an existing React Native app. Walks the consumer through use-case discovery, picks the right configuration (Service Agent for public/customer-facing, Employee Agent for signed-in workforce), wires the `@salesforce/react-native-agentforce` bridge package + native iOS/Android dependencies, and scaffolds TypeScript files for the AgentforceService configuration, logger/navigation/view-provider delegates, and a launch button. Use when a developer asks to "add Agentforce", "integrate the Agentforce SDK", "set up Agentforce chat", or wire a React Native app up to a Salesforce agent.
+description: Integrate the Agentforce Mobile SDK into an existing bare React Native app. Walks the consumer through use-case discovery, picks the right configuration (Service Agent for public/customer-facing, Employee Agent for signed-in workforce), installs the public `@salesforce/react-native-agentforce` bridge with native iOS/Android dependencies, and scaffolds TypeScript configuration, delegates, and a launch button. Use when a developer asks to "add Agentforce", "integrate the Agentforce SDK", "set up Agentforce chat", or wire a React Native app up to a Salesforce agent.
 ---
 
 # integrate-agentforce-react-native
 
-This skill walks a consumer through wiring the **Agentforce Mobile SDK** (via the `@salesforce/react-native-agentforce` bridge) into their React Native app. It is **interactive** — ask the user the questions in each phase before generating code. Don't assume; the wrong configuration mode is the most common integration mistake.
+This skill walks a consumer through wiring the **Agentforce Mobile SDK** (via the public `@salesforce/react-native-agentforce` bridge) into their React Native app. It is **interactive** — ask the user the questions in each phase before generating code. Don't assume; the wrong configuration mode is the most common integration mistake.
 
 ## Operating rules
 
@@ -133,27 +133,15 @@ implementation("com.salesforce.mobilesdk:SalesforceReact:13.1.1")
 
 ## Phase 4 — Add the bridge dependency
 
-The bridge ships as a local package `@salesforce/react-native-agentforce`. Two install paths:
-
-### Path 1: Install from this repo (recommended for now)
+Install the public scoped package:
 
 ```bash
-# Add the bridge package as a tarball or git dependency
-npm install salesforce/AgentforceMobileSDK-ReactNative#dev --save
-# or, if the bridge is published to a registry your org uses:
 npm install @salesforce/react-native-agentforce
 ```
 
-Then run the platform install scripts shipped with the bridge (these patch CocoaPods / Gradle, install Boost, etc.):
+Then update the iOS Podfile with `AgentforceSDK`, the required Salesforce spec sources, and—when autolinking does not emit it—the explicit `ReactNativeAgentforce` pod path shown in `references/dep-detection.md`. Run `pod install` from `ios/` afterward. React Native autolinking discovers the bridge on both platforms. Do **not** run the SDK repository's sample-only `installios.js` or `installandroid.js` scripts in a consumer app.
 
-```bash
-node node_modules/@salesforce/react-native-agentforce/installios.js service   # or 'employee' / 'all'
-node node_modules/@salesforce/react-native-agentforce/installandroid.js service
-```
-
-### Path 2: In-repo bridge (for forks / patches)
-
-If the consumer is forking or contributing back, vendor `AgentforceSDK-ReactNative-Bridge/` into their repo and reference it via npm:
+For a fork or an unreleased patch, vendor `AgentforceSDK-ReactNative-Bridge/` into the app and keep the public package name in `package.json`:
 
 ```json
 {
@@ -163,7 +151,7 @@ If the consumer is forking or contributing back, vendor `AgentforceSDK-ReactNati
 }
 ```
 
-See `references/dep-detection.md` for the full Podfile / Gradle / Boost / XcodeGen setup.
+See `references/dep-detection.md` for native prerequisites, autolinking checks, and the optional explicit Podfile entry.
 
 ## Phase 5 — Scaffold TypeScript files
 
@@ -201,8 +189,8 @@ If the user has an existing app with state management (Redux, Zustand, React Que
 Tell the user:
 
 1. **Install native deps**:
-   - iOS: `cd ios && pod install` (the bridge install script will have run `xcodegen` and patched `boost.podspec` if Boost is installed via Homebrew).
-   - Android: `cd android && ./gradlew :app:dependencies` to confirm `AgentforceSDK-ReactNative-Bridge` resolved.
+   - iOS: `cd ios && pod install`.
+   - Android: `cd android && ./gradlew :app:dependencies` to confirm the bridge resolved.
 2. **Build**:
    - iOS: `npm run ios` (or `npx react-native run-ios`).
    - Android: `npm run android` (or `npx react-native run-android`).
@@ -215,9 +203,8 @@ Tell the user:
 
 If the build fails, common causes:
 
-- **iOS** — missing `xcodegen` (`brew install xcodegen`) or missing Boost (`brew install boost`).
 - **iOS** — `pod install` fails with version conflicts on `SalesforceReact` if Mobile SDK and bridge versions don't agree. Check `ios/Podfile.lock`.
-- **Android** — wrong JDK (need 17), or Boost not exported via `REACT_NATIVE_BOOST_PATH`.
+- **Android** — wrong JDK (need 17), `minSdk` below 29, or an AGP/Kotlin version below the native SDK requirements.
 - **Both** — `AgentforceModule native module not found` at runtime usually means autolinking didn't run; restart Metro with `npm start -- --reset-cache`.
 - **Employee Agent** — `Employee Agent auth is not available` from `loginForEmployeeAgent()` means the Mobile SDK isn't initialized. Check bootconfig and SDK init.
 
@@ -225,6 +212,6 @@ If the build fails, common causes:
 
 - `references/auth-flows.md` — Service vs Employee Agent decision tree, Mobile SDK requirements, how `EmployeeAgentAuthBridge` interacts with the native Mobile SDK.
 - `references/api-reference.md` — `AgentforceService` method walkthrough: `configure`, `launchConversation`, `setAdditionalContext`, `setLoggerDelegate`, `setNavigationDelegate`, `setViewProviderDelegate`, `registerHiddenPreChatFields`.
-- `references/dep-detection.md` — Podfile, Gradle, Boost, XcodeGen, install scripts.
+- `references/dep-detection.md` — npm, CocoaPods, Gradle, and autolinking setup.
 - `references/chat-presentation.md` — Where to put the launch trigger in your RN navigation hierarchy. The chat UI itself is native; you can't embed it inside an RN view.
 - `references/snippets/*.ts(x)` — File templates with `{{PLACEHOLDERS}}` to substitute.

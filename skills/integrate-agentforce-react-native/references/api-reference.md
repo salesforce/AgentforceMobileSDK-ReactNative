@@ -14,8 +14,15 @@ AgentforceService.setNavigationDelegate(myNavigation);
 // 2. Configure
 await AgentforceService.configure({ type: 'service', ... });
 
-// 3. Launch with context required by the initial agent response
-await AgentforceService.launchConversation({ additionalContext: { variables: [...] } });
+// 3. Launch the native conversation UI; pass initial context here when needed
+await AgentforceService.launchConversation({
+  additionalContext: {
+    variables: [{ name: 'accountId', type: 'Text', value: '001xx0000005678' }],
+  },
+});
+
+// 4. (Optional) attach context to the live conversation
+await AgentforceService.setAdditionalContext({ variables: [...] });
 
 // 5. On app shutdown — clean up event listeners
 AgentforceService.destroy();
@@ -33,21 +40,26 @@ await AgentforceService.configure({
   serviceApiURL: 'https://service.salesforce.com',
   organizationId: '00Dxx0000001234',
   esDeveloperName: 'MyServiceAgent',
+  // Optional: native theme tokens and voice-session behavior.
+  appearance: { themeMode: 'system' },
+  voiceOptions: { userSilenceTimeoutSeconds: 30 },
 });
 ```
 
-### `launchConversation({ additionalContext? })`
+`appearance` can override native light/dark colors, asset names, visible labels, and typography. Keep unspecified values absent so the native defaults or server branding remain in effect. Colors must use `#RRGGBB` or `#AARRGGBB`; iOS icon names refer to the host asset catalog and Android icon names refer to host drawable resources.
 
-Open the native chat UI. **Preserves** any existing conversation — users continue where they left off. Throws if `configure()` hasn't been called.
-Pass `additionalContext` to apply variables before the chat UI begins session initialization.
+### `launchConversation()`
+
+Open the native chat UI. **Preserves** any existing conversation — users continue where they left off. Throws if `configure()` hasn't been called. Pass `additionalContext` here when the initial agent response needs the values; use `setAdditionalContext()` later to update an active conversation.
 
 ### `startNewConversation()`
 
 Like `launchConversation()` but discards any existing conversation first.
 
-### `closeConversation()`
+### `dismissConversation()` / `closeConversation()`
 
-Programmatically close the chat UI. Usually unnecessary — the SDK's built-in close button handles this.
+- `dismissConversation()` hides the native chat while preserving the conversation and history for the next launch. Use this for navigation-driven dismissal.
+- `closeConversation()` ends the conversation and discards its history, so the next launch starts fresh.
 
 ### `isConfigured()` / `getConfigurationInfo()`
 
@@ -55,7 +67,7 @@ Check current state. `getConfigurationInfo()` returns `{ configured, mode, descr
 
 ### `setAdditionalContext({ variables })`
 
-Attach contextual data to the **current** conversation after launch. Use `launchConversation({ additionalContext })` when the initial response needs the variables.
+Attach contextual data to the **current** conversation. Must be called **after** `launchConversation()`.
 
 ```ts
 await AgentforceService.setAdditionalContext({
@@ -152,6 +164,10 @@ type FeatureFlags = {
 ```
 
 If the consumer doesn't pass `featureFlags` to `configure()`, the bridge merges the persisted ones in.
+
+### Voice options
+
+Pass `voiceOptions` to `configure()` for per-session behavior. Current options include `userSilenceTimeoutSeconds`, `autoEndWhileMuted`, and `defaultClosedCaptionsEnabled`. Reconfigure to change them. On iOS, `launchConversation()` can also take `voiceCloseBehavior: 'returnToChat' | 'dismissContainer'`; Android retains its native close behavior.
 
 ### `destroy()`
 

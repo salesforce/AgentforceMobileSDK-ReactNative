@@ -20,9 +20,7 @@ export async function ensureEmployeeAgentLogin(): Promise<void> {
       'Mobile SDK not present. Add SalesforceReact (iOS Podfile / Android build.gradle).',
     );
   }
-  if (await hasEmployeeAgentSession()) {
-    return;
-  }
+  if (await hasEmployeeAgentSession()) return;
   await loginForEmployeeAgent();
 }
 

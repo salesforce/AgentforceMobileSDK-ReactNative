@@ -18,27 +18,15 @@ If the working directory contains `AgentforceSDK-ReactNative-Bridge/` as a sibli
 
 ## Install the bridge package
 
-### Option 1: From this repo (current state)
+### Option 1: Public npm package (recommended)
 
-The bridge isn't published to npm yet. Install from GitHub:
-
-```bash
-npm install salesforce/AgentforceMobileSDK-ReactNative#dev --save
-```
-
-…or pin to a specific commit/tag. Then run the platform install scripts that ship with the bridge:
+Install the scoped bridge package:
 
 ```bash
-node node_modules/@salesforce/react-native-agentforce/installios.js service     # or 'employee' / 'all'
-node node_modules/@salesforce/react-native-agentforce/installandroid.js service
+npm install @salesforce/react-native-agentforce
 ```
 
-These scripts:
-
-- Install Boost via Homebrew (or surface a clear error if it's missing).
-- Patch `boost.podspec` (iOS) or set `REACT_NATIVE_BOOST_PATH` (Android) so React Native uses the local Homebrew install instead of downloading ~100MB during builds.
-- Run `xcodegen generate` (iOS) to (re)build `*.xcodeproj` from `project.yml`.
-- Run `pod install` (iOS) and Gradle sync (Android).
+The package uses standard React Native autolinking. Do **not** run `installios.js` or `installandroid.js`; those scripts belong to SDK repository/sample development workflows, not normal consumer integration.
 
 ### Option 2: Local file dependency (forks/patches)
 
@@ -52,32 +40,43 @@ Clone or vendor `AgentforceSDK-ReactNative-Bridge/` into the consumer's repo, th
 }
 ```
 
-Then `npm install` and run the install scripts as above.
+Then run `npm install`, `cd ios && pod install`, and rebuild both native apps.
 
 ## iOS native setup
 
 ### Prerequisites
 
-- macOS, Xcode 15+, iOS 17+ deployment target.
+- macOS, Xcode 16+, iOS 17+ deployment target.
 - CocoaPods (`brew install cocoapods` or `gem install cocoapods`).
-- **XcodeGen** (`brew install xcodegen`) — the bridge generates `*.xcodeproj` from `ios/project.yml`.
-- **Boost** (`brew install boost`) — avoids React Native downloading Boost during builds.
 
 ### Podfile
 
-For Service Agent only:
+The host must include the native Agentforce SDK and its spec sources. The bridge pod is usually discovered by autolinking; the public bridge README also supports declaring it explicitly:
 
 ```ruby
+source 'https://github.com/forcedotcom/SalesforceMobileSDK-iOS-Specs.git'
+source 'https://github.com/Salesforce-Async-Messaging/podspecs.git'
+source 'https://github.com/livekit/podspecs.git'
+source 'https://cdn.cocoapods.org/'
+
+platform :ios, '17.0'
+
 target 'YourApp' do
+  use_frameworks!
+  pod 'AgentforceSDK'
+  pod 'Messaging-InApp-Core', '> 1.10.0'
   pod 'ReactNativeAgentforce', :path => '../node_modules/@salesforce/react-native-agentforce/ios'
   # ...rest of your Podfile
 end
 ```
 
-For Employee Agent (host app must include Mobile SDK pods):
+For Employee Agent, the host app must also include compatible Salesforce Mobile SDK pods:
 
 ```ruby
 target 'YourApp' do
+  use_frameworks!
+  pod 'AgentforceSDK'
+  pod 'Messaging-InApp-Core', '> 1.10.0'
   pod 'ReactNativeAgentforce', :path => '../node_modules/@salesforce/react-native-agentforce/ios'
   pod 'SalesforceReact'
   pod 'SalesforceSDKCore'
@@ -94,6 +93,10 @@ cd ios
 pod install --repo-update
 ```
 
+Merge `config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'` for every pod target into the app's existing `post_install` block. Do not create a second `post_install` block or remove React Native's `react_native_post_install(...)` call.
+
+Although the native iOS SDK now supports Swift Package Manager, the public React Native bridge's documented consumer path is CocoaPods. Keep `AgentforceSDK` and `ReactNativeAgentforce` together in the Podfile for a bridge-based app; do not also add the Agentforce SPM package to the same target.
+
 If `pod install` fails with version conflicts, check that your `Podfile.lock` versions of `SalesforceReact` and `ReactNativeAgentforce` are compatible.
 
 ## Android native setup
@@ -101,18 +104,8 @@ If `pod install` fails with version conflicts, check that your `Podfile.lock` ve
 ### Prerequisites
 
 - Android Studio, JDK 17 (higher versions cause build failures).
-- Gradle 8.0+, AGP that matches your RN version.
-- Min SDK 24+ (the bridge supports Android 7+; the underlying Agentforce SDK requires 29+ on its own — but the bridge itself loads later).
-
-### `android/build.gradle` (project-level)
-
-Verify the React Native gradle plugin and Boost path are wired up. The install script does this automatically; if you're doing it by hand:
-
-```gradle
-ext {
-    REACT_NATIVE_BOOST_PATH = "/opt/homebrew/Cellar/boost/<version>"  // or wherever brew installed it
-}
-```
+- AGP 8.9.1 or newer and Kotlin 1.9.22 or newer, while staying compatible with the selected React Native version.
+- Min SDK 29 or newer. The native Agentforce Android SDK sets the effective platform floor.
 
 ### `android/app/build.gradle` (or `.kts`)
 
@@ -122,7 +115,7 @@ For Employee Agent, add:
 implementation "com.salesforce.mobilesdk:SalesforceReact:13.1.1"
 ```
 
-Autolinking handles `@salesforce/react-native-agentforce` itself — no manual `implementation` line needed for the bridge.
+Autolinking handles `@salesforce/react-native-agentforce` itself — no manual `implementation` line is needed for the bridge.
 
 ### Sync
 
@@ -132,15 +125,6 @@ cd android
 ```
 
 …or just rebuild from Android Studio.
-
-## Boost — why everyone hits this
-
-React Native 0.71+ pulls Boost during builds from `archives.boost.io`. CI environments and corporate networks often block this. The bridge's install scripts work around it:
-
-- **Install Homebrew Boost first**: `brew install boost`
-- **Run the install script**: it patches `boost.podspec` and exports `REACT_NATIVE_BOOST_PATH` so both platforms use the local copy.
-
-If the user is on Linux or Windows (no Homebrew), point them at `docs/ci-guide.md` in the SDK repo for alternative Boost setups.
 
 ## Verifying the install
 
@@ -155,4 +139,4 @@ grep -i ReactNativeAgentforce ios/Podfile.lock
 ./gradlew :app:dependencies | grep -i agentforce
 ```
 
-If any of these come up empty, the install didn't take — re-run the install script and watch for errors.
+If any of these come up empty, reinstall the package, rerun `pod install`, confirm `react-native.config.js` has not disabled the package, and rebuild rather than relying on Metro hot reload.
