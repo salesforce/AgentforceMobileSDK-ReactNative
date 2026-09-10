@@ -516,7 +516,10 @@ class AgentforceModule: RCTEventEmitter {
     /// Returns BridgeNetwork when Mobile SDK is available, nil otherwise.
     private func createAuthenticatedNetwork() -> SalesforceNetwork.Network? {
         #if canImport(SalesforceSDKCore)
-        return BridgeNetwork(restClient: RestClient.shared)
+        // Do NOT capture RestClient.shared here. BridgeNetwork resolves the current user's
+        // RestClient per request so it tracks logout/login/user-switch instead of pinning
+        // the account current at configure time (which survives AgentforceClient reuse).
+        return BridgeNetwork()
         #else
         return nil
         #endif
