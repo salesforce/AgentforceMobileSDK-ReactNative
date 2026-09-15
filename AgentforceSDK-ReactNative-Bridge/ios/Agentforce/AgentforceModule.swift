@@ -1390,7 +1390,9 @@ class AgentforceModule: RCTEventEmitter {
 
     /// Helper function to recursively convert Any value to JSEncodableValue
     private func convertToJSEncodableValue(_ rawValue: Any) -> JSEncodableValue? {
-        if let stringValue = rawValue as? String {
+        if rawValue is NSNull {
+            return .null
+        } else if let stringValue = rawValue as? String {
             return .string(stringValue)
         } else if let numberValue = rawValue as? NSNumber {
             // Check if it's a boolean first (NSNumber can represent booleans)
