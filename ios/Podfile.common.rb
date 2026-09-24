@@ -22,26 +22,15 @@ def shared_pods
 
   pod 'AgentforceSDK', '19.29.3'
   # AgentforceSDK declares a broad `~> 6` service dependency; pin explicitly to
-  # the exact 262.2 service binary this SDK build was tested against.
+  # the exact 262.3 service binary this SDK build was tested against.
   pod 'AgentforceService', '6.17.3'
   pod 'AgentforceVoice', '2.10.8'
   pod 'Messaging-InApp-Core', '> 1.10.0'
   # Messaging-Multimedia-Core vends SMIMultimediaCore.framework, which
-  # AgentforceVoice 2.5.2 links at runtime (@rpath/SMIMultimediaCore.framework).
-  # The AgentforceVoice podspec resolved from this Specs source declares only
-  # AgentforceService/SalesforceLogging/SalesforceNetwork (not the Binary subspec
-  # that the iOS SDK uses), so this transitive multimedia dep isn't pulled in and
-  # the framework is never embedded — surfacing as a dyld "Library not loaded"
-  # crash once Service Agent voice is enabled. Declare it explicitly so it's
-  # installed and embedded.
-  # Constrained to ~> 1.11.0 (i.e. >= 1.11.0, < 1.12.0 — not the looser
-  # '> 1.10.0' the siblings use, nor '~> 1.11' which would still admit 1.12+):
-  # every 1.11.x pins LiveKitWebRTC 137.7151.10, the exact version the
-  # LiveKitClient '2.11.0' pin below targets. A 1.12+/2.x could pull a different
-  # LiveKitWebRTC and reintroduce the collision the LiveKit pin exists to prevent,
-  # so the two coupled pods are kept on the same minor line deliberately; bumping
-  # past 1.11.x should be a conscious act made alongside the LiveKit pin.
-  pod 'Messaging-Multimedia-Core', '~> 1.11.0'
+  # AgentforceVoice links at runtime (@rpath/SMIMultimediaCore.framework).
+  # Keep this explicit so the framework is embedded, and align it with the
+  # AgentforceVoice 2.10.8 podspec requirement.
+  pod 'Messaging-Multimedia-Core', '~> 1.12.0'
 
   # JWTKit is required by AgentforceService but not resolved automatically
   pod 'JWTKit'
@@ -54,10 +43,7 @@ def shared_pods
   pod 'SLDSIcons', '1.2.2'
 
   # LiveKit is needed for both Service and Employee agents.
-  # Pin to 2.11.0 (matches the iOS SDK lock): it pins LiveKitWebRTC 137.7151.10,
-  # which is the same version Messaging-Multimedia-Core 1.11.2 requires. Leaving
-  # it unpinned floats to 2.14.1 (WebRTC 144.x) and collides with the multimedia
-  # pod added for Service Agent voice.
+  # Messaging-Multimedia-Core 1.12.x requires the compatible 2.11.x line.
   pod 'LiveKitClient', '2.11.0' # Required so CocoaPods looks in the correct source location
 
   # AgentforceService links to Crypto.framework at runtime; SwiftCrypto provides it (avoids dyld "Library not loaded: Crypto.framework").
