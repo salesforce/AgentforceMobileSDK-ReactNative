@@ -247,6 +247,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
                     .enableVoice(flags.enableVoice)
+                    // Speech-to-text (dictation) is not working as intended on Android, so
+                    // keep it disabled regardless of the SDK default (which is true).
+                    .enableSpeechToText(false)
                     .setupFlags(internalFlagsForSDK(config))
                     .build()
 
@@ -400,6 +403,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
                     .enableVoice(flags.enableVoice)
+                    // Speech-to-text (dictation) is not working as intended on Android, so
+                    // keep it disabled regardless of the SDK default (which is true).
+                    .enableSpeechToText(false)
                     .setupFlags(internalFlagsForSDK(config))
                     .build()
 
