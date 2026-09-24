@@ -17,7 +17,10 @@ import AgentforceService
 ///
 /// The `modifyUtteranceBeforeSending` method emits a request to JS and waits
 /// (with a timeout) for JS to respond via `awaitModifiedUtterance` on the module.
-class BridgeUIDelegate: AgentforceUIDelegate {
+// `@unchecked Sendable`: `AgentforceUIDelegate` refines `Sendable` in SDK 19.x.
+// The only shared mutable state is guarded by `lock`; the remaining properties
+// are initialized once or effectively read-only.
+final class BridgeUIDelegate: AgentforceUIDelegate, @unchecked Sendable {
 
     // MARK: - Properties
 
@@ -103,19 +106,25 @@ class BridgeUIDelegate: AgentforceUIDelegate {
     func didReceiveResponse(_ message: AgentforceMessage, from conversation: any AgentConversation) {
         guard forwardingEnabled, message.state == .finished else { return }
 
-        // AgentforceSDK.AgentforceMessage does not yet expose `id` or `type`.
-        // Generate a local responseId and derive type from isUserMessage until
-        // the SDK surfaces those properties.
-        let payload: [String: Any] = [
-            "responseId": UUID().uuidString,
-            "message": message.message ?? NSNull(),
-            "type": message.isUserMessage ? "user" : "agent",
-            "conversationId": conversation.conversationId.uuidString,
-            "sessionId": conversation.sessionId ?? NSNull(),
-            "timestamp": ISO8601DateFormatter().string(from: Date()),
-        ]
+        // This callback runs off the main actor, so snapshot nonisolated message
+        // data before hopping to the actor-isolated conversation properties.
+        let responseId = UUID().uuidString
+        let messageText = message.message
+        let type = message.isUserMessage ? "user" : "agent"
+        let timestamp = ISO8601DateFormatter().string(from: Date())
 
-        module?.emitAgentResponseEvent(payload)
+        Task { @MainActor in
+            let payload: [String: Any] = [
+                "responseId": responseId,
+                "message": messageText ?? NSNull(),
+                "type": type,
+                "conversationId": conversation.conversationId.uuidString,
+                "sessionId": conversation.sessionId ?? NSNull(),
+                "timestamp": timestamp,
+            ]
+
+            module?.emitAgentResponseEvent(payload)
+        }
     }
 
     // Splash screen is not gated by `forwardingEnabled`: it renders a registered

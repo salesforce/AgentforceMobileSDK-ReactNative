@@ -1,7 +1,7 @@
 # Configuring Feature Flags & Voice Options — Employee Agent
 
 **Applies to:** `@salesforce/react-native-agentforce@0.6.0`
-(iOS AgentforceSDK 18.26.17 / AgentforceVoice 2.8.2; Android agentforce-sdk 15.130.4; Agentforce Mobile SDK 262.1.3)
+(iOS AgentforceSDK 19.29.3 / AgentforceVoice 2.10.8; Android agentforce-sdk 15.165.6; Agentforce Mobile SDK 262.3)
 
 Both `featureFlags` and `voiceOptions` are passed to a **single**
 `AgentforceService.configure(...)` call, as **top-level siblings of `type`**.

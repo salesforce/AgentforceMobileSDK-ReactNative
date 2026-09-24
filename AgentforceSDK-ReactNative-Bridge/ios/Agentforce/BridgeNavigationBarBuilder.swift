@@ -20,6 +20,7 @@ import AgentforceSDK
 /// builder is installed at all (see `AgentforceModule`), so the SDK falls back to
 /// the server-provided agent label / default. `showDefaults` is left at its
 /// default (`true`) so the close button and overflow menu are preserved.
+@MainActor
 final class BridgeNavigationBarBuilder: NavigationBarBuilder {
 
     var handleNavigation: HandleNavigationClosure?

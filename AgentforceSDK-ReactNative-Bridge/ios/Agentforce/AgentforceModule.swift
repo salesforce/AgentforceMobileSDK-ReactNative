@@ -265,6 +265,7 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Service Agent Configuration
 
+    @MainActor
     private func configureServiceAgent(
         _ configDict: [String: Any],
         voiceSessionOptions: AgentforceVoiceSessionOptions
@@ -320,8 +321,7 @@ class AgentforceModule: RCTEventEmitter {
 
         // Voice shipped for Service Agents in 262.0. Mirror the Employee path and
         // thread the enableVoice flag through; the SDK wires the voice stack
-        // (LiveKit/MIAW) internally once the flag is on. shouldBlockMicrophone stays
-        // false so the mic isn't gated; other public flags carry through too.
+        // (LiveKit/MIAW) internally once the flag is on.
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
         let defaultClosedCaptionsEnabled = Self.defaultClosedCaptionsEnabled(from: configDict)
         saveFeatureFlagsToUserDefaults(flags)
@@ -329,7 +329,6 @@ class AgentforceModule: RCTEventEmitter {
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
             multiAgent: flags.enableMultiAgent,
-            shouldBlockMicrophone: false,
             enableVoice: flags.enableVoice,
             enableOnboarding: false,
             defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled,
@@ -342,7 +341,8 @@ class AgentforceModule: RCTEventEmitter {
             organizationId: config.organizationId,
             serviceApiURL: config.serviceApiURL,
             serviceUISettings: uiSettings,
-            forceConfigEndPoint: config.serviceApiURL
+            forceConfigEndPoint: config.serviceApiURL,
+            authProvider: credentialProvider
         )
         .withFeatureFlags(featureFlagSettings)
         .withLogger(bridgeLogger)
@@ -362,8 +362,7 @@ class AgentforceModule: RCTEventEmitter {
 
         // Always pass bridgeViewProvider so late registrations take effect.
         // canHandle() returns false when the map is empty, matching nil behavior.
-        agentforceClient = await AgentforceClient(
-            credentialProvider: credentialProvider,
+        agentforceClient = AgentforceClient(
             mode: .serviceAgent(serviceConfig),
             viewProvider: bridgeViewProvider
         )
@@ -372,6 +371,7 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Employee Agent Configuration
 
+    @MainActor
     private func configureEmployeeAgent(
         _ configDict: [String: Any],
         voiceSessionOptions: AgentforceVoiceSessionOptions
@@ -460,7 +460,6 @@ class AgentforceModule: RCTEventEmitter {
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
             multiAgent: flags.enableMultiAgent,
-            shouldBlockMicrophone: false,
             enableVoice: flags.enableVoice,
             enableOnboarding: false,
             defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled,
@@ -473,6 +472,7 @@ class AgentforceModule: RCTEventEmitter {
 
         var fullConfiguration = AgentforceConfiguration(
             user: user,
+            authProvider: credentialProvider,
             agentforceCopier: BridgeCopier(),
             forceConfigEndpoint: config.instanceUrl,
             dataProvider: dataProvider,
@@ -499,8 +499,7 @@ class AgentforceModule: RCTEventEmitter {
             print("[AgentforceModule] Creating new AgentforceClient for Employee Agent")
             // Always pass bridgeViewProvider so late registrations take effect.
             // canHandle() returns false when the map is empty, matching nil behavior.
-            agentforceClient = await AgentforceClient(
-                credentialProvider: credentialProvider,
+            agentforceClient = AgentforceClient(
                 mode: .fullConfig(fullConfiguration),
                 viewProvider: bridgeViewProvider
             )
@@ -694,6 +693,7 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Conversation Helpers
 
+    @MainActor
     private func getOrCreateConversation(client: AgentforceClient, mode: AgentMode, forceNew: Bool = false) throws -> AgentConversation {
         // Return existing if available and not forcing new
         if !forceNew, let existing = currentConversation {
