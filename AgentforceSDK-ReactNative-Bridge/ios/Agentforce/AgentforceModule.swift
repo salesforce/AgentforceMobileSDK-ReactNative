@@ -265,6 +265,9 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Service Agent Configuration
 
+    // @MainActor: constructs AgentforceClient (its initializer is main-actor-isolated in the SDK)
+    // and mutates client state. Only caller is configureWithConfig's `Task { @MainActor in }`.
+    @MainActor
     private func configureServiceAgent(
         _ configDict: [String: Any],
         voiceSessionOptions: AgentforceVoiceSessionOptions
@@ -372,6 +375,9 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Employee Agent Configuration
 
+    // @MainActor: constructs AgentforceClient (its initializer is main-actor-isolated in the SDK)
+    // and mutates client state. Only caller is configureWithConfig's `Task { @MainActor in }`.
+    @MainActor
     private func configureEmployeeAgent(
         _ configDict: [String: Any],
         voiceSessionOptions: AgentforceVoiceSessionOptions
@@ -516,7 +522,10 @@ class AgentforceModule: RCTEventEmitter {
     /// Returns BridgeNetwork when Mobile SDK is available, nil otherwise.
     private func createAuthenticatedNetwork() -> SalesforceNetwork.Network? {
         #if canImport(SalesforceSDKCore)
-        return BridgeNetwork(restClient: RestClient.shared)
+        // Do NOT capture RestClient.shared here. BridgeNetwork resolves the current user's
+        // RestClient per request so it tracks logout/login/user-switch instead of pinning
+        // the account current at configure time (which survives AgentforceClient reuse).
+        return BridgeNetwork()
         #else
         return nil
         #endif
@@ -691,6 +700,10 @@ class AgentforceModule: RCTEventEmitter {
 
     // MARK: - Conversation Helpers
 
+    // Isolated to the main actor: `client.startAgentforceConversation(...)` is @MainActor in the
+    // SDK, and both callers (launchConversation / startNewConversation) already invoke this from
+    // within `Task { @MainActor in }`, so the hop is free and the synchronous call stays valid.
+    @MainActor
     private func getOrCreateConversation(client: AgentforceClient, mode: AgentMode, forceNew: Bool = false) throws -> AgentConversation {
         // Return existing if available and not forcing new
         if !forceNew, let existing = currentConversation {
@@ -1387,7 +1400,9 @@ class AgentforceModule: RCTEventEmitter {
 
     /// Helper function to recursively convert Any value to JSEncodableValue
     private func convertToJSEncodableValue(_ rawValue: Any) -> JSEncodableValue? {
-        if let stringValue = rawValue as? String {
+        if rawValue is NSNull {
+            return .null
+        } else if let stringValue = rawValue as? String {
             return .string(stringValue)
         } else if let numberValue = rawValue as? NSNumber {
             // Check if it's a boolean first (NSNumber can represent booleans)

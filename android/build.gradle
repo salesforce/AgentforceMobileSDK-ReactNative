@@ -1,11 +1,14 @@
 buildscript {
     ext {
         compileSdk = 36
-        minSdkVersion = 29
+        minSdkVersion = 30
         targetSdkVersion = 35
         kotlin_version = '2.2.0'
         // We use NDK 23 which has both M1 support and is the side-by-side NDK version from AGP.
-        ndkVersion = "23.1.7779620"
+        // Aligned to 23.0.7599858 — the r23 build shipped by the SFCI android image
+        // (docker-mobile/rhel9-sfci-android Dockerfile-ndk). The image does not ship
+        // 23.1.7779620; revisit if the image owners standardize on a different r23 patch.
+        ndkVersion = "23.0.7599858"
     }
 
     // Work-around for "In order to compile Java 9+ source, please set compileSdkVersion to 30 or above" error in some React Native community libraries.

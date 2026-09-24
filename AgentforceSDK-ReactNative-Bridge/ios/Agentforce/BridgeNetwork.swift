@@ -18,13 +18,29 @@ import SalesforceSDKCore
  */
 struct BridgeNetwork: SalesforceNetwork.Network {
 
-    private let restClient: RestClient
+    // Holds NO RestClient. The current user's RestClient is resolved per request so a
+    // logout/login or user switch is reflected immediately, instead of pinning the account
+    // that was current when the AgentforceClient (and this BridgeNetwork) was built. A
+    // captured client survives AgentforceClient reuse and goes stale after a logout +
+    // re-login (revoked refresh token), driving the Mobile SDK to re-launch its login flow.
+    private let restClientProvider: () -> RestClient?
 
-    init(restClient: RestClient = RestClient.shared) {
-        self.restClient = restClient
+    init(restClientProvider: @escaping () -> RestClient? = {
+        // RestClient.shared resolves to the *current* user at call time, but its
+        // implementation returns nil when there is no current user — gate on
+        // currentUserAccount before touching it to avoid an unexpected-nil crash.
+        UserAccountManager.shared.currentUserAccount != nil ? RestClient.shared : nil
+    }) {
+        self.restClientProvider = restClientProvider
     }
 
     func data(for request: SalesforceNetwork.NetworkRequest) async throws -> (Data, URLResponse) {
+        guard let restClient = restClientProvider() else {
+            // Logged out / no current user: fail fast rather than sending on a stale
+            // client, which would drive the Mobile SDK to launch its own login flow.
+            throw NetworkError.notAuthenticated
+        }
+
         let restRequest = try createRestRequest(from: request)
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -119,6 +135,10 @@ private extension URLRequest {
 enum NetworkError: Error {
     case noData
     case invalidURL
+    /// No current Mobile SDK user (logged out). Surfaced instead of sending on a stale
+    /// RestClient, so the host controls re-authentication rather than the Mobile SDK
+    /// launching its own login flow mid-session.
+    case notAuthenticated
 }
 
 #endif // canImport(SalesforceSDKCore)
