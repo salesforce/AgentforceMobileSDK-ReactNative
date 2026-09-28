@@ -43,6 +43,11 @@ struct ServiceAgentModeConfig {
     /// Optional UI settings parsed from JS config
     let serviceUISettings: [String: Bool]?
 
+    /// Leave the Force config endpoint unset so AgentforceSDK derives the core org host
+    /// from the SCRT service URL. Reusing `serviceApiURL` here sends Mobile Types and
+    /// branding requests to the SCRT host, where they return HTTP 404.
+    var forceConfigEndPoint: String { "" }
+
     /// Creates a ServiceAgentModeConfig from a dictionary
     /// - Parameter dict: Dictionary containing configuration values
     /// - Returns: ServiceAgentModeConfig if all required fields are present, nil otherwise

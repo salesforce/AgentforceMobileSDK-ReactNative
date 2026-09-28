@@ -345,7 +345,7 @@ class AgentforceModule: RCTEventEmitter {
             organizationId: config.organizationId,
             serviceApiURL: config.serviceApiURL,
             serviceUISettings: uiSettings,
-            forceConfigEndPoint: config.serviceApiURL
+            forceConfigEndPoint: config.forceConfigEndPoint
         )
         .withFeatureFlags(featureFlagSettings)
         .withLogger(bridgeLogger)
