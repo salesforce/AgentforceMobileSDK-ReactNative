@@ -258,8 +258,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
                 val agentforceConfigBuilder = AgentforceConfiguration
                     .builder(credentialProvider)
-                    .setServiceApiURL(serviceConfig.serviceApiURL)
-                    .setSalesforceDomain(serviceConfig.serviceApiURL)
+                    .setServiceAgentApiURL(serviceConfig.serviceApiURL)
                     .setApplication(application)
                     .setFeatureFlagSettings(featureFlagSettings)
                     .setCameraUriProvider(cameraUriProvider)
@@ -1351,6 +1350,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // endregion
 }
+
+/**
+ * Sets the SCRT endpoint used by Service Agent without treating it as the Salesforce core domain.
+ * The Android SDK derives the core domain from [ServiceAgentConfiguration.serviceApiURL] when it
+ * builds Service Agent mode, so setting `salesforceDomain` here would route core APIs to SCRT.
+ */
+internal fun AgentforceConfiguration.Builder.setServiceAgentApiURL(serviceApiURL: String) =
+    setServiceApiURL(serviceApiURL)
 
 /**
  * Registers voice with the SDK config builder using the non-deprecated

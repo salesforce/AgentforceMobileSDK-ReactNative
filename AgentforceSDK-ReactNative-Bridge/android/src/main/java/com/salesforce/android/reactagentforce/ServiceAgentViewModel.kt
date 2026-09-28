@@ -220,8 +220,7 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
                         .build(),
                     agentforceConfiguration = AgentforceConfiguration
                         .builder(authCredentialProvider)
-                        .setServiceApiURL(_serviceApiURL.value)
-                        .setSalesforceDomain(_serviceApiURL.value)
+                        .setServiceAgentApiURL(_serviceApiURL.value)
                         .setUser(
                             User(
                                 org = Org(id = _organizationId.value, community = null),
@@ -313,4 +312,3 @@ class ServiceAgentViewModel(application: Application) : AndroidViewModel(applica
         _conversation.value = null
     }
 }
-
