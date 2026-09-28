@@ -68,6 +68,18 @@ final class AgentModeTests: XCTestCase {
         XCTAssertEqual(true, config?.serviceUISettings?["endConversation"])
     }
 
+    func testServiceConfigLetsSDKDeriveForceConfigEndpoint() {
+        let serviceApiURL = "https://example.sandbox.my.salesforce-scrt.com"
+        let config = ServiceAgentModeConfig.from(dictionary: [
+            "serviceApiURL": serviceApiURL,
+            "organizationId": "00D",
+            "esDeveloperName": "MyAgent",
+        ])
+
+        XCTAssertEqual(serviceApiURL, config?.serviceApiURL)
+        XCTAssertEqual("", config?.forceConfigEndPoint)
+    }
+
     // MARK: - EmployeeAgentModeConfig.from(dictionary:)
 
     func testEmployeeConfigParsesRequiredFieldsAndAgentId() {
