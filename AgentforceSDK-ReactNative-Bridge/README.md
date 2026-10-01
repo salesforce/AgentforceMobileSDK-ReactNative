@@ -186,14 +186,12 @@ the Agentforce conversation. Keep `flex: 1` for the main app and other full-scre
 roots:
 
 ```js
-import {AppRegistry} from 'react-native';
-import {AgentforceService} from '@salesforce/react-native-agentforce';
+import { AppRegistry } from 'react-native';
+import { AgentforceService } from '@salesforce/react-native-agentforce';
 
 AppRegistry.registerComponent('CustomAgentforceView', () => CustomAgentforceView);
-AppRegistry.setRootViewStyleProvider(({initialProps}) =>
-  initialProps?.definition === 'AFMobileCustom/ersCaseServiceTypes'
-    ? {flex: 0}
-    : {flex: 1},
+AppRegistry.setRootViewStyleProvider(({ initialProps }) =>
+  initialProps?.definition === 'AFMobileCustom/ersCaseServiceTypes' ? { flex: 0 } : { flex: 1 },
 );
 
 async function registerAgentforceViews() {
