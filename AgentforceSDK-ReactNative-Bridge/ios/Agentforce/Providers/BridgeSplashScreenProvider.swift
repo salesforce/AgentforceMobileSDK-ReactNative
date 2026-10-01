@@ -4,7 +4,8 @@
  * Bridges the native splash-screen delegate hook to React Native.
  * When a splash screen is registered for an agent, the SDK's request for a
  * splash view is satisfied by hosting a registered React Native component via
- * RCTRootView, and the user's chosen utterance is routed back into the SDK.
+ * the host app's React Native runtime, and the user's chosen utterance is
+ * routed back into the SDK.
  */
 
 import Foundation
@@ -17,7 +18,7 @@ import AgentforceSDK
 ///
 /// Stores a 1:1 map of agent IDs to React Native component names (registered from
 /// JS) and, when the SDK asks the UI delegate for a splash screen, builds an
-/// `AnyView` that hosts the mapped component in an `RCTRootView`. It also retains
+/// `AnyView` that hosts the mapped component in React Native. It also retains
 /// the SDK-supplied `AgentforceSplashScreenUtteranceDelegate` per agent so a later
 /// `selectSplashScreenUtterance(agentId:utterance:)` call from JS can report the
 /// chosen utterance back to the SDK.
@@ -109,9 +110,9 @@ final class BridgeSplashScreenProvider {
     }
 }
 
-// MARK: - SwiftUI wrapper for RCTRootView
+// MARK: - SwiftUI wrapper for React Native root views
 
-/// Wraps an RCTRootView in a UIViewRepresentable so a React Native component can be
+/// Wraps a React Native root in a UIViewRepresentable so a component can be
 /// used as a SwiftUI splash screen. Fills the space the SDK gives it (the splash is
 /// laid out in the conversation content region), rather than sizing to content.
 private struct SplashReactNativeViewWrapper: UIViewRepresentable {
@@ -120,23 +121,17 @@ private struct SplashReactNativeViewWrapper: UIViewRepresentable {
     let initialProperties: [String: Any]
 
     func makeUIView(context: Context) -> UIView {
-        guard let bridge = bridge else {
-            assertionFailure("[BridgeSplashScreenProvider] RCT bridge is nil — cannot render React Native splash screen")
-            return UIView()
-        }
-        let rootView = RCTRootView(
+        AgentforceReactNativeRootView.makeView(
             bridge: bridge,
             moduleName: moduleName,
-            initialProperties: initialProperties
+            initialProperties: initialProperties,
+            sizeFlexibility: .none
         )
-        rootView.backgroundColor = .clear
         // Fill the region the SDK lays the splash into (below the top bar, above the
         // input bar); the React component drives its own internal layout.
-        rootView.sizeFlexibility = .none
-        return rootView
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        // RCTRootView handles its own updates via the bridge.
+        // React Native updates the hosted view through its runtime.
     }
 }

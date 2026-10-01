@@ -153,6 +153,63 @@ Call `setAdditionalContext()` after launch to update context on an active conver
 - iOS: Uses `AgentforceVariable` with `JSEncodableValue` enum; type is just a label
 - Context persists for the current conversation session
 
+### Custom React Native views on iOS
+
+Register custom response components with `setViewProviderDelegate()` as usual. In a
+bridgeless iOS app (such as React Native 0.83), also register the app's existing
+React Native root view factory before showing an Agentforce conversation. For the
+standard Swift `AppDelegate`, add this after creating `RCTReactNativeFactory`:
+
+```swift
+import ReactNativeAgentforce
+
+let factory = RCTReactNativeFactory(delegate: delegate)
+AgentforceReactNativeRootView.registerFactory { moduleName, properties in
+  factory.rootViewFactory.view(
+    withModuleName: moduleName,
+    initialProperties: properties
+  )
+}
+```
+
+Use the same `factory` that starts the app's React Native runtime. Apps with a
+legacy `RCTBridge` keep working without this registration. The registration also
+hosts custom splash screens on bridgeless iOS. Call
+`AgentforceReactNativeRootView.clearFactory()` when tearing down the React Native
+runtime. If no factory is registered in a bridgeless app, the SDK logs an error
+with the component name instead of silently attempting an unsupported legacy root.
+
+For a custom response that sizes itself to its content, register the component in
+JS and set its React Native root container to `flex: 0`. React Native's default
+root container has `flex: 1`, which can measure as zero height when embedded in
+the Agentforce conversation. Keep `flex: 1` for the main app and other full-screen
+roots:
+
+```js
+import {AppRegistry} from 'react-native';
+import {AgentforceService} from '@salesforce/react-native-agentforce';
+
+AppRegistry.registerComponent('CustomAgentforceView', () => CustomAgentforceView);
+AppRegistry.setRootViewStyleProvider(({initialProps}) =>
+  initialProps?.definition === 'AFMobileCustom/ersCaseServiceTypes'
+    ? {flex: 0}
+    : {flex: 1},
+);
+
+async function registerAgentforceViews() {
+  await AgentforceService.setViewProviderDelegate({
+    componentMap: {
+      'AFMobileCustom/ersCaseServiceTypes': 'CustomAgentforceView',
+    },
+  });
+}
+
+// Await registerAgentforceViews() before launchConversation().
+```
+
+The component receives `definition` and `properties` props. If the app already
+sets a root view style provider, add the conditional styling to that provider.
+
 ### Custom Splash Screen
 
 Supply a custom welcome ("splash") screen shown on top of the conversation before

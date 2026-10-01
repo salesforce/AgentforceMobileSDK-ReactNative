@@ -94,4 +94,10 @@ jobs:
         # let npm mint credentials from the OIDC token. publishConfig.access=public
         # in package.json publishes the scoped package publicly; --provenance
         # attaches a signed build-provenance attestation.
-        run: npm publish --provenance
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$PKG_VERSION" == *-* ]]; then
+            npm publish --provenance --tag next
+          else
+            npm publish --provenance
+          fi
