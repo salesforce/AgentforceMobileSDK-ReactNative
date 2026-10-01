@@ -3,7 +3,7 @@
  *
  * Bridges the native AgentforceViewProviding protocol to React Native.
  * When enabled, delegates rendering of specified component types to a
- * registered React Native component via RCTRootView.
+ * registered React Native component in the host app's runtime.
  */
 
 import Foundation
@@ -13,7 +13,7 @@ import React
 import AgentforceSDK
 
 /// Implements AgentforceViewProviding by delegating to a React Native component.
-/// Component types are registered synchronously from JS; rendering uses RCTRootView.
+/// Component types are registered synchronously from JS.
 class BridgeViewProvider: AgentforceViewProviding {
 
     /// Maps component definition strings to React Native component names (1:1).
@@ -73,38 +73,115 @@ class BridgeViewProvider: AgentforceViewProviding {
     }
 }
 
-// MARK: - SwiftUI wrapper for RCTRootView
+// MARK: - SwiftUI wrapper for React Native root views
 
-/// Wraps an RCTRootView in a UIViewRepresentable for use in SwiftUI.
-/// Uses RCTRootView's intrinsic content size so SwiftUI can lay it out correctly.
-private struct ReactNativeViewWrapper: UIViewRepresentable {
+/// Wraps a legacy root or Fabric surface in a UIViewRepresentable for SwiftUI.
+private struct ReactNativeViewWrapper: View {
+    @State private var fabricHeight: CGFloat?
+
     let bridge: RCTBridge?
     let moduleName: String
     let initialProperties: [String: Any]
 
-    func makeUIView(context: Context) -> UIView {
-        guard let bridge = bridge else {
-            assertionFailure("[BridgeViewProvider] RCT bridge is nil — cannot render React Native view")
-            return UIView() // Return empty view; a nil bridge means setup is broken
-        }
-        let rootView = RCTRootView(
+    var body: some View {
+        ReactNativeRootView(
             bridge: bridge,
             moduleName: moduleName,
-            initialProperties: initialProperties
+            initialProperties: initialProperties,
+            onFabricHeightChange: { fabricHeight = $0 }
         )
-        rootView.backgroundColor = .clear
-        rootView.sizeFlexibility = .widthAndHeight
-        return rootView
+        .frame(height: fabricHeight)
+    }
+}
+
+private struct ReactNativeRootView: UIViewRepresentable {
+    let bridge: RCTBridge?
+    let moduleName: String
+    let initialProperties: [String: Any]
+    let onFabricHeightChange: (CGFloat) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onHeightChange: onFabricHeightChange)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = AgentforceReactNativeRootView.makeView(
+            bridge: bridge,
+            moduleName: moduleName,
+            initialProperties: initialProperties,
+            sizeFlexibility: .widthAndHeight
+        )
+        if let rootView = view as? RCTSurfaceHostingProxyRootView {
+            context.coordinator.observe(rootView)
+        }
+        return view
+    }
+
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        coordinator.stopObserving()
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        // RCTRootView handles its own updates via the bridge
+        // React Native updates the hosted view through its runtime.
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIView, context: Context) -> CGSize? {
-        let width = proposal.width ?? UIScreen.main.bounds.width
-        let size = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
+        let proposedWidth = proposal.width ?? 0
+        let width = proposedWidth.isFinite && proposedWidth > 0
+            ? proposedWidth
+            : UIScreen.main.bounds.width
+        let maxHeight: CGFloat = uiView is RCTSurfaceHostingProxyRootView
+            ? 10_000
+            : CGFloat.greatestFiniteMagnitude
+        let size = uiView.sizeThatFits(CGSize(width: width, height: maxHeight))
+        if size.height <= 0, uiView is RCTSurfaceHostingProxyRootView {
+            // The Fabric surface initially measures zero while preparing. Give it
+            // a frame so it can mount and report its actual content height.
+            return CGSize(width: width, height: 1)
+        }
         guard size.height > 0 else { return nil }
         return CGSize(width: width, height: size.height)
+    }
+
+    final class Coordinator: NSObject, RCTRootViewDelegate {
+        private weak var rootView: RCTSurfaceHostingProxyRootView?
+        private var timer: Timer?
+        private var lastHeight: CGFloat = 0
+        private let onHeightChange: (CGFloat) -> Void
+
+        init(onHeightChange: @escaping (CGFloat) -> Void) {
+            self.onHeightChange = onHeightChange
+        }
+
+        func observe(_ rootView: RCTSurfaceHostingProxyRootView) {
+            self.rootView = rootView
+            rootView.delegate = self
+            timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+                self?.measure()
+            }
+        }
+
+        func stopObserving() {
+            timer?.invalidate()
+            timer = nil
+            rootView?.delegate = nil
+        }
+
+        func rootViewDidChangeIntrinsicSize(_ rootView: RCTRootView) {
+            measure()
+        }
+
+        private func measure() {
+            guard let rootView, rootView.window != nil, rootView.bounds.width > 0 else { return }
+            let size = rootView.sizeThatFits(CGSize(width: rootView.bounds.width, height: 10_000))
+            guard size.height > 0, abs(size.height - lastHeight) > 0.5 else { return }
+            lastHeight = size.height
+            DispatchQueue.main.async { [onHeightChange] in
+                onHeightChange(size.height)
+            }
+            // Subsequent content size changes arrive through RCTRootViewDelegate.
+            timer?.invalidate()
+            timer = nil
+        }
     }
 }
