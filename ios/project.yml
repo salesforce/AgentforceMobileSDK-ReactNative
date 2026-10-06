@@ -178,3 +178,4 @@ targets:
       - path: Tests
         type: group
       - path: ../AgentforceSDK-ReactNative-Bridge/ios/Agentforce/Models/AgentMode.swift
+      - path: ../AgentforceSDK-ReactNative-Bridge/ios/Agentforce/Providers/FabricContentHeight.swift

@@ -88,6 +88,7 @@ private struct ReactNativeViewWrapper: View {
             bridge: bridge,
             moduleName: moduleName,
             initialProperties: initialProperties,
+            measuredHeight: fabricHeight,
             onFabricHeightChange: { fabricHeight = $0 }
         )
         .frame(height: fabricHeight)
@@ -98,6 +99,7 @@ private struct ReactNativeRootView: UIViewRepresentable {
     let bridge: RCTBridge?
     let moduleName: String
     let initialProperties: [String: Any]
+    let measuredHeight: CGFloat?
     let onFabricHeightChange: (CGFloat) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -122,7 +124,9 @@ private struct ReactNativeRootView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        // React Native updates the hosted view through its runtime.
+        // React Native updates the hosted view through its runtime. Refresh the
+        // callback when SwiftUI recreates this value around an existing UIView.
+        context.coordinator.onHeightChange = onFabricHeightChange
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIView, context: Context) -> CGSize? {
@@ -130,6 +134,10 @@ private struct ReactNativeRootView: UIViewRepresentable {
         let width = proposedWidth.isFinite && proposedWidth > 0
             ? proposedWidth
             : UIScreen.main.bounds.width
+        if uiView is RCTSurfaceHostingProxyRootView,
+           let measuredHeight {
+            return CGSize(width: width, height: measuredHeight)
+        }
         let maxHeight: CGFloat = uiView is RCTSurfaceHostingProxyRootView
             ? 10_000
             : CGFloat.greatestFiniteMagnitude
@@ -147,7 +155,7 @@ private struct ReactNativeRootView: UIViewRepresentable {
         private weak var rootView: RCTSurfaceHostingProxyRootView?
         private var timer: Timer?
         private var lastHeight: CGFloat = 0
-        private let onHeightChange: (CGFloat) -> Void
+        var onHeightChange: (CGFloat) -> Void
 
         init(onHeightChange: @escaping (CGFloat) -> Void) {
             self.onHeightChange = onHeightChange
@@ -156,9 +164,14 @@ private struct ReactNativeRootView: UIViewRepresentable {
         func observe(_ rootView: RCTSurfaceHostingProxyRootView) {
             self.rootView = rootView
             rootView.delegate = self
-            timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+            // Fabric can change a mounted root component's frame without a
+            // corresponding intrinsic-size notification. Keep observing while
+            // this view is mounted, including while its parent is scrolling.
+            let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
                 self?.measure()
             }
+            RunLoop.main.add(timer, forMode: .common)
+            self.timer = timer
         }
 
         func stopObserving() {
@@ -168,20 +181,37 @@ private struct ReactNativeRootView: UIViewRepresentable {
         }
 
         func rootViewDidChangeIntrinsicSize(_ rootView: RCTRootView) {
-            measure()
+            DispatchQueue.main.async { [weak self] in self?.measure() }
         }
 
         private func measure() {
             guard let rootView, rootView.window != nil, rootView.bounds.width > 0 else { return }
-            let size = rootView.sizeThatFits(CGSize(width: rootView.bounds.width, height: 10_000))
-            guard size.height > 0, abs(size.height - lastHeight) > 0.5 else { return }
-            lastHeight = size.height
-            DispatchQueue.main.async { [onHeightChange] in
-                onHeightChange(size.height)
+            // Prefer the Fabric component's rendered frame. In the bridgeless
+            // path it can already be 160pt while the proxy and surface still
+            // report the 1pt fallback supplied by sizeThatFits below.
+            let contentHeight = FabricContentHeight.height(in: rootView.view)
+            let intrinsicHeight = rootView.intrinsicContentSize.height
+            let height: CGFloat
+            if let contentHeight, contentHeight > 1 || (lastHeight > 0 && contentHeight >= 0) {
+                height = contentHeight
+            } else if intrinsicHeight.isFinite, intrinsicHeight > 1 {
+                height = intrinsicHeight
+            } else {
+                let fittingHeight = rootView.sizeThatFits(
+                    CGSize(width: rootView.bounds.width, height: 10_000)
+                ).height
+                if fittingHeight.isFinite, fittingHeight > 1 {
+                    height = fittingHeight
+                } else {
+                    return // Never publish the temporary 1pt host as content.
+                }
             }
-            // Subsequent content size changes arrive through RCTRootViewDelegate.
-            timer?.invalidate()
-            timer = nil
+            guard abs(height - lastHeight) > 0.5 else { return }
+            lastHeight = height
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.rootView != nil else { return }
+                self.onHeightChange(height)
+            }
         }
     }
 }
