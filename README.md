@@ -75,6 +75,8 @@ This app uses the **AgentforceSDK-ReactNative-Bridge** (in-repo under `Agentforc
 - **Runtime detection**: Automatically detects Mobile SDK availability
 - **Subspecs/Variants**: Core (Service Agent) and WithMobileSDK (Employee Agent)
 
+React Native 0.87+ iOS apps can use the bridge's [Swift Package Manager setup](AgentforceSDK-ReactNative-Bridge/README.md#ios-swift-package-manager-react-native-087). This sample remains on React Native 0.74 and CocoaPods.
+
 ### JavaScript Layer (100% Shared)
 
 - **Framework**: React Native + TypeScript

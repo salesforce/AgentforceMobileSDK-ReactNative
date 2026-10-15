@@ -12,6 +12,60 @@ npm install @salesforce/react-native-agentforce
 
 The native module autolinks via the shipped `ReactNativeAgentforce` podspec (iOS) and Gradle library (Android). The npm package name is `@salesforce/react-native-agentforce`; the native module names (`ReactNativeAgentforce` pod, `react-native-agentforce` Gradle module) are unchanged.
 
+### iOS (Swift Package Manager, React Native 0.87+)
+
+The package ships a `Package.swift` for React Native's experimental SwiftPM
+integration. Set the iOS app target's deployment target to 17.0 or later.
+React Native 0.87 generates its autolinking package with an iOS 15 minimum,
+which cannot contain the Agentforce iOS SDK (minimum iOS 17). Exclude this
+module from the generated autolinking package in the app's
+`react-native.config.js`:
+
+```js
+module.exports = {
+  dependencies: {
+    '@salesforce/react-native-agentforce': { platforms: { ios: null } },
+  },
+};
+```
+
+Install the npm package and run React Native's setup from the app root (also
+do this once on a fresh CI checkout):
+
+```sh
+npm install @salesforce/react-native-agentforce
+npx react-native spm
+```
+
+In Xcode, use **File > Add Package Dependencies > Add Local** and select
+`node_modules/@salesforce/react-native-agentforce`. Add its
+`ReactNativeAgentforce` library product to the iOS app target. Commit the
+resulting Xcode project change. The package's Swift and Objective-C targets
+consume React Native's generated header packages and the public
+`AgentforceMobileSDK-iOS` binary package. Do not add
+`AgentforceMobileService-iOS` separately: the SDK package already contains
+the matching Service binary. React Native's setup generates its own binary
+and header packages under `ios/build/`; a clean checkout cannot resolve this
+bridge package until that setup completes. Xcode downloads the Agentforce SDK,
+Voice, Service, and supporting packages during SwiftPM resolution. Their
+package manifests bundle the resources required by those binaries; no
+XCFramework copy step is needed. If your app uses voice, add
+`NSMicrophoneUsageDescription` to its `Info.plist`.
+
+For an Xcode project with a shared app scheme, validate resolution and linking:
+
+```sh
+xcodebuild -resolvePackageDependencies -project ios/YourApp.xcodeproj -scheme YourApp
+xcodebuild build -project ios/YourApp.xcodeproj -scheme YourApp \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
+```
+
+The SwiftPM product supports Service Agent and direct Employee Agent
+credentials. Mobile SDK sourced Employee Agent authentication still requires
+the `WithMobileSDK` CocoaPods subspec; the SPM target does not add Salesforce
+Mobile SDK. React Native 0.74 apps, including the sample in this repository,
+continue to use CocoaPods.
+
 ### iOS (CocoaPods)
 
 In your app’s `Podfile`:
