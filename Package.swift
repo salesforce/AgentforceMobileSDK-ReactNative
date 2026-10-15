@@ -1,0 +1,1 @@
+AgentforceSDK-ReactNative-Bridge/Package.swift
