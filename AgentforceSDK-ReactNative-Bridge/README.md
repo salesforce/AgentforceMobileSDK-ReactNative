@@ -68,7 +68,11 @@ continue to use CocoaPods.
 
 ### iOS (CocoaPods)
 
-In your app’s `Podfile`:
+The package-root podspec lets React Native autolink the default `Core` subspec.
+If you declare the bridge manually in your app's `Podfile` (for example, to use
+`WithMobileSDK`), disable iOS autolinking for
+`@salesforce/react-native-agentforce` in the app's `react-native.config.js` as
+shown above, then add the desired pod:
 
 ```ruby
 pod 'ReactNativeAgentforce', :path => '../node_modules/@salesforce/react-native-agentforce/ios'
