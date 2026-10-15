@@ -33,12 +33,12 @@ Pod::Spec.new do |s|
       "ServiceAgent/**/*.{h,m,swift}"
     ]
     core.dependency "React-Core"
-    core.dependency "AgentforceSDK", "19.29.3"
-    core.dependency "AgentforceService", "6.17.3"
-    core.dependency "AgentforceVoice", "2.10.8"
-    # AgentforceSDK 17.31.6 (262.1) depends on SharedUI ('~> 1'); declare it so
-    # this target can resolve the design-system module.
-    core.dependency "SharedUI", "1.3.1"
+    core.dependency "AgentforceSDK", "264.0.0"
+    core.dependency "AgentforceService", "264.0.0"
+    core.dependency "AgentforceVoice", "264.0.0"
+    # AgentforceSDK 264.0.0 requires SharedUI >= 1.5.11; declare a compatible
+    # published binary so this target can resolve the design-system module.
+    core.dependency "SharedUI", "1.6.10"
   end
 
   # Optional: add for Employee Agent auth (OAuth via Salesforce Mobile SDK).

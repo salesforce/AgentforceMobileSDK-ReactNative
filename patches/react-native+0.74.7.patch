@@ -1,3 +1,136 @@
+diff --git a/node_modules/react-native/sdks/hermes-engine/hermes-utils.rb b/node_modules/react-native/sdks/hermes-engine/hermes-utils.rb
+index c0c7613..eda20e9 100644
+--- a/node_modules/react-native/sdks/hermes-engine/hermes-utils.rb
++++ b/node_modules/react-native/sdks/hermes-engine/hermes-utils.rb
+@@ -5,6 +5,7 @@
+
+ require 'net/http'
+ require 'rexml/document'
++require 'fileutils'
+
+ HERMES_GITHUB_URL = "https://github.com/facebook/hermes.git"
+ ENV_BUILD_FROM_SOURCE = "RCT_BUILD_HERMES_FROM_SOURCE"
+@@ -217,14 +218,49 @@ def download_hermes_tarball(react_native_path, tarball_url, version, configurati
+         "#{artifacts_dir()}/hermes-ios-#{version}.tar.gz" :
+         "#{artifacts_dir()}/hermes-ios-#{version}-#{configuration}.tar.gz"
+
+-    unless File.exist?(destination_path)
+-      # Download to a temporary file first so we don't cache incomplete downloads.
+-      tmp_file = "#{artifacts_dir()}/hermes-ios.download"
+-      `mkdir -p "#{artifacts_dir()}" && curl "#{tarball_url}" -Lo "#{tmp_file}" && mv "#{tmp_file}" "#{destination_path}"`
++    if File.exist?(destination_path)
++      return destination_path if valid_hermes_tarball?(destination_path)
++
++      hermes_log("Removing invalid cached artifact: #{destination_path}", :error)
++      FileUtils.rm_f(destination_path)
++    end
++
++    FileUtils.mkdir_p(artifacts_dir())
++    tmp_file = "#{destination_path}.download-#{Process.pid}"
++
++    begin
++      download_succeeded = system(
++        'curl',
++        '--fail',
++        '--location',
++        '--http1.1',
++        '--retry', '5',
++        '--retry-all-errors',
++        '--retry-delay', '2',
++        '--connect-timeout', '30',
++        '--output', tmp_file,
++        tarball_url
++      )
++
++      unless download_succeeded && valid_hermes_tarball?(tmp_file)
++        raise "[Hermes] Failed to download a valid artifact from #{tarball_url}"
++      end
++
++      # Only expose the final path after the complete archive has been validated.
++      File.rename(tmp_file, destination_path)
++    ensure
++      FileUtils.rm_f(tmp_file)
+     end
++
+     return destination_path
+ end
+
++def valid_hermes_tarball?(tarball_path)
++    return false unless File.file?(tarball_path) && File.size?(tarball_path)
++
++    return system('tar', '-tzf', tarball_path, out: File::NULL, err: File::NULL)
++end
++
+ def nightly_tarball_url(version)
+     params = "r=snapshots\&g=com.facebook.react\&a=react-native-artifacts\&c=hermes-ios-debug\&e=tar.gz\&v=#{version}-SNAPSHOT"
+     return resolve_url_redirects("http://oss.sonatype.org/service/local/artifact/maven/redirect\?#{params}")
+diff --git a/node_modules/react-native/sdks/hermes-engine/utils/replace_hermes_version.js b/node_modules/react-native/sdks/hermes-engine/utils/replace_hermes_version.js
+index f727aeb..4720eed 100644
+--- a/node_modules/react-native/sdks/hermes-engine/utils/replace_hermes_version.js
++++ b/node_modules/react-native/sdks/hermes-engine/utils/replace_hermes_version.js
+@@ -9,7 +9,7 @@
+
+ 'use strict';
+
+-const {execSync} = require('child_process');
++const {execFileSync} = require('child_process');
+ const fs = require('fs');
+ const yargs = require('yargs');
+
+@@ -55,13 +55,48 @@ function shouldReplaceHermesConfiguration(configuration) {
+ function replaceHermesConfiguration(configuration, version, podsRoot) {
+   const tarballURLPath = `${podsRoot}/hermes-engine-artifacts/hermes-ios-${version.toLowerCase()}-${configuration.toLowerCase()}.tar.gz`;
+
++  validateHermesTarball(tarballURLPath);
++
+   const finalLocation = 'hermes-engine';
+-  console.log('Preparing the final location');
+-  fs.rmSync(finalLocation, {force: true, recursive: true});
+-  fs.mkdirSync(finalLocation, {recursive: true});
++  const temporaryLocation = fs.mkdtempSync(`${finalLocation}.tmp-`);
++  const backupLocation = `${finalLocation}.backup-${process.pid}-${Date.now()}`;
++
++  try {
++    console.log('Extracting the tarball');
++    execFileSync('tar', ['-xf', tarballURLPath, '-C', temporaryLocation], {
++      stdio: 'inherit',
++    });
++
++    console.log('Preparing the final location');
++    if (fs.existsSync(finalLocation)) {
++      fs.renameSync(finalLocation, backupLocation);
++    }
++
++    try {
++      fs.renameSync(temporaryLocation, finalLocation);
++    } catch (error) {
++      if (fs.existsSync(backupLocation) && !fs.existsSync(finalLocation)) {
++        fs.renameSync(backupLocation, finalLocation);
++      }
++      throw error;
++    }
++
++    fs.rmSync(backupLocation, {force: true, recursive: true});
++  } finally {
++    fs.rmSync(temporaryLocation, {force: true, recursive: true});
++  }
++}
+
+-  console.log('Extracting the tarball');
+-  execSync(`tar -xf ${tarballURLPath} -C ${finalLocation}`);
++function validateHermesTarball(tarballPath) {
++  if (!fs.existsSync(tarballPath) || fs.statSync(tarballPath).size === 0) {
++    throw new Error(`Hermes archive is missing or empty: ${tarballPath}`);
++  }
++
++  try {
++    execFileSync('tar', ['-tzf', tarballPath], {stdio: 'ignore'});
++  } catch (_error) {
++    throw new Error(`Hermes archive is invalid: ${tarballPath}`);
++  }
+ }
+
+ function updateLastBuildConfiguration(configuration) {
 diff --git a/node_modules/react-native/third-party-podspecs/boost.podspec b/node_modules/react-native/third-party-podspecs/boost.podspec
 index 8e924af..edd3a44 100644
 --- a/node_modules/react-native/third-party-podspecs/boost.podspec

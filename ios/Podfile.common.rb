@@ -20,31 +20,36 @@ def shared_pods
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  pod 'AgentforceSDK', '19.29.3'
+  pod 'AgentforceSDK', '264.0.0'
   # AgentforceSDK declares a broad `~> 6` service dependency; pin explicitly to
-  # the exact 262.3 service binary this SDK build was tested against.
-  pod 'AgentforceService', '6.17.3'
-  pod 'AgentforceVoice', '2.10.8'
-  pod 'Messaging-InApp-Core', '> 1.10.0'
+  # the exact 264.0 service binary selected for this release.
+  pod 'AgentforceService', '264.0.0'
+  pod 'AgentforceVoice', '264.0.0'
+  pod 'Messaging-InApp-Core', '~> 1.13.0'
   # Messaging-Multimedia-Core vends SMIMultimediaCore.framework, which
   # AgentforceVoice links at runtime (@rpath/SMIMultimediaCore.framework).
-  # Keep this explicit so the framework is embedded, and align it with the
-  # AgentforceVoice 2.10.8 podspec requirement.
-  pod 'Messaging-Multimedia-Core', '~> 1.12.0'
+  # The AgentforceVoice podspec resolved from this Specs source declares only
+  # AgentforceService/SalesforceLogging/SalesforceNetwork (not the Binary subspec
+  # that the iOS SDK uses), so this transitive multimedia dep isn't pulled in and
+  # the framework is never embedded — surfacing as a dyld "Library not loaded"
+  # crash once Service Agent voice is enabled. Declare it explicitly so it's
+  # installed and embedded.
+  # Keep the Messaging family on one patch line. Multimedia-Core 1.13.x consumes
+  # the prebuilt LiveKit 2.16.x XCFramework declared below.
+  pod 'Messaging-Multimedia-Core', '~> 1.13.0'
 
   # JWTKit is required by AgentforceService but not resolved automatically
   pod 'JWTKit'
 
-  # SharedUI provides the design-system module (Colors/Fonts/Dimensions) that
-  # AgentforceSDK 17.31.6 (262.1) depends on ('SharedUI', '~> 1'). Pin to the
-  # exact flat spec the iOS SDK ships with; SLDSIcons is held at 1.2.2 to avoid
+  # AgentforceSDK 264.0.0 requires SharedUI >= 1.5.11. Pin a compatible
+  # published binary; SLDSIcons is held at 1.2.2 to avoid
   # the "Multiple commands produce SLDSIcons.framework" collision.
-  pod 'SharedUI', '1.3.1'
+  pod 'SharedUI', '1.6.10'
   pod 'SLDSIcons', '1.2.2'
 
-  # LiveKit is needed for both Service and Employee agents.
-  # Messaging-Multimedia-Core 1.12.x requires the compatible 2.11.x line.
-  pod 'LiveKitClient', '2.11.0' # Required so CocoaPods looks in the correct source location
+  # LiveKit is needed for both Service and Employee agents. Use the same prebuilt
+  # pod and minor line required by Messaging-Multimedia-Core 1.13.x.
+  pod 'LiveKitClient-XCFramework', '~> 2.16.0'
 
   # AgentforceService links to Crypto.framework at runtime; SwiftCrypto provides it (avoids dyld "Library not loaded: Crypto.framework").
   pod 'SwiftCrypto', '~> 3.15'
@@ -65,13 +70,6 @@ def common_pre_install(installer)
       def pod.build_type
         Pod::BuildType.static_library
       end
-    end
-
-    # AgentforceVoice.xcframework links against @rpath/LiveKit.framework/LiveKit,
-    # but CocoaPods builds LiveKitClient as LiveKitClient.framework by default.
-    # Override module_name so it produces LiveKit.framework instead.
-    if pod.name == 'LiveKitClient'
-      pod.root_spec.attributes_hash['module_name'] = 'LiveKit'
     end
   end
 end
