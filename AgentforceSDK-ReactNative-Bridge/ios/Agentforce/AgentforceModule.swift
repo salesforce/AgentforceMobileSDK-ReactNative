@@ -612,16 +612,15 @@ class AgentforceModule: RCTEventEmitter {
                     try await conversation.setAdditionalContext(context: context)
                 }
 
-                // Parse initialMode from options (defaults to chat)
+                // Select the combined chat view or the dedicated voice view.
                 let initialModeString = options["initialMode"] as? String ?? "chat"
-                let initialMode: AgentforceViewMode = (initialModeString == "voice") ? .voice : .chat
                 let voiceCloseBehavior: AgentforceVoiceCloseBehavior =
                     (options["voiceCloseBehavior"] as? String == "dismissContainer")
                     ? .dismissContainer
                     : .returnToChat
 
-                // Validate Voice is enabled if voice mode requested
-                if initialMode == .voice {
+                // Validate Voice is enabled for either voice experience.
+                if initialModeString == "voice" || initialModeString == "voiceOnly" {
                     guard getFeatureFlagsFromConfigOrUserDefaults([:]).enableVoice else {
                         throw NSError(
                             domain: "AgentforceModule",
@@ -631,21 +630,36 @@ class AgentforceModule: RCTEventEmitter {
                     }
                 }
 
-                let chatView = try client.createAgentforceChatView(
-                    conversation: conversation,
-                    initialMode: initialMode,
-                    delegate: bridgeUIDelegate,
-                    showTopBar: true,
-                    voiceCloseBehavior: voiceCloseBehavior,
-                    onContainerClose: { [weak self] in
-                        Task { @MainActor in
-                            self?.dismissConversation()
+                if initialModeString == "voiceOnly" {
+                    // The standalone voice view has no combined chat or text UI.
+                    // Its factory is deprecated, but the replacement chat view
+                    // presents the combined experience used by "voice".
+                    let voiceView = try client.createAgentforceVoiceView(
+                        conversation: conversation,
+                        onContainerClose: { [weak self] in
+                            Task { @MainActor in
+                                self?.dismissConversation()
+                            }
                         }
-                    },
-                    navigationBarBuilder: navigationBarBuilder
-                )
-
-                presentConversationView(chatView)
+                    )
+                    presentConversationView(voiceView)
+                } else {
+                    let initialMode: AgentforceViewMode = (initialModeString == "voice") ? .voice : .chat
+                    let chatView = try client.createAgentforceChatView(
+                        conversation: conversation,
+                        initialMode: initialMode,
+                        delegate: bridgeUIDelegate,
+                        showTopBar: true,
+                        voiceCloseBehavior: voiceCloseBehavior,
+                        onContainerClose: { [weak self] in
+                            Task { @MainActor in
+                                self?.dismissConversation()
+                            }
+                        },
+                        navigationBarBuilder: navigationBarBuilder
+                    )
+                    presentConversationView(chatView)
+                }
                 resolve(["success": true])
             } catch {
                 print("[AgentforceModule] ❌ Launch failed: \(error)")

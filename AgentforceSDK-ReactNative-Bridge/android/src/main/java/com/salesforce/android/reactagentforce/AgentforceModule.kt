@@ -526,7 +526,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     /**
      * Launch the Agentforce conversation UI - works for both Service and Employee agents
      *
-     * @param options Optional map with "initialMode": "chat" | "voice"
+     * @param options Optional map with "initialMode": "chat" | "voice" | "voiceOnly"
      * @param promise Promise to resolve/reject
      */
     @ReactMethod
@@ -536,14 +536,18 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val initialMode = options?.getString("initialMode") ?: "chat"
         Log.d(TAG, "launchConversation: initialMode=$initialMode")
 
+        // Android uses the dedicated AgentforceVoiceContainer for either voice mode.
+        // The combined chat view's launch-in-voice setting is configured separately.
+        val isVoiceView = initialMode == "voice" || initialMode == "voiceOnly"
+
         val activity = currentActivity
         if (activity == null) {
             promise.reject("ERROR", "Activity not available")
             return
         }
 
-        // Validate Voice feature flag if Voice mode requested
-        if (initialMode == "voice" && !getFeatureFlagsFromConfigOrPrefs(Arguments.createMap()).enableVoice) {
+        // Validate Voice feature flag if a voice view was requested
+        if (isVoiceView && !getFeatureFlagsFromConfigOrPrefs(Arguments.createMap()).enableVoice) {
             Log.e(TAG, "Voice mode requested but enableVoice feature flag is disabled")
             promise.reject("VOICE_DISABLED", "Voice is not enabled for this Agentforce configuration")
             return
@@ -573,7 +577,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                         conversation.setAdditionalContext(parseAdditionalContext(context))
                     }
 
-                    AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
+                    AgentforceConversationOverlay.show(activity, voiceMode = isVoiceView)
                     promise.resolve(Arguments.createMap().apply {
                         putBoolean("success", true)
                     })
@@ -601,7 +605,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     conversation.setAdditionalContext(parseAdditionalContext(context))
                 }
 
-                AgentforceConversationOverlay.show(activity, voiceMode = initialMode == "voice")
+                AgentforceConversationOverlay.show(activity, voiceMode = isVoiceView)
                 Log.d(TAG, "Conversation shown (initialMode=$initialMode)")
 
                 promise.resolve(Arguments.createMap().apply {
