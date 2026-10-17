@@ -29,6 +29,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActionSheetIOS,
   Image,
   Platform,
   ScrollView,
@@ -107,6 +108,57 @@ const agentforceUIDelegate: UIDelegate = {
     return request.utterance;
   },
 };
+
+
+type LaunchMode = 'chat' | 'voice' | 'voiceOnly';
+
+/** Prompt for chat / voice / voiceOnly when Voice is enabled (Employee Agent). */
+const chooseEmployeeLaunchMode = (enableVoice: boolean): Promise<LaunchMode | null> =>
+  new Promise(resolve => {
+    if (!enableVoice) {
+      // Voice modes require enableVoice; skip the picker and open chat.
+      resolve('chat');
+      return;
+    }
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: 'Launch Employee Agent',
+          message: 'Choose chat, combined voice, or the dedicated voice-only experience.',
+          options: ['Chat', 'Voice', 'Voice only', 'Cancel'],
+          cancelButtonIndex: 3,
+        },
+        buttonIndex => {
+          if (buttonIndex === 0) {
+            resolve('chat');
+          } else if (buttonIndex === 1) {
+            resolve('voice');
+          } else if (buttonIndex === 2) {
+            resolve('voiceOnly');
+          } else {
+            resolve(null);
+          }
+        },
+      );
+      return;
+    }
+
+    // Android Alert supports a small number of actions — nest voice choices.
+    Alert.alert('Launch Employee Agent', 'Choose conversation mode', [
+      { text: 'Chat', onPress: () => resolve('chat') },
+      {
+        text: 'Voice…',
+        onPress: () =>
+          Alert.alert('Voice mode', 'Combined voice or dedicated voice-only.', [
+            { text: 'Voice', onPress: () => resolve('voice') },
+            { text: 'Voice only', onPress: () => resolve('voiceOnly') },
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+          ]),
+      },
+      { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+    ]);
+  });
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [isServiceAgentConfigured, setIsServiceAgentConfigured] = useState(false);
@@ -287,7 +339,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       // Read the latest close-behavior setting (editable in Settings > Employee > Voice Close
       // Behavior) at launch time. iOS only; Android ignores this option.
       const voiceCloseBehavior = getVoiceCloseBehavior();
+      // Surface chat / voice / voiceOnly (bridge API from v0.8.0). Requires enableVoice for
+      // non-chat modes — see docs/voice-and-feature-flags-config.md.
+      const initialMode = await chooseEmployeeLaunchMode(!!featureFlags?.enableVoice);
+      if (!initialMode) {
+        return;
+      }
       await AgentforceService.launchConversation({
+        initialMode,
         additionalContext: contextVars.length > 0 ? { variables: contextVars } : undefined,
         voiceCloseBehavior,
       });
@@ -297,6 +356,42 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         error?.message || 'Failed to launch Employee Agent. Token may be expired.',
       );
       console.error('Launch error:', error);
+    }
+  };
+
+
+  /**
+   * Sample session lifecycle helpers.
+   * Prefer closeConversation / startNewConversation after End Chat rather than
+   * destroyStorage or a hand-rolled sessionId (see issue #156). These calls do
+   * not claim to fix native iOS resume races; they document the supported bridge APIs.
+   */
+  const handleStartNewConversation = async () => {
+    try {
+      await AgentforceService.startNewConversation();
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to start a new conversation.');
+      console.error('startNewConversation error:', error);
+    }
+  };
+
+  const handleCloseConversation = async () => {
+    try {
+      await AgentforceService.closeConversation();
+      Alert.alert('Conversation closed', 'History was discarded. The next launch starts fresh.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to close conversation.');
+      console.error('closeConversation error:', error);
+    }
+  };
+
+  const handleDismissConversation = async () => {
+    try {
+      await AgentforceService.dismissConversation();
+      Alert.alert('Conversation dismissed', 'UI hidden; history is kept for the next launch.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to dismiss conversation.');
+      console.error('dismissConversation error:', error);
     }
   };
 
@@ -374,6 +469,34 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           )}
         </View>
+
+        {(isServiceAgentConfigured || isEmployeeAgentConfigured) && (
+          <View style={styles.sessionContainer}>
+            <Text style={styles.sessionTitle}>Session helpers</Text>
+            <Text style={styles.sessionHint}>
+              Use Close or Start new after End Chat instead of destroyStorage / custom
+              sessionId. Dismiss hides the UI and keeps history.
+            </Text>
+            <TouchableOpacity
+              style={styles.sessionButton}
+              onPress={handleStartNewConversation}
+              disabled={isChecking}>
+              <Text style={styles.sessionButtonText}>Start new conversation</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sessionButton}
+              onPress={handleCloseConversation}
+              disabled={isChecking}>
+              <Text style={styles.sessionButtonText}>Close conversation (discard)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sessionButton}
+              onPress={handleDismissConversation}
+              disabled={isChecking}>
+              <Text style={styles.sessionButtonText}>Dismiss conversation (keep history)</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <TouchableOpacity
           style={styles.settingsButton}
@@ -500,6 +623,42 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#7B1FA2',
     fontWeight: '300',
+  },
+  sessionContainer: {
+    width: '100%',
+    gap: 10,
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  sessionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#212529',
+    marginBottom: 4,
+  },
+  sessionHint: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  sessionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  sessionButtonText: {
+    fontSize: 14,
+    color: '#495057',
+    fontWeight: '500',
+    textAlign: 'center',
   },
   settingsButton: {
     padding: 16,

@@ -1,7 +1,7 @@
 # Configuring Feature Flags & Voice Options — Employee Agent
 
-**Applies to:** `@salesforce/react-native-agentforce@0.6.0`
-(iOS AgentforceSDK 18.26.17 / AgentforceVoice 2.8.2; Android agentforce-sdk 15.130.4; Agentforce Mobile SDK 262.1.3)
+**Applies to:** `@salesforce/react-native-agentforce@0.8.0`
+(Agentforce Mobile SDK 264.0.0; see the bridge `package.json` / podspec for platform pins)
 
 Both `featureFlags` and `voiceOptions` are passed to a **single**
 `AgentforceService.configure(...)` call, as **top-level siblings of `type`**.
@@ -47,7 +47,10 @@ async function startEmployeeAgent() {
     voiceOptions, // <-- sibling of `type`
   });
 
-  await AgentforceService.launchConversation();
+  // Chat (default), combined voice, or dedicated voice-only (requires enableVoice)
+  await AgentforceService.launchConversation({ initialMode: 'chat' });
+  // await AgentforceService.launchConversation({ initialMode: 'voice' });
+  // await AgentforceService.launchConversation({ initialMode: 'voiceOnly' });
 }
 ```
 
@@ -80,6 +83,26 @@ async function startEmployeeAgent() {
    ignores later `defaultClosedCaptionsEnabled` values for that user. The native
    SDK's closed-caption feature gate must also be enabled.
 
+
+## Launch modes (`initialMode`)
+
+Pass `initialMode` to `launchConversation`:
+
+| Mode | Behavior |
+| ---- | -------- |
+| `'chat'` (default) | Opens the conversation in Chat (text) mode. |
+| `'voice'` | Opens in Voice. On iOS this is the combined voice + text experience; on Android it opens the dedicated Voice view. |
+| `'voiceOnly'` | Opens the dedicated Voice-only view with no text interaction content (`AgentforceVoiceView` / `AgentforceVoiceContainer`). Added in bridge **0.8.0**. |
+
+Both `'voice'` and `'voiceOnly'` require `enableVoice: true`. When Voice is disabled or unavailable, launch fails with an error.
+
+```typescript
+await AgentforceService.launchConversation({
+  initialMode: 'voiceOnly',
+  voiceCloseBehavior: 'dismissContainer', // iOS only
+});
+```
+
 ## iOS Voice Close Behavior
 
 Use `launchConversation` to select what closing Voice does on iOS:
@@ -106,6 +129,14 @@ screen (`src/screens/SettingsScreen.tsx`):
 - **Voice Close Behavior** section — a segmented control for
   `voiceCloseBehavior` (persisted in `src/store/VoiceCloseBehaviorStore.ts`,
   applied on the next `launchConversation()` call from Home).
+
+
+- **Home screen launch picker** — tapping **Employee Agent** prompts for Chat /
+  Voice / Voice only when `enableVoice` is on (`src/screens/HomeScreen.tsx`).
+- **Session helpers** — Home also exposes `startNewConversation`,
+  `closeConversation` (discard history), and `dismissConversation` (keep history).
+  Prefer these after End Chat instead of `destroyStorage` or a custom `sessionId`
+  (see issue #156).
 
 Both stores are in-memory only and reset on process restart, matching the
 existing Voice Timeout settings pattern.
