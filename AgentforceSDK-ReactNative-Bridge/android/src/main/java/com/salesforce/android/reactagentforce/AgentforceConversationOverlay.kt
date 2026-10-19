@@ -16,11 +16,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -33,8 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.unit.dp
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
@@ -124,11 +127,29 @@ object AgentforceConversationOverlay {
         activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
         val overlayState = isVisible
+        val rootTopInsetPx = mutableIntStateOf(0)
+        val rootBottomInsetPx = mutableIntStateOf(0)
+        val rootImeInsetPx = mutableIntStateOf(0)
         val wrapper = object : FrameLayout(activity) {
             override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
                 if (!overlayState.value) return false
                 return super.dispatchTouchEvent(ev)
             }
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(wrapper) { view, insets ->
+            // The host may consume system-bar and IME insets before they reach Compose.
+            // Read the root window so the overlay can still clear the bars and keyboard.
+            val rootInsets = ViewCompat.getRootWindowInsets(view)
+            rootTopInsetPx.intValue = rootInsets
+                ?.getInsets(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout())
+                ?.top ?: 0
+            rootBottomInsetPx.intValue = rootInsets
+                ?.getInsets(WindowInsetsCompat.Type.navigationBars())
+                ?.bottom ?: 0
+            rootImeInsetPx.intValue = rootInsets
+                ?.getInsets(WindowInsetsCompat.Type.ime())
+                ?.bottom ?: 0
+            insets
         }
 
         val overlay = ComposeView(activity).apply {
@@ -138,7 +159,10 @@ object AgentforceConversationOverlay {
 
             setContent {
                 ConversationOverlayContent(
-                    onClose = { hide() }
+                    onClose = { hide() },
+                    rootTopInsetPx = rootTopInsetPx.intValue,
+                    rootBottomInsetPx = rootBottomInsetPx.intValue,
+                    rootImeInsetPx = rootImeInsetPx.intValue
                 )
             }
         }
@@ -159,6 +183,7 @@ object AgentforceConversationOverlay {
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
+        ViewCompat.requestApplyInsets(wrapper)
 
         overlayContainer = wrapper
         attachedActivity = activity
@@ -168,7 +193,12 @@ object AgentforceConversationOverlay {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ConversationOverlayContent(onClose: () -> Unit) {
+private fun ConversationOverlayContent(
+    onClose: () -> Unit,
+    rootTopInsetPx: Int,
+    rootBottomInsetPx: Int,
+    rootImeInsetPx: Int
+) {
     val visible by AgentforceConversationOverlay.isVisible
     val voiceMode by AgentforceConversationOverlay.isVoiceMode
 
@@ -210,9 +240,15 @@ private fun ConversationOverlayContent(onClose: () -> Unit) {
                 // Background before the insets, so the padded strips aren't transparent
                 // (host screen bleed-through); after graphicsLayer so it slides on hide.
                 .background(surfaceColor)
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .imePadding()
+                .windowInsetsPadding(
+                    WindowInsets.statusBars.union(WindowInsets(top = rootTopInsetPx))
+                )
+                .windowInsetsPadding(
+                    WindowInsets.navigationBars.union(WindowInsets(bottom = rootBottomInsetPx))
+                )
+                .windowInsetsPadding(
+                    WindowInsets.ime.union(WindowInsets(bottom = rootImeInsetPx))
+                )
         ) {
             if (voiceMode) {
                 client.AgentforceVoiceContainer(
