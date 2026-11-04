@@ -30,8 +30,8 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
-    "@react-navigation/native": "^6.1.9",
-    "@react-navigation/native-stack": "^6.9.26",
+    "@react-navigation/native": "^7.5.1",
+    "@react-navigation/native-stack": "^7.21.0",
     "@salesforce/react-native-agentforce": "file:./AgentforceSDK-ReactNative-Bridge",
     "react": "18.2.0",
     "react-native": "0.74.7",
