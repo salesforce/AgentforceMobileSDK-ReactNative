@@ -1,9 +1,12 @@
 # Service Agent only. Dependencies are a subset of Employee Agent.
 # Used by: node installios.js service
 
+monorepo_root = File.expand_path('../../..', __dir__)
+plugin 'cocoapods-art', :sources => ['cocoapods-mobe'] if File.file?(File.join(monorepo_root, 'AgentforceSDK.podspec'))
+
 require_relative 'Podfile.common'
 
-platform :ios, '17.0'
+platform :ios, '18.0'
 prepare_react_native_project!
 use_modular_headers!
 use_frameworks!

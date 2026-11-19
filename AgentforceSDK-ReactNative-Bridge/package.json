@@ -1,6 +1,6 @@
 {
   "name": "@salesforce/react-native-agentforce",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Agentforce React Native bridge: JS API and native module for Service Agent and Employee Agent (auth bridge included; host app adds Mobile SDK).",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -11,6 +11,8 @@
     "src",
     "ios",
     "android",
+    "ReactNativeAgentforce.podspec",
+    "ReactNativeAgentforce.podspec.rb",
     "README.md",
     "LICENSE",
     "!android/build",
@@ -60,8 +62,8 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.0",
-    "react": "18.2.0",
-    "react-native": "0.74.7",
+    "react": "18.3.1",
+    "react-native": "0.77.3",
     "rimraf": "^5.0.5",
     "typescript": "^5.0.4"
   },

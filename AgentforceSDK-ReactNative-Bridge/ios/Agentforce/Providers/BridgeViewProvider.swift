@@ -55,21 +55,28 @@ class BridgeViewProvider: AgentforceViewProviding {
 
     @MainActor
     func view(for type: String, data: [String: Any]) -> AnyView {
-        guard let moduleName = lock.withLock({ componentMap[type] }) else {
+        view(for: AgentforceComponent(definition: type, properties: data))
+    }
+
+    @MainActor
+    func view(for component: AgentforceComponent) -> AnyView {
+        guard let moduleName = lock.withLock({ componentMap[component.definition] }) else {
             return AnyView(EmptyView())
         }
-        // Note: The iOS SDK protocol only provides (type, data). Android's SDK
-        // provides a full AgentforceComponent with name and subComponents.
-        // Consumers should handle missing name/subComponents gracefully.
-        let props: [String: Any] = [
-            "definition": type,
-            "properties": data,
-        ]
         return AnyView(ReactNativeViewWrapper(
             bridge: bridge,
             moduleName: moduleName,
-            initialProperties: props
+            initialProperties: Self.componentData(component).props
         ))
+    }
+
+    private static func componentData(_ component: AgentforceComponent) -> BridgeViewComponentData {
+        BridgeViewComponentData(
+            definition: component.definition,
+            name: BridgeViewComponentData.name(of: component),
+            properties: component.properties,
+            subComponents: component.subComponents.map(componentData)
+        )
     }
 }
 

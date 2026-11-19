@@ -26,6 +26,7 @@ react {
     // debuggableVariants = ["liteDebug", "prodDebug"]
     /* Bundling */
     debuggableVariants = []
+    autolinkLibrariesWithApp()
     //   A list containing the node command and its flags. Default is just 'node'.
     // nodeExecutableAndArgs = ["node"]
     //
@@ -161,13 +162,6 @@ dependencies {
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0"
 
-    debugImplementation("com.facebook.flipper:flipper:${FLIPPER_VERSION}")
-    debugImplementation("com.facebook.flipper:flipper-network-plugin:${FLIPPER_VERSION}") {
-        exclude group: 'com.squareup.okhttp3', module: 'okhttp'
-    }
-
-    debugImplementation("com.facebook.flipper:flipper-fresco-plugin:${FLIPPER_VERSION}")
-
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
@@ -217,5 +211,3 @@ android.applicationVariants.all { variant ->
         preBuildTask.dependsOn taskName
     }
 }
-
-apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)

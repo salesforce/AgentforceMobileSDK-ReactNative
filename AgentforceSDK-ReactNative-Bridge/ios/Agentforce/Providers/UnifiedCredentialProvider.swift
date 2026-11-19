@@ -51,7 +51,11 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
     /// - Parameter config: Employee Agent configuration
     func configure(employeeAgent config: EmployeeAgentModeConfig) {
         self.mode = .employee(config: config)
-        self.directToken = config.accessToken
+        switch config.authentication {
+        case .directOAuth(let token): self.directToken = token
+        case .legacy(let token): self.directToken = token
+        case .mobileSDKOAuth: self.directToken = nil
+        }
         self.directOrgId = config.organizationId
         self.directUserId = config.userId
 
@@ -74,8 +78,21 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
             )
 
         case .employee(let config):
-            // Employee Agent uses OAuth with REAL token
-            // Get fresh credentials from Mobile SDK each time (Mobile SDK handles refresh internally)
+            switch config.authentication {
+            case .directOAuth(let token):
+                return .OAuth(authToken: directToken ?? token, orgId: config.organizationId, userId: config.userId)
+            case .mobileSDKOAuth:
+                guard let credentials = mobileSDKCredentials() else { fatalError("Mobile SDK OAuth session is unavailable") }
+                return credentials
+            case .legacy:
+                if let credentials = mobileSDKCredentials() { return credentials }
+                guard let token = directToken else { fatalError("Employee Agent requires a token") }
+                return .OAuth(authToken: token, orgId: config.organizationId, userId: config.userId)
+            }
+        }
+    }
+
+    private func mobileSDKCredentials() -> AgentforceAuthCredentials? {
             #if canImport(SalesforceSDKCore)
             if let currentUser = UserAccountManager.shared.currentUserAccount,
                let accessToken = currentUser.credentials.accessToken,
@@ -88,18 +105,7 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
                 )
             }
             #endif
-
-            // Fallback to cached token if Mobile SDK not available
-            if let token = directToken {
-                return .OAuth(
-                    authToken: token,
-                    orgId: directOrgId ?? config.organizationId,
-                    userId: directUserId ?? config.userId
-                )
-            } else {
-                fatalError("Employee Agent mode requires either Mobile SDK or cached token")
-            }
-        }
+            return nil
     }
     
     // MARK: - Token Management (Employee Agent only)

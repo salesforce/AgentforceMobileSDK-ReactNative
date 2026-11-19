@@ -52,16 +52,6 @@
 				tools:replace="android:resource" />
 		</provider>
 
-		<provider
-			android:name="com.salesforce.android.agentforcesdkimpl.utils.AgentforcePDFFileProvider"
-			android:authorities="${applicationId}.pdffileprovider"
-			android:exported="false"
-			android:grantUriPermissions="true"
-			tools:replace="android:authorities">
-			<meta-data
-				android:name="android.support.FILE_PROVIDER_PATHS"
-				android:resource="@xml/pdf_file_paths" />
-		</provider>
         <activity android:name="com.facebook.react.devsupport.DevSettingsActivity"/>
 	</application>
 </manifest>

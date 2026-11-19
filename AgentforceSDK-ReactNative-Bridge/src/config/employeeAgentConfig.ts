@@ -42,5 +42,5 @@ const resolved = local
   : defaults;
 
 export const EMPLOYEE_AGENT_ENABLED = resolved.EMPLOYEE_AGENT_ENABLED;
-export const EMPLOYEE_AGENT_CONFIG = resolved.EMPLOYEE_AGENT_CONFIG;
+export const EMPLOYEE_AGENT_CONFIG: EmployeeAgentConfig = resolved.EMPLOYEE_AGENT_CONFIG;
 export const isEmployeeAgentConfigValid = resolved.isEmployeeAgentConfigValid;

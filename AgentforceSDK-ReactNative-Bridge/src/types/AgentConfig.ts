@@ -90,8 +90,6 @@ export interface ServiceUISettings {
   showQueueStatus?: boolean;
   /** Enable video upload in conversations (default: false, iOS only) */
   enableVideoUpload?: boolean;
-  /** Enable secure forms during conversations (default: false, iOS only) */
-  secureForms?: boolean;
   /** Enable audio upload in conversations (default: false, iOS only) */
   enableAudioUpload?: boolean;
 }
@@ -147,7 +145,11 @@ export interface ServiceAgentConfig extends BaseAgentConfig {
  * };
  * ```
  */
-export interface EmployeeAgentConfig extends BaseAgentConfig {
+export type EmployeeAuthentication =
+  | { type: 'oauth'; source: 'salesforceMobileSdk' }
+  | { type: 'oauth'; source: 'direct'; accessToken: string };
+
+interface EmployeeAgentBaseConfig extends BaseAgentConfig {
   /** Discriminator field - must be 'employee' for Employee Agent */
   type: 'employee';
 
@@ -162,12 +164,52 @@ export interface EmployeeAgentConfig extends BaseAgentConfig {
 
   /** Optional display label for the agent */
   agentLabel?: string;
+}
 
-  /**
-   * OAuth access token for authentication.
-   * The native SDK will fetch fresh tokens from the Mobile SDK automatically.
-   */
-  accessToken?: string;
+/** Employee authentication with an explicit credential source. */
+export type EmployeeAgentConfig = EmployeeAgentBaseConfig &
+  (
+    | { authentication: EmployeeAuthentication; accessToken?: never }
+    | {
+        /** @deprecated Use `authentication`. The legacy runtime prefers Mobile SDK OAuth when available. */
+        accessToken?: string;
+        authentication?: never;
+      }
+  );
+
+/** Validate the public authentication union for JavaScript callers without TypeScript. */
+export function validateEmployeeAuthentication(config: EmployeeAgentConfig): void {
+  const candidate = config as EmployeeAgentBaseConfig & {
+    authentication?: Record<string, unknown>;
+    accessToken?: unknown;
+  };
+  const auth = candidate.authentication;
+  if (auth === undefined) {
+    return;
+  } // Preserve the legacy configuration path.
+  if (candidate.accessToken !== undefined) {
+    throw new Error('INVALID_CONFIG: authentication and accessToken cannot be combined');
+  }
+  if (!auth || typeof auth !== 'object') {
+    throw new Error('INVALID_CONFIG: authentication must be an object');
+  }
+  const { type, source } = auth;
+  if (type !== 'oauth') {
+    throw new Error('INVALID_CONFIG: unknown authentication type');
+  }
+  if (source !== 'direct' && source !== 'salesforceMobileSdk') {
+    throw new Error('INVALID_CONFIG: unknown authentication source');
+  }
+  if (source === 'direct') {
+    if (typeof auth.accessToken !== 'string' || !auth.accessToken.trim()) {
+      throw new Error('INVALID_CONFIG: authentication.accessToken is required');
+    }
+    if (auth.token !== undefined) {
+      throw new Error('INVALID_CONFIG: unexpected credential field');
+    }
+  } else if (auth.accessToken !== undefined || auth.token !== undefined) {
+    throw new Error('INVALID_CONFIG: Mobile SDK authentication does not accept a direct token');
+  }
 }
 
 /**

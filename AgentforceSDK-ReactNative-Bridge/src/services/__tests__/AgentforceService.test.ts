@@ -118,6 +118,22 @@ const appearance = {
 };
 
 describe('AgentforceService.configure', () => {
+  it.each(['direct', 'salesforceMobileSdk'])(
+    'rejects removed OrgJWT authentication from %s',
+    async source => {
+      const config = {
+        type: 'employee',
+        instanceUrl: 'https://myorg.my.salesforce.com',
+        organizationId: '00Dxx0000001234',
+        userId: '005xx0000001234',
+        authentication: { type: 'orgJwt', source, token: 'unsupported-token' },
+      } as unknown as AgentConfig;
+      await expect(AgentforceService.configure(config)).rejects.toThrow('INVALID_CONFIG');
+      expect(nativeModule.configureWithConfig).not.toHaveBeenCalled();
+      expect(nativeModule.configure).not.toHaveBeenCalled();
+    },
+  );
+
   it('routes to configureWithConfig on iOS', async () => {
     setPlatform('ios');
     const result = await AgentforceService.configure(serviceConfig);

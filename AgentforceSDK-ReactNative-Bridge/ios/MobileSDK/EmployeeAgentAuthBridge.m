@@ -2,18 +2,15 @@
  * Copyright (c) 2024-present, salesforce.com, inc. All rights reserved.
  *
  * React Native bridge for Employee Agent auth via Salesforce Mobile SDK.
- * When Mobile SDK is present (pod 'ReactNativeAgentforce/WithMobileSDK'), isAuthSupported is YES
- * and methods delegate to the SDK. Otherwise a stub is compiled and isAuthSupported is NO.
+ * Compiled only by the WithMobileSDK CocoaPods subspec. Service Agent and
+ * SwiftPM builds omit this module; the JavaScript API handles its absence.
  */
 
 #import <React/RCTBridgeModule.h>
 
-#if __has_include(<SalesforceSDKCore/SFUserAccountManager.h>)
 #import <SalesforceSDKCore/SFUserAccountManager.h>
 #import <SalesforceSDKCore/SFOAuthCredentials.h>
 #import <SalesforceSDKCore/SalesforceSDKManager.h>
-#define HAS_SALESFORCE_SDK 1
-#endif
 
 @interface EmployeeAgentAuthBridge : NSObject <RCTBridgeModule>
 @end
@@ -25,8 +22,6 @@ RCT_EXPORT_MODULE(EmployeeAgentAuthBridge);
 + (BOOL)requiresMainQueueSetup {
   return NO;
 }
-
-#if HAS_SALESFORCE_SDK
 
 - (NSDictionary *)credentialsDictionaryFromUserAccount:(SFUserAccount *)userAccount {
   SFOAuthCredentials *creds = userAccount.credentials;
@@ -111,36 +106,5 @@ RCT_EXPORT_METHOD(logout:(RCTPromiseResolveBlock)resolve
     [[SFUserAccountManager sharedInstance] logout];
   });
 }
-
-#else
-
-// Stub when Salesforce Mobile SDK is not linked (Service Agent–only apps).
-
-RCT_EXPORT_METHOD(isAuthSupported:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject) {
-  resolve(@NO);
-}
-
-RCT_EXPORT_METHOD(getAuthCredentials:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject) {
-  resolve([NSNull null]);
-}
-
-RCT_EXPORT_METHOD(refreshAuthCredentials:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject) {
-  reject(@"NOT_AVAILABLE", @"Token refresh requires Salesforce Mobile SDK.", nil);
-}
-
-RCT_EXPORT_METHOD(login:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject) {
-  reject(@"NOT_AVAILABLE", @"Employee Agent auth requires Salesforce Mobile SDK. Use pod 'ReactNativeAgentforce/WithMobileSDK' and add the Mobile SDK to your app.", nil);
-}
-
-RCT_EXPORT_METHOD(logout:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject) {
-  resolve(nil);
-}
-
-#endif
 
 @end

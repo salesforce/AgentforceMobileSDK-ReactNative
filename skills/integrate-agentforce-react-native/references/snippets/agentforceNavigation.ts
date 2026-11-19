@@ -14,7 +14,9 @@ export const agentforceNavigation: NavigationDelegate = {
     switch (request.type) {
       case 'link': {
         const uri = request.uri as string | undefined;
-        if (uri) Linking.openURL(uri);
+        if (uri) {
+          Linking.openURL(uri);
+        }
         break;
       }
       case 'record': {

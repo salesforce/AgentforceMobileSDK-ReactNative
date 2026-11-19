@@ -2,7 +2,24 @@
 # Required by Podfile.service and Podfile.employee.
 # Service Agent dependencies are a subset of Employee Agent dependencies.
 
+# Both app delegates create an RCTBridge/RCTRootView (Paper). Keep native view
+# managers on that renderer too; Fabric-only factories cannot serve this host.
+# Set this before autolinking and podspec evaluation, including in CI shells.
+ENV['RCT_NEW_ARCH_ENABLED'] = '0'
+
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
+
+AGENTFORCE_MONOREPO_ROOT = File.expand_path('../../..', __dir__)
+AGENTFORCE_PODSPEC_FILES = %w[
+  AgentforceSDK.podspec
+  AgentforceService.podspec
+  AgentforceVoice.podspec
+]
+AGENTFORCE_PRESENT_PODS = AGENTFORCE_PODSPEC_FILES.select { |podspec| File.file?(File.join(AGENTFORCE_MONOREPO_ROOT, podspec)) }
+if AGENTFORCE_PRESENT_PODS.any? && AGENTFORCE_PRESENT_PODS != AGENTFORCE_PODSPEC_FILES
+  raise Pod::Informative, "Incomplete local Agentforce SDK; missing #{(AGENTFORCE_PODSPEC_FILES - AGENTFORCE_PRESENT_PODS).join(', ')}. Restore the SDK checkout before installing pods."
+end
+AGENTFORCE_LOCAL_PODS = AGENTFORCE_PRESENT_PODS.any?
 
 def shared_pods
   source 'https://github.com/forcedotcom/SalesforceMobileSDK-iOS-Specs.git'
@@ -20,11 +37,17 @@ def shared_pods
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  pod 'AgentforceSDK', '264.0.0'
-  # AgentforceSDK declares a broad `~> 6` service dependency; pin explicitly to
-  # the exact 264.0 service binary selected for this release.
-  pod 'AgentforceService', '264.0.0'
-  pod 'AgentforceVoice', '264.0.0'
+  # Resolve sibling podspecs when running from a combined source checkout.
+  # Standalone copies fall back to the matching published release.
+  if AGENTFORCE_LOCAL_PODS
+    pod 'AgentforceSDK', :path => AGENTFORCE_MONOREPO_ROOT
+    pod 'AgentforceService', :path => AGENTFORCE_MONOREPO_ROOT
+    pod 'AgentforceVoice', :path => AGENTFORCE_MONOREPO_ROOT
+  else
+    pod 'AgentforceSDK', '264.1.0'
+    pod 'AgentforceService', '264.1.0'
+    pod 'AgentforceVoice', '264.1.0'
+  end
   pod 'Messaging-InApp-Core', '~> 1.13.0'
   # Messaging-Multimedia-Core vends SMIMultimediaCore.framework, which
   # AgentforceVoice links at runtime (@rpath/SMIMultimediaCore.framework).
@@ -34,21 +57,24 @@ def shared_pods
   # the framework is never embedded — surfacing as a dyld "Library not loaded"
   # crash once Service Agent voice is enabled. Declare it explicitly so it's
   # installed and embedded.
-  # Keep the Messaging family on one patch line. Multimedia-Core 1.13.x consumes
-  # the prebuilt LiveKit 2.16.x XCFramework declared below.
+  # Keep the Messaging family on the line required by AgentforceVoice 264.0.0.
   pod 'Messaging-Multimedia-Core', '~> 1.13.0'
 
   # JWTKit is required by AgentforceService but not resolved automatically
   pod 'JWTKit'
 
-  # AgentforceSDK 264.0.0 requires SharedUI >= 1.5.11. Pin a compatible
-  # published binary; SLDSIcons is held at 1.2.2 to avoid
-  # the "Multiple commands produce SLDSIcons.framework" collision.
-  pod 'SharedUI', '1.6.10'
-  pod 'SLDSIcons', '1.2.2'
+  # SharedUI provides the design-system module (Colors/Fonts/Dimensions).
+  # Match the local SDK's Binary design-system subspecs when using local source.
+  # Public standalone installs retain the paired published flat specs.
+  if AGENTFORCE_LOCAL_PODS
+    pod 'SharedUI/Binary', '~> 1.5', '>= 1.5.11'
+    pod 'SLDSIcons/Binary'
+  else
+    pod 'SharedUI', '1.6.10'
+    pod 'SLDSIcons', '1.2.7'
+  end
 
-  # LiveKit is needed for both Service and Employee agents. Use the same prebuilt
-  # pod and minor line required by Messaging-Multimedia-Core 1.13.x.
+  # Match AgentforceVoice and Messaging-Multimedia-Core on main (PR #125).
   pod 'LiveKitClient-XCFramework', '~> 2.16.0'
 
   # AgentforceService links to Crypto.framework at runtime; SwiftCrypto provides it (avoids dyld "Library not loaded: Crypto.framework").
@@ -65,6 +91,7 @@ def shared_pods
 end
 
 def common_pre_install(installer)
+  repair_legacy_boost_installation(installer)
   installer.pod_targets.each do |pod|
     if pod.name.eql?('RNReanimated')
       def pod.build_type
@@ -72,33 +99,61 @@ def common_pre_install(installer)
       end
     end
   end
+  patch_fmt_for_apple_clang(installer)
+end
+
+def repair_legacy_boost_installation(installer)
+  boost = installer.pod_targets.find { |pod| pod.name == 'boost' }
+  return unless boost && File.symlink?(File.join(installer.sandbox.root, 'boost/boost'))
+
+  # Older post-install hooks replaced the entire header directory with a symlink.
+  # Restore the pinned source and privacy resource through CocoaPods' downloader,
+  # before header maps are generated. Do not alter the Homebrew installation.
+  Pod::UI.puts 'Restoring the legacy Boost installation before generating header maps.'
+  Pod::Installer::PodSourceInstaller.new(
+    installer.sandbox, installer.podfile, { boost.platform => boost.specs }
+  ).install!
+  if File.symlink?(File.join(installer.sandbox.root, 'boost/boost'))
+    raise Pod::Informative, 'Boost source still has the legacy layout after reinstalling; refresh the Boost pod cache.'
+  end
+  boost.file_accessors.each { |accessor| accessor.path_list.read_file_system }
+end
+
+def patch_fmt_for_apple_clang(installer)
+  fmt = installer.pod_targets.find { |pod| pod.name == 'fmt' }
+  return unless fmt && fmt.root_spec.version.to_s == '11.0.2'
+
+  # fmt 11.0.2 enables consteval on Apple Clang 21+, which rejects its format
+  # implementation. This release overwrites command-line FMT_USE_CONSTEVAL
+  # definitions. Patch its detection before source locking, for all consumers.
+  header = File.join(installer.sandbox.root, 'fmt/include/fmt/base.h')
+  original = '#elif defined(__apple_build_version__) && __apple_build_version__ < 14000029L'
+  patched = '#elif defined(__apple_build_version__) && (__apple_build_version__ < 14000029L || __apple_build_version__ >= 21000000L)'
+  content = File.read(header)
+  return if content.include?(patched)
+  unless content.include?(original)
+    raise Pod::Informative, 'Unexpected fmt 11.0.2 compiler detection; review the Apple Clang compatibility patch.'
+  end
+
+  mode = File.stat(header).mode
+  begin
+    File.chmod(mode | 0o200, header)
+    File.write(header, content.sub(original, patched))
+  ensure
+    File.chmod(mode, header)
+  end
 end
 
 def common_post_install(installer)
-  # Create symlink from Pods/boost/boost to Homebrew boost headers
-  # This ensures React Native uses local Homebrew installation instead of downloading
-  boost_pod_path = File.join(installer.sandbox.root, 'boost')
-  boost_headers_symlink = File.join(boost_pod_path, 'boost')
-
-  if File.directory?(boost_pod_path)
-    brew_boost_prefix = `brew --prefix boost 2>/dev/null`.strip
-    if !brew_boost_prefix.empty? && File.directory?(brew_boost_prefix)
-      brew_boost_headers = File.join(brew_boost_prefix, 'include', 'boost')
-
-      # Remove any existing boost directory/symlink
-      FileUtils.rm_rf(boost_headers_symlink) if File.exist?(boost_headers_symlink)
-
-      # Create symlink to Homebrew boost headers
-      File.symlink(brew_boost_headers, boost_headers_symlink)
-      Pod::UI.puts "✅ Linked Pods/boost/boost -> #{brew_boost_headers}".green
-    else
-      Pod::UI.warn "⚠️  Homebrew Boost not found. Run: brew install boost"
-    end
-  end
-
+  # The patched Boost podspec prepares its Homebrew header link before CocoaPods
+  # indexes sources. Preserve that layout here: replacing the tree invalidates
+  # cached header and privacy-resource paths used when CocoaPods locks sources.
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = [
+        Gem::Version.new(config.build_settings.fetch('IPHONEOS_DEPLOYMENT_TARGET', '0')),
+        Gem::Version.new('18.0')
+      ].max.to_s
       config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
       config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
       config.build_settings['CLANG_ENABLE_MODULES'] = 'YES'
@@ -140,11 +195,6 @@ def add_pods_target_dependency(installer)
     pods_target = pods_project.targets.find { |t| t.name == "Pods-#{app_name}" }
     next unless app_target && pods_target
 
-    # Skip if dependency already exists
-    next if app_target.dependencies.any? { |d|
-      d.target_proxy && d.target_proxy.remote_info == "Pods-#{app_name}"
-    }
-
     # Add Pods target as explicit dependency of app target
     ios_root = File.expand_path(Pod::Config.instance.installation_root)
     pods_xcodeproj_path = File.join(ios_root, 'Pods', 'Pods.xcodeproj')
@@ -154,6 +204,29 @@ def add_pods_target_dependency(installer)
       pods_ref = user_project.new_file(pods_xcodeproj_path)
       user_project.main_group << pods_ref unless user_project.main_group.children.include?(pods_ref)
     end
+
+    # xcodeproj's new_file shares the app Products group with the subproject.
+    # Xcode expects only PBXReferenceProxy children in a subproject's ProductGroup;
+    # app PBXFileReferences there crash its project-save path (e.g. editing signing).
+    # Repair older generated projects too, even if their dependencies already exist.
+    reference = user_project.root_object.project_references.find { |ref| ref[:project_ref] == pods_ref }
+    if reference && reference[:product_group] == user_project.products_group
+      products = user_project.new(Xcodeproj::Project::Object::PBXGroup)
+      products.name = 'Products'
+      products.source_tree = '<group>'
+      user_project.products_group.children.select { |child|
+        child.isa == 'PBXReferenceProxy' && child.remote_ref.container_portal == pods_ref.uuid
+      }.each do |child|
+        user_project.products_group.children.delete(child)
+        products.children << child
+      end
+      reference[:product_group] = products
+      user_project.save
+    end
+
+    next if app_target.dependencies.any? { |d|
+      d.target_proxy && d.target_proxy.remote_info == "Pods-#{app_name}"
+    }
 
     proxy = user_project.new(Xcodeproj::Project::Object::PBXContainerItemProxy)
     proxy.container_portal = pods_ref.uuid

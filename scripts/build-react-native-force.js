@@ -51,7 +51,7 @@ if (fs.existsSync(path.join(forcePath, 'dist', 'index.js'))) {
 console.log('Building react-native-force (Salesforce Mobile SDK React Native bridge)...');
 
 try {
-  execSync('npm install react-native@0.74.7 --no-save --legacy-peer-deps', {
+  execSync('npm install react-native@0.77.3 --no-save --legacy-peer-deps', {
     cwd: forcePath,
     stdio: 'inherit',
   });

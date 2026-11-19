@@ -17,6 +17,7 @@ import {
   FeatureFlags,
   InternalFlags,
   isLegacyConfig,
+  validateEmployeeAuthentication,
 } from '../types/AgentConfig';
 
 import { LoggerDelegate, LogLevel } from '../types/LoggerDelegate';
@@ -628,6 +629,9 @@ class AgentforceService {
     try {
       // Normalize config to ensure it has a type field
       const normalizedConfig = this.normalizeConfig(config);
+      if (normalizedConfig.type === 'employee') {
+        validateEmployeeAuthentication(normalizedConfig);
+      }
 
       // Merge stored feature flags into config if not provided (so native uses same defaults/stored)
       const configWithFeatureFlags = await this.mergeFeatureFlagsIntoConfig(normalizedConfig);
@@ -647,8 +651,9 @@ class AgentforceService {
         result = await AgentforceModule.configure(configWithFlags);
       }
 
+      const success = result?.success ?? true;
       console.log(`[AgentforceService] Configured successfully (mode: ${configWithFlags.type})`);
-      return result?.success ?? true;
+      return success;
     } catch (error) {
       console.error('[AgentforceService] Configuration failed:', error);
       throw error;

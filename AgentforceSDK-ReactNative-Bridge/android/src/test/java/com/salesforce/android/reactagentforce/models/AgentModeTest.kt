@@ -141,6 +141,90 @@ class AgentModeTest {
     }
 
     @Test
+    fun `explicit agentId disables multi-agent discovery`() {
+        val config = EmployeeAgentModeConfig(
+            instanceUrl = "https://myorg",
+            organizationId = "00D",
+            userId = "005",
+            agentId = "0Xa",
+            accessToken = "tok"
+        )
+
+        assertEquals(false, config.effectiveEnableMultiAgent(requested = true))
+        assertEquals(false, config.effectiveEnableMultiAgent(requested = false))
+    }
+
+    @Test
+    fun `missing agentId preserves requested multi-agent discovery`() {
+        val config = EmployeeAgentModeConfig(
+            instanceUrl = "https://myorg",
+            organizationId = "00D",
+            userId = "005",
+            accessToken = "tok"
+        )
+
+        assertEquals(true, config.effectiveEnableMultiAgent(requested = true))
+        assertEquals(false, config.effectiveEnableMultiAgent(requested = false))
+    }
+
+    @Test
+    fun `client configuration plan tracks both voice transitions and reuse`() {
+        val config = EmployeeAgentModeConfig(
+            instanceUrl = "https://myorg",
+            organizationId = "00D",
+            userId = "005",
+            agentId = "0Xa",
+            agentLabel = " Support Bot ",
+            accessToken = "tok"
+        )
+        val voiceOptions = VoiceOptionsSnapshot(null, false, false)
+        val disabled = config.clientConfigurationPlan(
+            requestedEnableMultiAgent = true,
+            enableMultiModalInput = true,
+            enablePDFUpload = true,
+            enableVoice = false,
+            voiceOptions = voiceOptions,
+            internalFlags = emptyMap()
+        )
+        val enabled = config.clientConfigurationPlan(
+            requestedEnableMultiAgent = true,
+            enableMultiModalInput = true,
+            enablePDFUpload = true,
+            enableVoice = true,
+            voiceOptions = voiceOptions,
+            internalFlags = emptyMap()
+        )
+
+        assertEquals(true, enabled.requiresClientRebuild(disabled))
+        assertEquals(true, disabled.requiresClientRebuild(enabled))
+        assertEquals(false, enabled.requiresClientRebuild(enabled))
+        assertEquals(false, enabled.enableMultiAgent)
+        assertEquals("0Xa", enabled.directAgentId)
+        assertEquals("Support Bot", enabled.directAgentLabel)
+    }
+
+    @Test
+    fun `multi-agent client configuration plan preserves discovery`() {
+        val config = EmployeeAgentModeConfig(
+            instanceUrl = "https://myorg",
+            organizationId = "00D",
+            userId = "005",
+            accessToken = "tok"
+        )
+        val plan = config.clientConfigurationPlan(
+            requestedEnableMultiAgent = true,
+            enableMultiModalInput = true,
+            enablePDFUpload = true,
+            enableVoice = true,
+            voiceOptions = VoiceOptionsSnapshot(30.0, true, true),
+            internalFlags = mapOf("example" to true)
+        )
+
+        assertEquals(true, plan.enableMultiAgent)
+        assertNull(plan.directAgentId)
+    }
+
+    @Test
     fun `employee config is null when accessToken is missing`() {
         val map = mapOf(
             mapOf(
@@ -150,6 +234,55 @@ class AgentModeTest {
                 // accessToken missing
             )
         )
+        assertNull(EmployeeAgentModeConfig.fromReadableMap(map))
+    }
+
+    @Test
+    fun `employee config parses direct OAuth without legacy token`() {
+        val auth = mapOf(mapOf("type" to "oauth", "source" to "direct", "accessToken" to "oauth"))
+        val map = mapOf(mapOf("instanceUrl" to "https://myorg", "organizationId" to "00D", "userId" to "005"))
+        every { map.hasKey("authentication") } returns true
+        every { map.getMap("authentication") } returns auth
+
+        val config = EmployeeAgentModeConfig.fromReadableMap(map)
+        assertEquals(EmployeeAuthentication.DirectOAuth("oauth"), config?.authentication)
+    }
+
+    @Test
+    fun `employee config parses Mobile SDK OAuth without accessToken`() {
+        val auth = mapOf(mapOf("type" to "oauth", "source" to "salesforceMobileSdk"))
+        val map = mapOf(mapOf("instanceUrl" to "https://myorg", "organizationId" to "00D", "userId" to "005"))
+        every { map.hasKey("authentication") } returns true
+        every { map.getMap("authentication") } returns auth
+
+        assertEquals(EmployeeAuthentication.MobileSDKOAuth, EmployeeAgentModeConfig.fromReadableMap(map)?.authentication)
+    }
+
+    @Test
+    fun `Mobile SDK credentials use RestClient network for agent discovery`() {
+        assertEquals(true, EmployeeAuthentication.Legacy("oauth").usesMobileSDKNetwork)
+        assertEquals(true, EmployeeAuthentication.MobileSDKOAuth.usesMobileSDKNetwork)
+        assertEquals(false, EmployeeAuthentication.DirectOAuth("oauth").usesMobileSDKNetwork)
+    }
+
+    @Test
+    fun `employee config rejects removed OrgJWT sources`() {
+        for (source in listOf("direct", "salesforceMobileSdk")) {
+            val auth = mapOf(mapOf("type" to "orgJwt", "source" to source, "token" to "unsupported-token"))
+            val values = mapOf(mapOf("instanceUrl" to "https://myorg", "organizationId" to "00D", "userId" to "005"))
+            every { values.hasKey("authentication") } returns true
+            every { values.getMap("authentication") } returns auth
+            assertNull(EmployeeAgentModeConfig.fromReadableMap(values))
+        }
+    }
+
+    @Test
+    fun `employee config rejects legacy and explicit credentials together`() {
+        val auth = mapOf(mapOf("type" to "oauth", "source" to "direct", "accessToken" to "oauth"))
+        val map = mapOf(mapOf("instanceUrl" to "https://myorg", "organizationId" to "00D", "userId" to "005", "accessToken" to "oauth"))
+        every { map.hasKey("authentication") } returns true
+        every { map.getMap("authentication") } returns auth
+
         assertNull(EmployeeAgentModeConfig.fromReadableMap(map))
     }
 

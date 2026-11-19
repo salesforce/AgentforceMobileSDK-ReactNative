@@ -1,0 +1,19 @@
+// Select local SDK sources when this sample is inside the SDK monorepo.
+// Standalone public checkouts keep the bridge's published Maven dependencies.
+def sdkRoot = new File(settingsDir, '../../../android/sdk').canonicalFile
+if (sdkRoot.exists()) {
+    def requiredFiles = [
+        'settings.gradle.kts',
+        'build.gradle.kts',
+        'agentforce-sdk/build.gradle.kts',
+        'agentforce-sdk-voice/build.gradle.kts'
+    ]
+    def missing = requiredFiles.findAll { !new File(sdkRoot, it).isFile() }
+    if (!missing.isEmpty()) {
+        throw new GradleException("Incomplete local Agentforce SDK at ${sdkRoot}; missing ${missing.join(', ')}. Restore the SDK checkout before building.")
+    }
+    includeBuild(sdkRoot)
+    logger.lifecycle("Agentforce SDK: using local sources at ${sdkRoot}")
+} else {
+    logger.lifecycle('Agentforce SDK: using published Maven dependencies')
+}

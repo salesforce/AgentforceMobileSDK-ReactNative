@@ -84,6 +84,15 @@ data class ServiceAgentModeConfig(
 /**
  * Configuration for Employee Agent mode (authenticated access)
  */
+sealed class EmployeeAuthentication {
+    data class Legacy(val accessToken: String) : EmployeeAuthentication()
+    data object MobileSDKOAuth : EmployeeAuthentication()
+    data class DirectOAuth(val accessToken: String) : EmployeeAuthentication()
+
+    val usesMobileSDKNetwork: Boolean
+        get() = this is Legacy || this is MobileSDKOAuth
+}
+
 data class EmployeeAgentModeConfig(
     /** Salesforce instance URL (e.g., "https://myorg.my.salesforce.com") */
     val instanceUrl: String,
@@ -96,8 +105,37 @@ data class EmployeeAgentModeConfig(
     /** Optional display label for the agent */
     val agentLabel: String? = null,
     /** OAuth access token for authentication */
-    var accessToken: String
+    var accessToken: String,
+    val authentication: EmployeeAuthentication = EmployeeAuthentication.Legacy(accessToken)
 ) {
+    /**
+     * Multi-agent discovery is used only when the host leaves [agentId] unset.
+     *
+     * The React Native contract accepts one direct agent ID, not a list of IDs. When that ID is
+     * present, the Android SDK must stay on its direct-agent path so missing agent-info metadata
+     * does not become an authoritative per-agent voice denial.
+     */
+    fun effectiveEnableMultiAgent(requested: Boolean): Boolean = requested && agentId == null
+
+    /** Resolves the immutable settings installed when the native Employee client is created. */
+    fun clientConfigurationPlan(
+        requestedEnableMultiAgent: Boolean,
+        enableMultiModalInput: Boolean,
+        enablePDFUpload: Boolean,
+        enableVoice: Boolean,
+        voiceOptions: VoiceOptionsSnapshot,
+        internalFlags: Map<String, Boolean>
+    ): EmployeeClientConfigurationPlan = EmployeeClientConfigurationPlan(
+        enableMultiAgent = effectiveEnableMultiAgent(requestedEnableMultiAgent),
+        enableMultiModalInput = enableMultiModalInput,
+        enablePDFUpload = enablePDFUpload,
+        enableVoice = enableVoice,
+        voiceOptions = voiceOptions,
+        internalFlags = internalFlags.toMap(),
+        directAgentId = agentId,
+        directAgentLabel = agentLabel?.trim()?.takeIf { it.isNotEmpty() }
+    )
+
     companion object {
         /**
          * Creates an EmployeeAgentModeConfig from a ReadableMap
@@ -108,7 +146,21 @@ data class EmployeeAgentModeConfig(
             val instanceUrl = map.getString("instanceUrl") ?: return null
             val organizationId = map.getString("organizationId") ?: return null
             val userId = map.getString("userId") ?: return null
-            val accessToken = map.getString("accessToken") ?: return null
+            val accessToken = map.getString("accessToken")
+            val authentication = if (map.hasKey("authentication")) {
+                if (accessToken != null) return null
+                val auth = map.getMap("authentication") ?: return null
+                when (auth.getString("type") to auth.getString("source")) {
+                    "oauth" to "salesforceMobileSdk" -> EmployeeAuthentication.MobileSDKOAuth
+                    "oauth" to "direct" -> {
+                        val token = auth.getString("accessToken")?.takeIf { it.isNotBlank() } ?: return null
+                        EmployeeAuthentication.DirectOAuth(token)
+                    }
+                    else -> return null
+                }
+            } else {
+                EmployeeAuthentication.Legacy(accessToken ?: return null)
+            }
             val agentId = map.getString("agentId")?.takeIf { it.isNotBlank() }
 
             return EmployeeAgentModeConfig(
@@ -117,8 +169,30 @@ data class EmployeeAgentModeConfig(
                 userId = userId,
                 agentId = agentId,
                 agentLabel = if (map.hasKey("agentLabel")) map.getString("agentLabel") else null,
-                accessToken = accessToken
+                accessToken = accessToken ?: "",
+                authentication = authentication
             )
         }
     }
+}
+
+/** Normalized voice options that affect native client behavior. */
+data class VoiceOptionsSnapshot(
+    val userSilenceTimeoutSeconds: Double?,
+    val autoEndWhileMuted: Boolean,
+    val defaultClosedCaptionsEnabled: Boolean,
+)
+
+/** Creation-time Employee Agent settings applied to a native client. */
+data class EmployeeClientConfigurationPlan(
+    val enableMultiAgent: Boolean,
+    val enableMultiModalInput: Boolean,
+    val enablePDFUpload: Boolean,
+    val enableVoice: Boolean,
+    val voiceOptions: VoiceOptionsSnapshot,
+    val internalFlags: Map<String, Boolean>,
+    val directAgentId: String?,
+    val directAgentLabel: String?,
+) {
+    fun requiresClientRebuild(comparedTo: EmployeeClientConfigurationPlan?): Boolean = this != comparedTo
 }

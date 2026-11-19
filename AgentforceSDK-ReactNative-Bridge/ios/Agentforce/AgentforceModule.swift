@@ -50,11 +50,9 @@ class AgentforceModule: RCTEventEmitter {
     /// supplied, so the SDK falls back to the server-provided agent label.
     private var navigationBarBuilder: BridgeNavigationBarBuilder?
 
-    /// Normalized voice options applied to the currently-live client. Compared
-    /// against a fresh snapshot on reconfigure so a voice-options change forces a
-    /// new client (the SDK reads voice options only at client creation). `nil`
-    /// when no client is live.
-    private var appliedVoiceOptions: VoiceOptionsSnapshot?
+    /// Resolved creation-time settings applied to the currently-live Employee client.
+    /// A repeated configure call may reuse the client only when this plan is unchanged.
+    private var appliedEmployeeConfiguration: EmployeeClientConfigurationPlan?
 
     /// Value snapshot of the voice options that actually affect client behavior,
     /// normalized the same way the SDK treats them: a missing, non-positive, or
@@ -280,27 +278,6 @@ class AgentforceModule: RCTEventEmitter {
             throw AgentConfigError.missingRequiredField("serviceApiURL must be a valid URL (e.g. https://your-site.salesforce.com)")
         }
 
-        // Always close existing conversation and recreate client on reconfigure.
-        // This allows "Save Configuration" to act as a conversation reset.
-        await closeCurrentConversation()
-        cleanupClient()
-
-        // Configure unified credential provider for Service Agent mode
-        credentialProvider.configure(serviceAgent: config)
-        currentMode = .service(config: config)
-
-        // Service Agent has no client-supplied label override; clear any builder
-        // left over from a prior Employee Agent session.
-        navigationBarBuilder = nil
-
-        // Persist trimmed values to UserDefaults for cross-session recall
-        let trimmedSiteUrl = config.serviceApiURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedOrgId = config.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedDevName = config.esDeveloperName.trimmingCharacters(in: .whitespacesAndNewlines)
-        UserDefaults.standard.set(trimmedSiteUrl, forKey: "ServiceAgentSiteUrl")
-        UserDefaults.standard.set(trimmedOrgId, forKey: "ServiceAgentOrgUrl")
-        UserDefaults.standard.set(trimmedDevName, forKey: "ServiceAgentDevName")
-
         // Build ServiceUISettings from JS config (use SDK defaults for omitted keys)
         let uiSettings: ServiceUISettings
         if let raw = config.serviceUISettings {
@@ -311,13 +288,11 @@ class AgentforceModule: RCTEventEmitter {
                 useWelcomeUtterances: raw["useWelcomeUtterances"] ?? false,
                 showQueueStatus: raw["showQueueStatus"] ?? true,
                 enableVideoUpload: raw["enableVideoUpload"] ?? false,
-                secureForms: raw["secureForms"] ?? true,
                 enableAudioUpload: raw["enableAudioUpload"] ?? false
             )
         } else {
             uiSettings = ServiceUISettings(
-                showQueueStatus: true,
-                secureForms: true
+                showQueueStatus: true
             )
         }
 
@@ -327,7 +302,6 @@ class AgentforceModule: RCTEventEmitter {
         // false so the mic isn't gated; other public flags carry through too.
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
         let defaultClosedCaptionsEnabled = Self.defaultClosedCaptionsEnabled(from: configDict)
-        saveFeatureFlagsToUserDefaults(flags)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
@@ -363,6 +337,21 @@ class AgentforceModule: RCTEventEmitter {
             serviceConfig = serviceConfig.setTheming(theming)
         }
 
+        // All throwing validation is complete; commit the Service Agent transition.
+        await closeCurrentConversation()
+        cleanupClient()
+        credentialProvider.configure(serviceAgent: config)
+        currentMode = .service(config: config)
+        navigationBarBuilder = nil
+        saveFeatureFlagsToUserDefaults(flags)
+
+        let trimmedSiteUrl = config.serviceApiURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedOrgId = config.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDevName = config.esDeveloperName.trimmingCharacters(in: .whitespacesAndNewlines)
+        UserDefaults.standard.set(trimmedSiteUrl, forKey: "ServiceAgentSiteUrl")
+        UserDefaults.standard.set(trimmedOrgId, forKey: "ServiceAgentOrgUrl")
+        UserDefaults.standard.set(trimmedDevName, forKey: "ServiceAgentDevName")
+
         // Always pass bridgeViewProvider so late registrations take effect.
         // canHandle() returns false when the map is empty, matching nil behavior.
         agentforceClient = await AgentforceClient(
@@ -383,36 +372,55 @@ class AgentforceModule: RCTEventEmitter {
         voiceSessionOptions: AgentforceVoiceSessionOptions
     ) async throws {
         guard let config = EmployeeAgentModeConfig.from(dictionary: configDict) else {
-            throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, agentId, or accessToken")
+            throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, or authentication")
         }
+        let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
+        let voiceOptionsSnapshot = Self.voiceOptionsSnapshot(from: configDict)
+        let internalFlags = internalFlagsForSDK(configDict)
+        let clientConfiguration = config.clientConfigurationPlan(
+            enableMultiAgent: flags.enableMultiAgent,
+            enableMultiModalInput: flags.enableMultiModalInput,
+            enablePDFUpload: flags.enablePDFUpload,
+            enableVoice: flags.enableVoice,
+            userSilenceTimeoutSeconds: voiceOptionsSnapshot.userSilenceTimeoutSeconds,
+            autoEndWhileMuted: voiceOptionsSnapshot.autoEndWhileMuted,
+            defaultClosedCaptionsEnabled: voiceOptionsSnapshot.defaultClosedCaptionsEnabled,
+            internalFlags: internalFlags
+        )
 
         // Check if agentId changed or we're switching modes
         var agentIdChanged = false
         var switchingModes = false
+        var authenticationChanged = false
         
         if case .service = currentMode {
             switchingModes = true
         } else if case .employee(let existingConfig) = currentMode {
             agentIdChanged = existingConfig.agentId != config.agentId
+            authenticationChanged = existingConfig.authentication != config.authentication ||
+                existingConfig.organizationId != config.organizationId ||
+                existingConfig.userId != config.userId ||
+                existingConfig.instanceUrl != config.instanceUrl
         }
         
-        // A live client only reads its voice options at creation, so a change to
-        // them must force a rebuild. Only meaningful when a client already exists.
-        let voiceOptionsSnapshot = Self.voiceOptionsSnapshot(from: configDict)
-        let voiceOptionsChanged = agentforceClient != nil && appliedVoiceOptions != voiceOptionsSnapshot
+        // The native client reads feature flags, voice options, and direct-agent metadata only at
+        // creation. Reuse is safe only when the resolved creation plan is unchanged.
+        let clientConfigurationChanged = agentforceClient != nil &&
+            clientConfiguration.requiresClientRebuild(comparedTo: appliedEmployeeConfiguration)
 
-        let needsNewClient = switchingModes || agentIdChanged || voiceOptionsChanged || agentforceClient == nil
+        let needsNewClient = switchingModes || agentIdChanged || authenticationChanged ||
+            clientConfigurationChanged || agentforceClient == nil
 
-        // Only cleanup if switching from Service mode, agentId changed, or voice options changed
+        // Tear down any client whose identity or creation-time configuration is no longer valid.
         if switchingModes {
             print("[AgentforceModule] ⚠️ Switching from Service to Employee mode - cleaning up")
             cleanupClient()
-        } else if agentIdChanged {
+        } else if agentIdChanged || authenticationChanged {
             print("[AgentforceModule] ⚠️ AgentId changed - cleaning up conversation")
             await closeCurrentConversation()
             cleanupClient()
-        } else if voiceOptionsChanged {
-            print("[AgentforceModule] ⚠️ Voice options changed - cleaning up conversation to rebuild client")
+        } else if clientConfigurationChanged {
+            print("[AgentforceModule] ⚠️ Client configuration changed - cleaning up conversation to rebuild client")
             await closeCurrentConversation()
             cleanupClient()
         } else if agentforceClient != nil {
@@ -441,12 +449,14 @@ class AgentforceModule: RCTEventEmitter {
         var organizationId = config.organizationId
 
         #if canImport(SalesforceSDKCore)
-        if let currentUser = UserAccountManager.shared.currentUserAccount {
-            if let mobileUserId = currentUser.credentials.userId {
-                userId = mobileUserId
-            }
-            if let mobileOrgId = currentUser.credentials.organizationId {
-                organizationId = mobileOrgId
+        if config.authentication.usesMobileSDKNetwork {
+            if let currentUser = UserAccountManager.shared.currentUserAccount {
+                if let mobileUserId = currentUser.credentials.userId {
+                    userId = mobileUserId
+                }
+                if let mobileOrgId = currentUser.credentials.organizationId {
+                    organizationId = mobileOrgId
+                }
             }
         }
         #endif
@@ -459,26 +469,40 @@ class AgentforceModule: RCTEventEmitter {
             displayName: userId
         )
 
-        let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
-        let defaultClosedCaptionsEnabled = Self.defaultClosedCaptionsEnabled(from: configDict)
         saveFeatureFlagsToUserDefaults(flags)
+        let availableAgents = clientConfiguration.directAgentInfoSeed.map { seed in
+            [
+                AgentInfo(
+                    agentType: nil,
+                    agentId: seed.agentId,
+                    description: nil,
+                    label: seed.label,
+                    isDefault: true,
+                    stopRecPrompts: nil,
+                    stopWelcomePrompts: nil,
+                    isVoiceEnabled: seed.isVoiceEnabled
+                )
+            ]
+        }
         let featureFlagSettings = AgentforceFeatureFlagSettings(
-            enableMultiModalInput: flags.enableMultiModalInput,
-            enablePDFFileUpload: flags.enablePDFUpload,
-            multiAgent: flags.enableMultiAgent,
+            enableMultiModalInput: clientConfiguration.enableMultiModalInput,
+            enablePDFFileUpload: clientConfiguration.enablePDFUpload,
+            multiAgent: clientConfiguration.enableMultiAgent,
             shouldBlockMicrophone: false,
-            enableVoice: flags.enableVoice,
+            enableVoice: clientConfiguration.enableVoice,
             enableOnboarding: false,
-            defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled,
-            internalFlags: internalFlagsForSDK(configDict)
+            defaultClosedCaptionsEnabled: clientConfiguration.defaultClosedCaptionsEnabled,
+            internalFlags: clientConfiguration.internalFlags
         )
 
         // Build full configuration with authenticated network and data provider for Employee Agent.
-        let network = createAuthenticatedNetwork()
+        let network = config.authentication.usesMobileSDKNetwork ? createAuthenticatedNetwork() : nil
         let dataProvider = createDataProvider(network: network)
 
         var fullConfiguration = AgentforceConfiguration(
             user: user,
+            authProvider: credentialProvider,
+            availableAgents: availableAgents,
             agentforceCopier: BridgeCopier(),
             forceConfigEndpoint: config.instanceUrl,
             dataProvider: dataProvider,
@@ -510,7 +534,7 @@ class AgentforceModule: RCTEventEmitter {
                 mode: .fullConfig(fullConfiguration),
                 viewProvider: bridgeViewProvider
             )
-            appliedVoiceOptions = voiceOptionsSnapshot
+            appliedEmployeeConfiguration = clientConfiguration
         } else {
             print("[AgentforceModule] Reusing existing AgentforceClient - credentials will be refreshed automatically")
         }
@@ -1339,7 +1363,7 @@ class AgentforceModule: RCTEventEmitter {
     private func cleanupClient() {
         currentConversation = nil
         agentforceClient = nil
-        appliedVoiceOptions = nil
+        appliedEmployeeConfiguration = nil
         bridgeHiddenPreChat.setFields([:])
     }
 

@@ -2,6 +2,7 @@ package com.salesforce.android.reactagentforce.providers
 
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentials
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
+import com.salesforce.android.reactagentforce.models.EmployeeAuthentication
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -67,6 +68,18 @@ class UnifiedCredentialProviderTest {
 
         val creds = provider.getAuthCredentials() as AgentforceAuthCredentials.OAuth
         assertEquals("refreshed-token", creds.authToken)
+    }
+
+    @Test
+    fun `direct OAuth uses the supplied token`() {
+        val provider = UnifiedCredentialProvider()
+        provider.configure(employeeConfig.copy(
+            accessToken = "",
+            authentication = EmployeeAuthentication.DirectOAuth("direct-token")
+        ))
+
+        val credentials = provider.getAuthCredentials() as AgentforceAuthCredentials.OAuth
+        assertEquals("direct-token", credentials.authToken)
     }
 
     @Test

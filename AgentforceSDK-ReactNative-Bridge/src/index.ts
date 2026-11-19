@@ -21,6 +21,7 @@ export type {
   ServiceAgentConfig,
   ServiceUISettings,
   EmployeeAgentConfig,
+  EmployeeAuthentication,
   AgentConfig,
   FeatureFlags,
   InternalFlags,

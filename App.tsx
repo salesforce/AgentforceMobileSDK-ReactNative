@@ -25,6 +25,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import FeatureFlagsScreen from './src/screens/FeatureFlagsScreen';
@@ -39,41 +40,43 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const App = (): JSX.Element => {
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="Home"
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: '#0176D3',
-          },
-          headerTintColor: '#ffffff',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
-        }}>
-        <Stack.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{
-            title: 'Agentforce Mobile',
-          }}
-        />
-        <Stack.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{
-            title: 'Configuration',
-          }}
-        />
-        <Stack.Screen
-          name="FeatureFlags"
-          component={FeatureFlagsScreen}
-          options={{
-            title: 'Feature Flags',
-          }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName="Home"
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: '#0176D3',
+            },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: {
+              fontWeight: 'bold',
+            },
+          }}>
+          <Stack.Screen
+            name="Home"
+            component={HomeScreen}
+            options={{
+              title: 'Agentforce Mobile',
+            }}
+          />
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{
+              title: 'Configuration',
+            }}
+          />
+          <Stack.Screen
+            name="FeatureFlags"
+            component={FeatureFlagsScreen}
+            options={{
+              title: 'Feature Flags',
+            }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </GestureHandlerRootView>
   );
 };
 

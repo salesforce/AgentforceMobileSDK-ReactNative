@@ -267,7 +267,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             userId: creds.userId,
             agentId: agentId, // undefined triggers multi-agent mode
             agentLabel: '', // optional: set a custom name to display in the chat header (overrides the server agent label)
-            accessToken: creds.accessToken,
+            authentication: { type: 'oauth' as const, source: 'salesforceMobileSdk' as const },
             featureFlags,
             appearance: getAgentAppearance(),
             voiceOptions, // auto-end voice after user silence; edit in Settings > Employee > Voice Timeout

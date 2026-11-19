@@ -70,6 +70,19 @@ struct ServiceAgentModeConfig {
 // MARK: - Employee Agent Configuration
 
 /// Configuration for Employee Agent mode (authenticated access)
+enum EmployeeAuthentication: Equatable {
+    case legacy(accessToken: String)
+    case mobileSDKOAuth
+    case directOAuth(accessToken: String)
+
+    var usesMobileSDKNetwork: Bool {
+        switch self {
+        case .legacy, .mobileSDKOAuth: return true
+        case .directOAuth: return false
+        }
+    }
+}
+
 struct EmployeeAgentModeConfig {
     /// Salesforce instance URL (e.g., "https://myorg.my.salesforce.com")
     let instanceUrl: String
@@ -88,6 +101,48 @@ struct EmployeeAgentModeConfig {
     
     /// OAuth access token for authentication
     var accessToken: String
+    var authentication: EmployeeAuthentication
+
+    /// Metadata supplied to the native SDK for a directly configured agent.
+    ///
+    /// Direct-agent hosts do not rely on agent discovery, so seed the configured agent and let the
+    /// host's `enableVoice` choice drive voice eligibility. Multi-agent configurations leave this
+    /// unset so the native SDK can discover the available agents.
+    func directAgentInfoSeed(enableVoice: Bool) -> DirectAgentInfoSeed? {
+        guard let agentId else { return nil }
+        let trimmedLabel = agentLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return DirectAgentInfoSeed(
+            agentId: agentId,
+            label: trimmedLabel.flatMap { $0.isEmpty ? nil : $0 } ?? "Agentforce",
+            isVoiceEnabled: enableVoice
+        )
+    }
+
+    /// Resolves every Employee Agent setting that is immutable after client creation.
+    /// The bridge compares this plan with the one applied to the live client so a repeated
+    /// `configure()` call can reuse only a genuinely equivalent client.
+    func clientConfigurationPlan(
+        enableMultiAgent: Bool,
+        enableMultiModalInput: Bool,
+        enablePDFUpload: Bool,
+        enableVoice: Bool,
+        userSilenceTimeoutSeconds: Double?,
+        autoEndWhileMuted: Bool,
+        defaultClosedCaptionsEnabled: Bool,
+        internalFlags: [String: Bool]
+    ) -> EmployeeClientConfigurationPlan {
+        EmployeeClientConfigurationPlan(
+            enableMultiAgent: enableMultiAgent,
+            enableMultiModalInput: enableMultiModalInput,
+            enablePDFUpload: enablePDFUpload,
+            enableVoice: enableVoice,
+            userSilenceTimeoutSeconds: userSilenceTimeoutSeconds,
+            autoEndWhileMuted: autoEndWhileMuted,
+            defaultClosedCaptionsEnabled: defaultClosedCaptionsEnabled,
+            internalFlags: internalFlags,
+            directAgentInfoSeed: directAgentInfoSeed(enableVoice: enableVoice)
+        )
+    }
     
     /// Creates an EmployeeAgentModeConfig from a dictionary
     /// - Parameter dict: Dictionary containing configuration values
@@ -95,9 +150,27 @@ struct EmployeeAgentModeConfig {
     static func from(dictionary dict: [String: Any]) -> EmployeeAgentModeConfig? {
         guard let instanceUrl = dict["instanceUrl"] as? String,
               let organizationId = dict["organizationId"] as? String,
-              let userId = dict["userId"] as? String,
-              let accessToken = dict["accessToken"] as? String else {
+              let userId = dict["userId"] as? String else {
             return nil
+        }
+        let accessToken = dict["accessToken"] as? String
+        let authentication: EmployeeAuthentication
+        if let rawAuth = dict["authentication"] as? [String: Any] {
+            guard accessToken == nil,
+                  let type = rawAuth["type"] as? String,
+                  let source = rawAuth["source"] as? String else { return nil }
+            switch (type, source) {
+            case ("oauth", "salesforceMobileSdk"):
+                authentication = .mobileSDKOAuth
+            case ("oauth", "direct"):
+                guard let token = rawAuth["accessToken"] as? String,
+                      !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+                authentication = .directOAuth(accessToken: token)
+            default: return nil
+            }
+        } else {
+            guard let accessToken else { return nil }
+            authentication = .legacy(accessToken: accessToken)
         }
         let agentId: String? = (dict["agentId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
 
@@ -107,8 +180,34 @@ struct EmployeeAgentModeConfig {
             userId: userId,
             agentId: agentId,
             agentLabel: dict["agentLabel"] as? String,
-            accessToken: accessToken
+            accessToken: accessToken ?? "",
+            authentication: authentication
         )
+    }
+}
+
+/// Foundation-only representation of the `AgentInfo` that the bridge passes to AgentforceSDK.
+/// Keeping this conversion input independent of the SDK makes the direct-agent policy unit-testable.
+struct DirectAgentInfoSeed: Equatable {
+    let agentId: String
+    let label: String
+    let isVoiceEnabled: Bool
+}
+
+/// Creation-time Employee Agent settings applied to a native client.
+struct EmployeeClientConfigurationPlan: Equatable {
+    let enableMultiAgent: Bool
+    let enableMultiModalInput: Bool
+    let enablePDFUpload: Bool
+    let enableVoice: Bool
+    let userSilenceTimeoutSeconds: Double?
+    let autoEndWhileMuted: Bool
+    let defaultClosedCaptionsEnabled: Bool
+    let internalFlags: [String: Bool]
+    let directAgentInfoSeed: DirectAgentInfoSeed?
+
+    func requiresClientRebuild(comparedTo applied: EmployeeClientConfigurationPlan?) -> Bool {
+        self != applied
     }
 }
 
