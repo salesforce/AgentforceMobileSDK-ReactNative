@@ -26,10 +26,10 @@ Your app must also include the Agentforce iOS SDK in the Podfile so the bridge c
 
 The npm package also ships `ios/Package.swift` for React Native's experimental
 SwiftPM integration (introduced in React Native 0.87). The manifest uses the
-Agentforce iOS `264.0.0` release, which selects its SwiftPM-specific SDK,
+Agentforce iOS `264.1.0` release, which selects its SwiftPM-specific SDK,
 Service, and Voice XCFrameworks. Set the consuming app's iOS deployment target
 to 17 or later before opting into React Native's SwiftPM integration. The React
-Native 0.74 sample app in this repository continues to use CocoaPods.
+Native 0.77.3 sample app in this repository continues to use CocoaPods.
 
 The SwiftPM product currently supports Service Agent and host-supplied Employee
 Agent credentials. Salesforce Mobile SDK sourced Employee Agent credentials
@@ -302,7 +302,7 @@ async function registerAgentforceViews() {
 The component receives `definition` and `properties` props. If the app already
 sets a root view style provider, add the conditional styling to that provider.
 
-The React Native 0.77 sample uses a legacy `RCTBridge`, so it keeps
+The React Native 0.77.3 sample uses a legacy `RCTBridge`, so it keeps
 using the existing `RCTRootView` path without factory registration.
 
 ### Custom Splash Screen

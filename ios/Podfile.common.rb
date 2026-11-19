@@ -57,7 +57,7 @@ def shared_pods
   # the framework is never embedded — surfacing as a dyld "Library not loaded"
   # crash once Service Agent voice is enabled. Declare it explicitly so it's
   # installed and embedded.
-  # Keep the Messaging family on the line required by AgentforceVoice 264.0.0.
+  # Keep the Messaging family on the line required by AgentforceVoice 264.1.0.
   pod 'Messaging-Multimedia-Core', '~> 1.13.0'
 
   # JWTKit is required by AgentforceService but not resolved automatically
@@ -74,7 +74,7 @@ def shared_pods
     pod 'SLDSIcons', '1.2.7'
   end
 
-  # Match AgentforceVoice and Messaging-Multimedia-Core on main (PR #125).
+  # Keep LiveKit aligned with AgentforceVoice and Messaging-Multimedia-Core.
   pod 'LiveKitClient-XCFramework', '~> 2.16.0'
 
   # AgentforceService links to Crypto.framework at runtime; SwiftCrypto provides it (avoids dyld "Library not loaded: Crypto.framework").
