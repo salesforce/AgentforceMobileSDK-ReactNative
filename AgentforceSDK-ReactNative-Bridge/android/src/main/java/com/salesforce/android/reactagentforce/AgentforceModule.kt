@@ -330,18 +330,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
 
-        // Rebuild the client only when switching from Service mode, the agentId changed, or no
-        // client exists yet (mirrors iOS's needsNewClient). Otherwise reuse it: rebuilding while
-        // preserving the conversation orphans that conversation on the old client and breaks
-        // re-launch with a 404. See [[project_rn_android_bootstrap_fix]].
+        // Account/source, agent, and creation-time settings determine whether the client can
+        // be reused. Token rotation updates the shared provider without closing the conversation.
         val currentEmployeeMode = currentMode as? LocalAgentMode.Employee
         val switchingModes = AgentforceClientHolder.isServiceAgent
         val agentIdChanged = currentEmployeeMode?.config?.agentId != employeeConfig.agentId
-        val authenticationChanged = currentEmployeeMode?.config?.let { previous ->
-            previous.authentication != employeeConfig.authentication ||
-                previous.organizationId != employeeConfig.organizationId ||
-                previous.userId != employeeConfig.userId ||
-                previous.instanceUrl != employeeConfig.instanceUrl
+        val identityChanged = currentEmployeeMode?.config?.let { previous ->
+            !previous.hasSameIdentityAs(employeeConfig)
         } ?: false
 
         // Cross-activity re-launch: reuse is only safe while the overlay is still attached to the
@@ -373,7 +368,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         val clientConfigurationChanged = AgentforceClientHolder.agentforceClient != null &&
             currentClientConfiguration.requiresClientRebuild(appliedEmployeeConfiguration)
 
-        val needsNewClient = switchingModes || agentIdChanged || authenticationChanged || clientConfigurationChanged ||
+        val needsNewClient = switchingModes || agentIdChanged || identityChanged || clientConfigurationChanged ||
             AgentforceClientHolder.agentforceClient == null || activityChanged
 
         if (activityChanged) {

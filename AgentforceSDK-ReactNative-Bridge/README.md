@@ -130,6 +130,9 @@ await AgentforceService.configure({
 
 For a host-managed OAuth flow, supply the access token with
 `{ type: 'oauth', source: 'direct', accessToken }` and reconfigure when it changes.
+Reconfiguring with only a refreshed token preserves the existing client and
+conversation history. Changes to the user, organization, instance URL, authentication
+source, agent, or creation-time settings can still rebuild the client.
 Keep tokens in memory and omit them from logs. Call `AgentforceService.resetSettings()`
 on host-managed logout or account switch. `logoutEmployeeAgent()` resets Agentforce
 state before signing out of Mobile SDK. The legacy top-level `accessToken` remains

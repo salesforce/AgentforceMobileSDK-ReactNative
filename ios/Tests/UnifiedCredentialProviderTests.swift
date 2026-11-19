@@ -80,6 +80,28 @@ final class UnifiedCredentialProviderTests: XCTestCase {
         XCTAssertEqual("updated-host-token", try provider.resolvedCredentials().authToken)
     }
 
+    func testReconfiguringHostTokenRefreshesCredentialsWithoutChangingClientIdentity() throws {
+        let tokenPairs: [(EmployeeAuthentication, EmployeeAuthentication)] = [
+            (.directOAuth(accessToken: "old-token"), .directOAuth(accessToken: "new-token")),
+            (.legacy(accessToken: "old-token"), .legacy(accessToken: "new-token")),
+        ]
+        for (previousAuth, refreshedAuth) in tokenPairs {
+            let provider = UnifiedCredentialProvider(mobileSDKCredentials: { nil })
+            let previous = employee(previousAuth)
+            let refreshed = employee(refreshedAuth)
+            try provider.configure(employeeAgent: previous)
+            XCTAssertEqual("old-token", try provider.resolvedCredentials().authToken)
+
+            // configure() updates the shared provider even when the module reuses its client.
+            XCTAssertTrue(previous.hasSameIdentity(as: refreshed))
+            try provider.configure(employeeAgent: refreshed)
+            XCTAssertEqual(
+                OAuthCredentialSnapshot(authToken: "new-token", orgId: "00D", userId: "005"),
+                try provider.resolvedCredentials()
+            )
+        }
+    }
+
     func testLegacyOAuthFallbackAndServiceGuestCredentialsRemainAvailable() throws {
         let provider = UnifiedCredentialProvider(mobileSDKCredentials: { nil })
         try provider.configure(employeeAgent: employee(.legacy(accessToken: "legacy-token")))

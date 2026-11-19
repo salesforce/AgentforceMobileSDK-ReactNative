@@ -91,6 +91,48 @@ class AgentModeTest {
     // --- EmployeeAgentModeConfig.fromReadableMap ---
 
     @Test
+    fun `token-only refresh preserves employee client identity`() {
+        val original = EmployeeAgentModeConfig("https://myorg", "00D", "005", accessToken = "old-token")
+        assertEquals(true, original.hasSameIdentityAs(original.copy(
+            accessToken = "new-token",
+            authentication = EmployeeAuthentication.Legacy("new-token")
+        )))
+        assertEquals(true,
+            original.copy(authentication = EmployeeAuthentication.DirectOAuth("old-token")).hasSameIdentityAs(
+                original.copy(authentication = EmployeeAuthentication.DirectOAuth("new-token"))
+            )
+        )
+    }
+
+    @Test
+    fun `user org and instance changes invalidate employee client identity`() {
+        val original = EmployeeAgentModeConfig("https://myorg", "00D", "005", accessToken = "token")
+        for (changed in listOf(
+            original.copy(instanceUrl = "https://other-org"),
+            original.copy(organizationId = "other-org-id"),
+            original.copy(userId = "other-user-id"),
+        )) {
+            assertEquals(false, original.hasSameIdentityAs(changed))
+        }
+    }
+
+    @Test
+    fun `every authentication source transition invalidates employee client identity`() {
+        val original = EmployeeAgentModeConfig("https://myorg", "00D", "005", accessToken = "token")
+        val sources = listOf(
+            EmployeeAuthentication.Legacy("token"),
+            EmployeeAuthentication.DirectOAuth("token"),
+            EmployeeAuthentication.MobileSDKOAuth,
+        )
+        for ((previousIndex, previous) in sources.withIndex()) {
+            for ((nextIndex, next) in sources.withIndex()) {
+                assertEquals(previousIndex == nextIndex,
+                    original.copy(authentication = previous).hasSameIdentityAs(original.copy(authentication = next)))
+            }
+        }
+    }
+
+    @Test
     fun `employee config parses required fields and optional agentId`() {
         val map = mapOf(
             mapOf(

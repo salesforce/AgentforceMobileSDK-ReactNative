@@ -393,19 +393,16 @@ class AgentforceModule: RCTEventEmitter {
             internalFlags: internalFlags
         )
 
-        // Check if agentId changed or we're switching modes
+        // Account/source changes require a new client; token rotation alone does not.
         var agentIdChanged = false
         var switchingModes = false
-        var authenticationChanged = false
+        var identityChanged = false
         
         if case .service = currentMode {
             switchingModes = true
         } else if case .employee(let existingConfig) = currentMode {
             agentIdChanged = existingConfig.agentId != config.agentId
-            authenticationChanged = existingConfig.authentication != config.authentication ||
-                existingConfig.organizationId != config.organizationId ||
-                existingConfig.userId != config.userId ||
-                existingConfig.instanceUrl != config.instanceUrl
+            identityChanged = !existingConfig.hasSameIdentity(as: config)
         }
         
         // The native client reads feature flags, voice options, and direct-agent metadata only at
@@ -413,15 +410,15 @@ class AgentforceModule: RCTEventEmitter {
         let clientConfigurationChanged = agentforceClient != nil &&
             clientConfiguration.requiresClientRebuild(comparedTo: appliedEmployeeConfiguration)
 
-        let needsNewClient = switchingModes || agentIdChanged || authenticationChanged ||
+        let needsNewClient = switchingModes || agentIdChanged || identityChanged ||
             clientConfigurationChanged || agentforceClient == nil
 
         // Tear down any client whose identity or creation-time configuration is no longer valid.
         if switchingModes {
             print("[AgentforceModule] ⚠️ Switching from Service to Employee mode - cleaning up")
             cleanupClient()
-        } else if agentIdChanged || authenticationChanged {
-            print("[AgentforceModule] ⚠️ AgentId changed - cleaning up conversation")
+        } else if agentIdChanged || identityChanged {
+            print("[AgentforceModule] ⚠️ Agent or account identity changed - cleaning up conversation")
             await closeCurrentConversation()
             cleanupClient()
         } else if clientConfigurationChanged {

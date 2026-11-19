@@ -83,6 +83,47 @@ final class AgentModeTests: XCTestCase {
 
     // MARK: - EmployeeAgentModeConfig.from(dictionary:)
 
+    private func identityConfig(
+        _ authentication: EmployeeAuthentication = .directOAuth(accessToken: "old-token"),
+        instanceUrl: String = "https://myorg",
+        organizationId: String = "00D",
+        userId: String = "005"
+    ) -> EmployeeAgentModeConfig {
+        EmployeeAgentModeConfig(
+            instanceUrl: instanceUrl, organizationId: organizationId, userId: userId,
+            agentId: nil, agentLabel: nil, accessToken: "", authentication: authentication
+        )
+    }
+
+    func testTokenOnlyRefreshPreservesEmployeeClientIdentity() {
+        XCTAssertTrue(identityConfig().hasSameIdentity(as: identityConfig(.directOAuth(accessToken: "new-token"))))
+        XCTAssertTrue(
+            identityConfig(.legacy(accessToken: "old-token"))
+                .hasSameIdentity(as: identityConfig(.legacy(accessToken: "new-token")))
+        )
+    }
+
+    func testUserOrgAndInstanceChangesInvalidateEmployeeClientIdentity() {
+        for changed in [
+            identityConfig(instanceUrl: "https://other-org"),
+            identityConfig(organizationId: "other-org-id"),
+            identityConfig(userId: "other-user-id"),
+        ] {
+            XCTAssertFalse(identityConfig().hasSameIdentity(as: changed))
+        }
+    }
+
+    func testEveryAuthenticationSourceTransitionInvalidatesEmployeeClientIdentity() {
+        let sources: [EmployeeAuthentication] = [
+            .legacy(accessToken: "token"), .directOAuth(accessToken: "token"), .mobileSDKOAuth,
+        ]
+        for (previousIndex, previous) in sources.enumerated() {
+            for (nextIndex, next) in sources.enumerated() {
+                XCTAssertEqual(previousIndex == nextIndex, identityConfig(previous).hasSameIdentity(as: identityConfig(next)))
+            }
+        }
+    }
+
     func testEmployeeConfigParsesRequiredFieldsAndAgentId() {
         let config = EmployeeAgentModeConfig.from(dictionary: [
             "instanceUrl": "https://myorg",

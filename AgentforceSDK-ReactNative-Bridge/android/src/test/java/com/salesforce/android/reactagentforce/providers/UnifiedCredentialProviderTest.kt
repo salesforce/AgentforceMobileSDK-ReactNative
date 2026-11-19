@@ -83,6 +83,28 @@ class UnifiedCredentialProviderTest {
     }
 
     @Test
+    fun `reconfiguring a host token refreshes credentials without changing client identity`() {
+        for ((previousAuth, refreshedAuth) in listOf(
+            EmployeeAuthentication.DirectOAuth("old-token") to EmployeeAuthentication.DirectOAuth("new-token"),
+            EmployeeAuthentication.Legacy("old-token") to EmployeeAuthentication.Legacy("new-token"),
+        )) {
+            val provider = UnifiedCredentialProvider()
+            val previous = employeeConfig.copy(accessToken = "old-token", authentication = previousAuth)
+            val refreshed = employeeConfig.copy(accessToken = "new-token", authentication = refreshedAuth)
+            provider.configure(previous)
+            assertEquals("old-token", (provider.getAuthCredentials() as AgentforceAuthCredentials.OAuth).authToken)
+
+            // configure() updates the shared provider even when the module reuses its client.
+            assertTrue(previous.hasSameIdentityAs(refreshed))
+            provider.configure(refreshed)
+            val credentials = provider.getAuthCredentials() as AgentforceAuthCredentials.OAuth
+            assertEquals("new-token", credentials.authToken)
+            assertEquals("00DEmp", credentials.orgId)
+            assertEquals("005User", credentials.userId)
+        }
+    }
+
+    @Test
     fun `updateToken is a no-op in service mode`() {
         val provider = UnifiedCredentialProvider()
         provider.configure(serviceConfig)

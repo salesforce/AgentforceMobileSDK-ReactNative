@@ -93,6 +93,13 @@ sealed class EmployeeAuthentication {
     data object MobileSDKOAuth : EmployeeAuthentication()
     data class DirectOAuth(val accessToken: String) : EmployeeAuthentication()
 
+    /** Token values may rotate without changing the authentication source. */
+    fun hasSameSourceAs(other: EmployeeAuthentication): Boolean = when (this) {
+        is Legacy -> other is Legacy
+        is MobileSDKOAuth -> other is MobileSDKOAuth
+        is DirectOAuth -> other is DirectOAuth
+    }
+
     val usesMobileSDKNetwork: Boolean
         get() = this is Legacy || this is MobileSDKOAuth
 }
@@ -112,6 +119,13 @@ data class EmployeeAgentModeConfig(
     var accessToken: String,
     val authentication: EmployeeAuthentication = EmployeeAuthentication.Legacy(accessToken)
 ) {
+    /** User/account identity and authentication source determine whether a client can be reused. */
+    fun hasSameIdentityAs(other: EmployeeAgentModeConfig): Boolean =
+        instanceUrl == other.instanceUrl &&
+            organizationId == other.organizationId &&
+            userId == other.userId &&
+            authentication.hasSameSourceAs(other.authentication)
+
     /**
      * Multi-agent discovery is used only when the host leaves [agentId] unset.
      *

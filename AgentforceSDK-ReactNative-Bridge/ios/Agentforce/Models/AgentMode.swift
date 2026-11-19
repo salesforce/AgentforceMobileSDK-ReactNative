@@ -75,6 +75,16 @@ enum EmployeeAuthentication: Equatable {
     case mobileSDKOAuth
     case directOAuth(accessToken: String)
 
+    /// Token values may rotate without changing the authentication source.
+    func hasSameSource(as other: EmployeeAuthentication) -> Bool {
+        switch (self, other) {
+        case (.legacy, .legacy), (.mobileSDKOAuth, .mobileSDKOAuth), (.directOAuth, .directOAuth):
+            return true
+        default:
+            return false
+        }
+    }
+
     var usesMobileSDKNetwork: Bool {
         switch self {
         case .legacy, .mobileSDKOAuth: return true
@@ -102,6 +112,14 @@ struct EmployeeAgentModeConfig {
     /// OAuth access token for authentication
     var accessToken: String
     var authentication: EmployeeAuthentication
+
+    /// User/account identity and authentication source determine whether a client can be reused.
+    func hasSameIdentity(as other: EmployeeAgentModeConfig) -> Bool {
+        instanceUrl == other.instanceUrl &&
+            organizationId == other.organizationId &&
+            userId == other.userId &&
+            authentication.hasSameSource(as: other.authentication)
+    }
 
     /// Metadata supplied to the native SDK for a directly configured agent.
     ///
