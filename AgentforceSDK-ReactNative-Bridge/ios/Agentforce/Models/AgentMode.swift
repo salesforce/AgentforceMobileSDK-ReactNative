@@ -220,6 +220,7 @@ enum AgentConfigError: LocalizedError {
     case invalidMode(String)
     case tokenRequired
     case sdkNotInitialized
+    case mobileSDKSessionUnavailable
     
     var errorDescription: String? {
         switch self {
@@ -233,6 +234,8 @@ enum AgentConfigError: LocalizedError {
             return "Employee Agent requires an access token."
         case .sdkNotInitialized:
             return "SDK not initialized. Configuration may have failed."
+        case .mobileSDKSessionUnavailable:
+            return "Mobile SDK OAuth session is unavailable. Integrate Salesforce Mobile SDK and sign in before configuring Employee Agent."
         }
     }
 }

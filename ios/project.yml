@@ -165,7 +165,7 @@ targets:
   # Standalone unit-test bundle for the bridge's Foundation-only pure logic.
   # It compiles the testable bridge source directly (no host app, no pods/SDK
   # linking) so it runs fast and stays independent of the CocoaPods graph.
-  # SDK-coupled types (UnifiedCredentialProvider, BridgeNetwork) are out of scope.
+  # Credential resolution compiles without SDK adaptation; BridgeNetwork is out of scope.
   BridgeUnitTests:
     type: bundle.unit-test
     platform: iOS
@@ -178,5 +178,6 @@ targets:
       - path: Tests
         type: group
       - path: ../AgentforceSDK-ReactNative-Bridge/ios/Agentforce/Models/AgentMode.swift
+      - path: ../AgentforceSDK-ReactNative-Bridge/ios/Agentforce/Providers/UnifiedCredentialProvider.swift
       - path: ../AgentforceSDK-ReactNative-Bridge/ios/Agentforce/Providers/BridgeViewComponentData.swift
       - path: ../AgentforceSDK-ReactNative-Bridge/ios/Agentforce/Providers/FabricContentHeight.swift

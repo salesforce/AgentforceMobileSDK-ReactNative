@@ -1,6 +1,7 @@
 package com.salesforce.android.reactagentforce.models
 
 import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.NoSuchKeyException
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
@@ -9,11 +10,15 @@ import org.junit.Test
 
 class AgentModeTest {
 
-    /** Builds a mock ReadableMap backed by a string map; getString/hasKey honor it. */
+    /** Missing reads throw just like ReadableNativeMap, rather than silently returning null. */
     private fun mapOf(strings: Map<String, String?>): ReadableMap {
         val map = mockk<ReadableMap>(relaxed = true)
         every { map.hasKey(any()) } answers { strings.containsKey(firstArg()) }
-        every { map.getString(any()) } answers { strings[firstArg<String>()] }
+        every { map.getString(any()) } answers {
+            val key = firstArg<String>()
+            if (!strings.containsKey(key)) throw NoSuchKeyException(key)
+            strings[key]
+        }
         return map
     }
 
@@ -71,10 +76,11 @@ class AgentModeTest {
         every { settings.getBoolean("downloadTranscript") } returns false
         every { settings.getBoolean("endConversation") } returns true
 
-        val map = mockk<ReadableMap>(relaxed = true)
-        every { map.getString("serviceApiURL") } returns "https://service"
-        every { map.getString("organizationId") } returns "00D"
-        every { map.getString("esDeveloperName") } returns "MyAgent"
+        val map = mapOf(mapOf(
+            "serviceApiURL" to "https://service",
+            "organizationId" to "00D",
+            "esDeveloperName" to "MyAgent",
+        ))
         every { map.hasKey("serviceUISettings") } returns true
         every { map.getMap("serviceUISettings") } returns settings
 
@@ -256,6 +262,21 @@ class AgentModeTest {
         every { map.getMap("authentication") } returns auth
 
         assertEquals(EmployeeAuthentication.MobileSDKOAuth, EmployeeAgentModeConfig.fromReadableMap(map)?.authentication)
+    }
+
+    @Test
+    fun `employee config rejects incomplete OAuth maps without missing key exceptions`() {
+        for (fields in listOf(
+            mapOf("source" to "direct", "accessToken" to "oauth"),
+            mapOf("type" to "oauth"),
+            mapOf("type" to "oauth", "source" to "direct"),
+        )) {
+            val auth = mapOf(fields)
+            val values = mapOf(mapOf("instanceUrl" to "https://myorg", "organizationId" to "00D", "userId" to "005"))
+            every { values.hasKey("authentication") } returns true
+            every { values.getMap("authentication") } returns auth
+            assertNull(EmployeeAgentModeConfig.fromReadableMap(values))
+        }
     }
 
     @Test

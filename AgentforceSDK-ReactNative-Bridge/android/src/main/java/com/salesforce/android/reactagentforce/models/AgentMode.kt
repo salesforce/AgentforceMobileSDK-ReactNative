@@ -6,6 +6,10 @@ package com.salesforce.android.reactagentforce.models
 
 import com.facebook.react.bridge.ReadableMap
 
+/** ReadableNativeMap throws for an absent key, even when the return type is nullable. */
+private fun ReadableMap.stringOrNull(key: String): String? =
+    if (hasKey(key)) getString(key) else null
+
 /**
  * Sealed class defining the operating mode for the Agentforce SDK.
  * Mirrors the AgentConfig union type from JavaScript.
@@ -53,9 +57,9 @@ data class ServiceAgentModeConfig(
          * @return ServiceAgentModeConfig if all required fields are present, null otherwise
          */
         fun fromReadableMap(map: ReadableMap): ServiceAgentModeConfig? {
-            val serviceApiURL = map.getString("serviceApiURL") ?: return null
-            val organizationId = map.getString("organizationId") ?: return null
-            val esDeveloperName = map.getString("esDeveloperName") ?: return null
+            val serviceApiURL = map.stringOrNull("serviceApiURL") ?: return null
+            val organizationId = map.stringOrNull("organizationId") ?: return null
+            val esDeveloperName = map.stringOrNull("esDeveloperName") ?: return null
 
             val uiSettings: Map<String, Boolean>? = if (map.hasKey("serviceUISettings")) {
                 map.getMap("serviceUISettings")?.let { settingsMap ->
@@ -143,17 +147,17 @@ data class EmployeeAgentModeConfig(
          * @return EmployeeAgentModeConfig if all required fields are present, null otherwise
          */
         fun fromReadableMap(map: ReadableMap): EmployeeAgentModeConfig? {
-            val instanceUrl = map.getString("instanceUrl") ?: return null
-            val organizationId = map.getString("organizationId") ?: return null
-            val userId = map.getString("userId") ?: return null
-            val accessToken = map.getString("accessToken")
+            val instanceUrl = map.stringOrNull("instanceUrl") ?: return null
+            val organizationId = map.stringOrNull("organizationId") ?: return null
+            val userId = map.stringOrNull("userId") ?: return null
+            val accessToken = map.stringOrNull("accessToken")
             val authentication = if (map.hasKey("authentication")) {
                 if (accessToken != null) return null
                 val auth = map.getMap("authentication") ?: return null
-                when (auth.getString("type") to auth.getString("source")) {
+                when (auth.stringOrNull("type") to auth.stringOrNull("source")) {
                     "oauth" to "salesforceMobileSdk" -> EmployeeAuthentication.MobileSDKOAuth
                     "oauth" to "direct" -> {
-                        val token = auth.getString("accessToken")?.takeIf { it.isNotBlank() } ?: return null
+                        val token = auth.stringOrNull("accessToken")?.takeIf { it.isNotBlank() } ?: return null
                         EmployeeAuthentication.DirectOAuth(token)
                     }
                     else -> return null
@@ -161,14 +165,14 @@ data class EmployeeAgentModeConfig(
             } else {
                 EmployeeAuthentication.Legacy(accessToken ?: return null)
             }
-            val agentId = map.getString("agentId")?.takeIf { it.isNotBlank() }
+            val agentId = map.stringOrNull("agentId")?.takeIf { it.isNotBlank() }
 
             return EmployeeAgentModeConfig(
                 instanceUrl = instanceUrl,
                 organizationId = organizationId,
                 userId = userId,
                 agentId = agentId,
-                agentLabel = if (map.hasKey("agentLabel")) map.getString("agentLabel") else null,
+                agentLabel = map.stringOrNull("agentLabel"),
                 accessToken = accessToken ?: "",
                 authentication = authentication
             )

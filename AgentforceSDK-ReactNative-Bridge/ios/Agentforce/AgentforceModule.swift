@@ -189,6 +189,9 @@ class AgentforceModule: RCTEventEmitter {
             // Skip if the RN bridge has torn this module down (hot reload) so we
             // don't run bridge work or resolve promises into a dead JS runtime.
             guard !isInvalidated else { return }
+            credentialProvider.onCredentialError = { [weak logger = bridgeLogger] error in
+                logger?.log(error.localizedDescription, level: .error)
+            }
             do {
                 switch type {
                 case "service":
@@ -374,6 +377,8 @@ class AgentforceModule: RCTEventEmitter {
         guard let config = EmployeeAgentModeConfig.from(dictionary: configDict) else {
             throw AgentConfigError.missingRequiredField("instanceUrl, organizationId, userId, or authentication")
         }
+        // Reject missing Mobile SDK integration/session before touching the live client.
+        try credentialProvider.validate(employeeAgent: config)
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
         let voiceOptionsSnapshot = Self.voiceOptionsSnapshot(from: configDict)
         let internalFlags = internalFlagsForSDK(configDict)
@@ -429,7 +434,7 @@ class AgentforceModule: RCTEventEmitter {
 
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
-        credentialProvider.configure(employeeAgent: config)
+        try credentialProvider.configure(employeeAgent: config)
         currentMode = .employee(config: config)
 
         // Install a navigation bar builder to override the header title when the
@@ -743,6 +748,7 @@ class AgentforceModule: RCTEventEmitter {
     // within `Task { @MainActor in }`, so the hop is free and the synchronous call stays valid.
     @MainActor
     private func getOrCreateConversation(client: AgentforceClient, mode: AgentMode, forceNew: Bool = false) throws -> AgentConversation {
+        try credentialProvider.validateCredentials()
         // Return existing if available and not forcing new
         if !forceNew, let existing = currentConversation {
             return existing
@@ -1565,6 +1571,13 @@ class AgentforceModule: RCTEventEmitter {
                     "No active conversation. Launch conversation first, then send an utterance.",
                     nil
                 )
+                return
+            }
+
+            do {
+                try credentialProvider.validateCredentials()
+            } catch {
+                reject("AUTH_ERROR", error.localizedDescription, error)
                 return
             }
 

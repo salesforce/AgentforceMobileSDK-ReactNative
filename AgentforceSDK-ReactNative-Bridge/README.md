@@ -135,6 +135,13 @@ on host-managed logout or account switch. `logoutEmployeeAgent()` resets Agentfo
 state before signing out of Mobile SDK. The legacy top-level `accessToken` remains
 supported as a deprecated OAuth alias.
 
+On iOS, the `salesforceMobileSdk` source requires the optional Mobile SDK integration
+and a signed-in session before `configure()`. Missing session credentials reject
+configuration without replacing the existing configuration. If the session disappears
+later, conversation launch and send operations reject with a recoverable error;
+SDK credential callbacks withhold the token and report the error through the logger
+when log forwarding is enabled. Sign in and configure again before retrying.
+
 ### Appearance Customization
 
 Pass an optional serializable `appearance` object to `configure()` to override Agentforce's
