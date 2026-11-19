@@ -27,7 +27,8 @@ final class AgentModeTests: XCTestCase {
                 userId: "005",
                 agentId: nil,
                 agentLabel: nil,
-                accessToken: "tok"
+                accessToken: "tok",
+                authentication: .legacy(accessToken: "tok")
             )
         )
         XCTAssertEqual("service", service.typeString)
@@ -82,6 +83,47 @@ final class AgentModeTests: XCTestCase {
 
     // MARK: - EmployeeAgentModeConfig.from(dictionary:)
 
+    private func identityConfig(
+        _ authentication: EmployeeAuthentication = .directOAuth(accessToken: "old-token"),
+        instanceUrl: String = "https://myorg",
+        organizationId: String = "00D",
+        userId: String = "005"
+    ) -> EmployeeAgentModeConfig {
+        EmployeeAgentModeConfig(
+            instanceUrl: instanceUrl, organizationId: organizationId, userId: userId,
+            agentId: nil, agentLabel: nil, accessToken: "", authentication: authentication
+        )
+    }
+
+    func testTokenOnlyRefreshPreservesEmployeeClientIdentity() {
+        XCTAssertTrue(identityConfig().hasSameIdentity(as: identityConfig(.directOAuth(accessToken: "new-token"))))
+        XCTAssertTrue(
+            identityConfig(.legacy(accessToken: "old-token"))
+                .hasSameIdentity(as: identityConfig(.legacy(accessToken: "new-token")))
+        )
+    }
+
+    func testUserOrgAndInstanceChangesInvalidateEmployeeClientIdentity() {
+        for changed in [
+            identityConfig(instanceUrl: "https://other-org"),
+            identityConfig(organizationId: "other-org-id"),
+            identityConfig(userId: "other-user-id"),
+        ] {
+            XCTAssertFalse(identityConfig().hasSameIdentity(as: changed))
+        }
+    }
+
+    func testEveryAuthenticationSourceTransitionInvalidatesEmployeeClientIdentity() {
+        let sources: [EmployeeAuthentication] = [
+            .legacy(accessToken: "token"), .directOAuth(accessToken: "token"), .mobileSDKOAuth,
+        ]
+        for (previousIndex, previous) in sources.enumerated() {
+            for (nextIndex, next) in sources.enumerated() {
+                XCTAssertEqual(previousIndex == nextIndex, identityConfig(previous).hasSameIdentity(as: identityConfig(next)))
+            }
+        }
+    }
+
     func testEmployeeConfigParsesRequiredFieldsAndAgentId() {
         let config = EmployeeAgentModeConfig.from(dictionary: [
             "instanceUrl": "https://myorg",
@@ -127,12 +169,151 @@ final class AgentModeTests: XCTestCase {
         XCTAssertNil(withoutLabel?.agentLabel)
     }
 
+    func testDirectAgentInfoSeedUsesExplicitAgentAndVoiceSetting() {
+        let config = EmployeeAgentModeConfig.from(dictionary: [
+            "instanceUrl": "https://myorg",
+            "organizationId": "00D",
+            "userId": "005",
+            "accessToken": "tok",
+            "agentId": "0Xa",
+            "agentLabel": "Support Bot",
+        ])
+
+        XCTAssertEqual(
+            DirectAgentInfoSeed(agentId: "0Xa", label: "Support Bot", isVoiceEnabled: true),
+            config?.directAgentInfoSeed(enableVoice: true)
+        )
+        XCTAssertEqual(
+            DirectAgentInfoSeed(agentId: "0Xa", label: "Support Bot", isVoiceEnabled: false),
+            config?.directAgentInfoSeed(enableVoice: false)
+        )
+    }
+
+    func testDirectAgentInfoSeedUsesDefaultLabelForBlankLabel() {
+        let config = EmployeeAgentModeConfig.from(dictionary: [
+            "instanceUrl": "https://myorg",
+            "organizationId": "00D",
+            "userId": "005",
+            "accessToken": "tok",
+            "agentId": "0Xa",
+            "agentLabel": "   ",
+        ])
+
+        XCTAssertEqual(
+            DirectAgentInfoSeed(agentId: "0Xa", label: "Agentforce", isVoiceEnabled: true),
+            config?.directAgentInfoSeed(enableVoice: true)
+        )
+    }
+
+    func testDirectAgentInfoSeedIsNilForMultiAgentConfiguration() {
+        let config = EmployeeAgentModeConfig.from(dictionary: [
+            "instanceUrl": "https://myorg",
+            "organizationId": "00D",
+            "userId": "005",
+            "accessToken": "tok",
+        ])
+
+        XCTAssertNil(config?.directAgentInfoSeed(enableVoice: true))
+    }
+
+    func testClientConfigurationPlanTracksBothVoiceTransitionsAndReuse() throws {
+        let config = try XCTUnwrap(EmployeeAgentModeConfig.from(dictionary: [
+            "instanceUrl": "https://myorg",
+            "organizationId": "00D",
+            "userId": "005",
+            "accessToken": "tok",
+            "agentId": "0Xa",
+            "agentLabel": "Support Bot",
+        ]))
+        let disabled = config.clientConfigurationPlan(
+            enableMultiAgent: true,
+            enableMultiModalInput: true,
+            enablePDFUpload: true,
+            enableVoice: false,
+            userSilenceTimeoutSeconds: nil,
+            autoEndWhileMuted: false,
+            defaultClosedCaptionsEnabled: false,
+            internalFlags: [:]
+        )
+        let enabled = config.clientConfigurationPlan(
+            enableMultiAgent: true,
+            enableMultiModalInput: true,
+            enablePDFUpload: true,
+            enableVoice: true,
+            userSilenceTimeoutSeconds: nil,
+            autoEndWhileMuted: false,
+            defaultClosedCaptionsEnabled: false,
+            internalFlags: [:]
+        )
+
+        XCTAssertTrue(enabled.requiresClientRebuild(comparedTo: disabled))
+        XCTAssertTrue(disabled.requiresClientRebuild(comparedTo: enabled))
+        XCTAssertFalse(enabled.requiresClientRebuild(comparedTo: enabled))
+        XCTAssertEqual(
+            DirectAgentInfoSeed(agentId: "0Xa", label: "Support Bot", isVoiceEnabled: true),
+            enabled.directAgentInfoSeed
+        )
+        XCTAssertEqual(false, disabled.directAgentInfoSeed?.isVoiceEnabled)
+    }
+
+    func testMultiAgentClientConfigurationPlanHasNoDirectAgentSeed() throws {
+        let config = try XCTUnwrap(EmployeeAgentModeConfig.from(dictionary: [
+            "instanceUrl": "https://myorg",
+            "organizationId": "00D",
+            "userId": "005",
+            "accessToken": "tok",
+        ]))
+        let plan = config.clientConfigurationPlan(
+            enableMultiAgent: true,
+            enableMultiModalInput: true,
+            enablePDFUpload: true,
+            enableVoice: true,
+            userSilenceTimeoutSeconds: 30,
+            autoEndWhileMuted: true,
+            defaultClosedCaptionsEnabled: true,
+            internalFlags: ["example": true]
+        )
+
+        XCTAssertTrue(plan.enableMultiAgent)
+        XCTAssertNil(plan.directAgentInfoSeed)
+    }
+
     func testEmployeeConfigIsNilWhenAccessTokenMissing() {
         let config = EmployeeAgentModeConfig.from(dictionary: [
             "instanceUrl": "https://myorg",
             "organizationId": "00D",
             "userId": "005",
             // accessToken missing
+        ])
+        XCTAssertNil(config)
+    }
+
+    func testEmployeeConfigParsesOAuthSources() {
+        var values: [String: Any] = [
+            "instanceUrl": "https://myorg", "organizationId": "00D", "userId": "005",
+            "authentication": ["type": "oauth", "source": "direct", "accessToken": "oauth"],
+        ]
+        XCTAssertEqual(.directOAuth(accessToken: "oauth"), EmployeeAgentModeConfig.from(dictionary: values)?.authentication)
+        values["authentication"] = ["type": "oauth", "source": "salesforceMobileSdk"]
+        XCTAssertEqual(.mobileSDKOAuth, EmployeeAgentModeConfig.from(dictionary: values)?.authentication)
+    }
+
+    func testEmployeeConfigRejectsRemovedOrgJWT() {
+        for source in ["direct", "salesforceMobileSdk"] {
+            XCTAssertNil(EmployeeAgentModeConfig.from(dictionary: [
+                "instanceUrl": "https://myorg", "organizationId": "00D", "userId": "005",
+                "authentication": ["type": "orgJwt", "source": source, "token": "unsupported-token"],
+            ]))
+        }
+    }
+
+    func testEmployeeConfigRejectsAmbiguousAuthentication() {
+        let config = EmployeeAgentModeConfig.from(dictionary: [
+            "instanceUrl": "https://myorg",
+            "organizationId": "00D",
+            "userId": "005",
+            "accessToken": "oauth",
+            "authentication": ["type": "oauth", "source": "direct", "accessToken": "oauth"],
         ])
         XCTAssertNil(config)
     }

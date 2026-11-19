@@ -7,6 +7,7 @@
  */
 
 import { NativeModules, Platform } from 'react-native';
+import AgentforceService from './AgentforceService';
 
 export interface AuthCredentials {
   instanceUrl: string;
@@ -127,5 +128,9 @@ export async function logoutEmployeeAgent(): Promise<void> {
   if (!EmployeeAgentAuthBridge || typeof EmployeeAgentAuthBridge.logout !== 'function') {
     return;
   }
+  // Release the Agentforce client and its cached credentials before Mobile SDK
+  // removes the account. Host apps that sign out outside this wrapper should
+  // call AgentforceService.resetSettings() as part of their logout flow.
+  await AgentforceService.resetSettings();
   await EmployeeAgentAuthBridge.logout();
 }

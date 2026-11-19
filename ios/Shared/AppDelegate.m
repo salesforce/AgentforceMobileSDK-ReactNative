@@ -36,14 +36,12 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
-  self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
   self.launchOptions = launchOptions;
   
   // Initialize React Native bridge in advance (but don't show it yet)
   self.bridge = [[RCTBridge alloc] initWithDelegate:self launchOptions:launchOptions];
   
-  // For Service Agent mode, go directly to React Native (no authentication needed)
-  [self proceedToApp];
+  // SceneDelegate attaches the React Native UI after connecting its window scene.
   
   return YES;
 }

@@ -18,7 +18,15 @@ function loadWith(bridge: Bridge | undefined, os = 'ios') {
   let mod: typeof import('../EmployeeAgentAuth');
   jest.isolateModules(() => {
     jest.doMock('react-native', () => ({
-      NativeModules: bridge ? { EmployeeAgentAuthBridge: bridge } : {},
+      NativeModules: {
+        ...(bridge ? { EmployeeAgentAuthBridge: bridge } : {}),
+        AgentforceModule: { resetSettings: jest.fn().mockResolvedValue({ success: true }) },
+      },
+      NativeEventEmitter: class {
+        addListener() {
+          return { remove: jest.fn() };
+        }
+      },
       Platform: { OS: os },
     }));
     mod = require('../EmployeeAgentAuth');

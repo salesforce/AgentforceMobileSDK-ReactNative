@@ -40,14 +40,12 @@
   // Initialize Salesforce Mobile SDK (required for Employee Agent OAuth)
   [SalesforceReactSDKManager initializeSDK];
 
-  self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
   self.launchOptions = launchOptions;
 
   // Initialize React Native bridge in advance (but don't show it yet)
   self.bridge = [[RCTBridge alloc] initWithDelegate:self launchOptions:launchOptions];
 
-  // Go directly to React Native app
-  [self proceedToApp];
+  // SceneDelegate attaches the React Native UI after connecting its window scene.
 
   return YES;
 }

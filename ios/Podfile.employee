@@ -2,9 +2,12 @@
 # Service Agent deps are a subset; "all" uses this Podfile so both apps share one lock.
 # Used by: node installios.js employee | node installios.js all
 
+monorepo_root = File.expand_path('../../..', __dir__)
+plugin 'cocoapods-art', :sources => ['cocoapods-mobe'] if File.file?(File.join(monorepo_root, 'AgentforceSDK.podspec'))
+
 require_relative 'Podfile.common'
 
-platform :ios, '17.0'
+platform :ios, '18.0'
 prepare_react_native_project!
 use_modular_headers!
 use_frameworks!

@@ -29,7 +29,6 @@ import com.salesforce.android.reactagentforce.AgentforceClientPermissions;
 import com.facebook.react.ReactActivityDelegate;
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactActivityDelegate;
-import com.swmansion.gesturehandler.react.RNGestureHandlerEnabledRootView;
 
 /**
  * Simplified MainActivity for Agentforce Service Agent sample
@@ -47,8 +46,8 @@ public class MainActivity extends ReactActivity {
 	}
 
 	/**
-	 * Returns the instance of the {@link ReactActivityDelegate}. We use a custom delegate
-	 * that wraps the root view in RNGestureHandlerEnabledRootView for proper touch handling.
+	 * Returns the standard React Native activity delegate. Gesture handling is
+	 * configured by GestureHandlerRootView at the JavaScript app root.
 	 */
 	@Override
 	protected ReactActivityDelegate createReactActivityDelegate() {
@@ -56,13 +55,7 @@ public class MainActivity extends ReactActivity {
 			this,
 			getMainComponentName(),
 			DefaultNewArchitectureEntryPoint.getFabricEnabled()
-		) {
-			@Override
-			protected com.facebook.react.ReactRootView createRootView() {
-				RNGestureHandlerEnabledRootView rootView = new RNGestureHandlerEnabledRootView(MainActivity.this);
-				return rootView;
-			}
-		};
+		);
 	}
 
 	/**

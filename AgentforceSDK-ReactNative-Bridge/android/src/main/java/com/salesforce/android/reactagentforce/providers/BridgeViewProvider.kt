@@ -78,9 +78,8 @@ class BridgeViewProvider(
             putString("definition", component.definition)
             component.name?.let { putString("name", it) }
             putBundle("properties", mapToBundle(component.properties))
-            // Access subcomponents via regions.components.components (older SDK structure)
-            val subComponents = component.regions.components?.components
-            if (subComponents != null && subComponents.isNotEmpty()) {
+            val subComponents = component.subComponents
+            if (subComponents.isNotEmpty()) {
                 val subArray = subComponents.map { componentToBundle(it) }.toTypedArray()
                 putParcelableArray("subComponents", subArray)
             }

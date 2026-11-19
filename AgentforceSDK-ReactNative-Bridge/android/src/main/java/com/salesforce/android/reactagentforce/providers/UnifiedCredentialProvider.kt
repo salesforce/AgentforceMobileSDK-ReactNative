@@ -9,6 +9,7 @@ import com.salesforce.android.agentforceservice.AgentforceAuthCredentialProvider
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentials
 import com.salesforce.android.reactagentforce.models.AgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
+import com.salesforce.android.reactagentforce.models.EmployeeAuthentication
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
 import com.salesforce.androidsdk.app.SalesforceSDKManager
 
@@ -52,7 +53,11 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
      */
     fun configure(employeeAgent: EmployeeAgentModeConfig) {
         this.mode = AgentMode.Employee(employeeAgent)
-        this.directToken = employeeAgent.accessToken
+        this.directToken = when (val auth = employeeAgent.authentication) {
+            is EmployeeAuthentication.DirectOAuth -> auth.accessToken
+            is EmployeeAuthentication.Legacy -> auth.accessToken
+            EmployeeAuthentication.MobileSDKOAuth -> null
+        }
         this.directOrgId = employeeAgent.organizationId
         this.directUserId = employeeAgent.userId
 
@@ -73,8 +78,26 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
             }
             
             is AgentMode.Employee -> {
-                // Employee Agent uses OAuth with REAL token
-                // Get fresh credentials from Mobile SDK each time (Mobile SDK handles refresh internally)
+                when (val auth = currentMode.config.authentication) {
+                    is EmployeeAuthentication.DirectOAuth -> AgentforceAuthCredentials.OAuth(
+                        authToken = directToken ?: auth.accessToken,
+                        orgId = currentMode.config.organizationId,
+                        userId = currentMode.config.userId
+                    )
+                    EmployeeAuthentication.MobileSDKOAuth -> mobileSDKCredentials()
+                        ?: throw IllegalStateException("Mobile SDK OAuth session is unavailable")
+                    is EmployeeAuthentication.Legacy -> mobileSDKCredentials()
+                        ?: AgentforceAuthCredentials.OAuth(
+                            authToken = directToken ?: auth.accessToken,
+                            orgId = currentMode.config.organizationId,
+                            userId = currentMode.config.userId
+                        )
+                }
+            }
+        }
+    }
+
+    private fun mobileSDKCredentials(): AgentforceAuthCredentials.OAuth? {
                 try {
                     val currentUser = SalesforceSDKManager.getInstance()
                         ?.userAccountManager?.currentUser
@@ -96,16 +119,7 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
                     Log.w(TAG, "Failed to get fresh credentials from Mobile SDK, falling back to cached", e)
                 }
 
-                // Fallback to cached token if Mobile SDK not available
-                val token = directToken
-                    ?: throw IllegalStateException("Employee Agent mode requires either Mobile SDK or cached token")
-                AgentforceAuthCredentials.OAuth(
-                    authToken = token,
-                    orgId = directOrgId ?: currentMode.config.organizationId,
-                    userId = directUserId ?: currentMode.config.userId
-                )
-            }
-        }
+                return null
     }
     
     /**
@@ -119,7 +133,7 @@ class UnifiedCredentialProvider : AgentforceAuthCredentialProvider {
         }
         this.directToken = newToken
     }
-    
+
     /** Check if currently in Employee Agent mode */
     val isEmployeeAgent: Boolean
         get() = mode is AgentMode.Employee

@@ -1,61 +1,40 @@
-# Patches
+# React Native 0.77 patches
 
-This directory contains patches for fixing warnings in the react-native-gradle-plugin that are treated as errors when building the Android app.
+`react-native+0.77.3.patch` is applied by `patch-package` during npm setup.
+It preserves the existing Hermes download validation and uses Homebrew Boost
+headers while retaining React Native 0.77's Boost privacy resource.
 
-## Applied Patches
+The Boost podspec creates its Homebrew header link during `prepare_command`,
+before CocoaPods indexes source files. The Podfile's `post_install` hook must
+preserve that tree so CocoaPods can still lock its cached header and privacy
+resource paths afterward. Replacing it with another Boost version can remove
+headers such as `bind/bind_cc.hpp` and cause `pod install` to fail.
 
-### libs.versions.toml.patch
+Existing Pods directories produced by the old flattening hook are repaired during
+`pre_install`: CocoaPods restores the pinned Boost source and privacy resource
+before generating header maps. This fixes missing Boost includes on incremental
+developer builds without changing Homebrew headers or discarding other pods.
 
-Fixes Kotlin and AGP version mismatches between the project and react-native-gradle-plugin.
+Run the offline regression check with CocoaPods installed:
 
-**Changes**:
+```bash
+ruby scripts/tests/boost_post_install_test.rb
+```
 
-- Updates Kotlin from 1.9.22 to 2.2.0 to match project requirements
-- Updates Android Gradle Plugin (AGP) from 8.2.1 to 8.9.1 to match project configuration
+React Native 0.77 pins fmt 11.0.2. The shared Podfile pre-install hook adjusts
+that version's compiler detection for Apple Clang 21+, avoiding its `consteval`
+compilation errors while retaining C++20. The adjustment applies to the fmt
+header so dependent pods see the same configuration; fmt 11.0.2 overwrites
+command-line `FMT_USE_CONSTEVAL` definitions. Other fmt versions are untouched.
+Remove the adjustment when upgrading to a compatible fmt release.
 
-This prevents the error: "Found interface org.jetbrains.kotlin.gradle.dsl.KotlinTopLevelExtension, but class was expected"
+```bash
+ruby scripts/tests/fmt_compatibility_test.rb
+```
 
-### build.gradle.kts.patch
+The npm postinstall step and `installandroid.js` align the React Native Gradle
+plugin's AGP and Kotlin versions with this app. React Native 0.77 already uses the
+`compilerOptions` DSL and no longer needs the older Gradle source patches.
 
-Migrates the react-native-gradle-plugin build script to use Kotlin 2.2.0's new `compilerOptions` DSL.
-
-**Changes**:
-
-- Replaces deprecated `kotlinOptions` with `compilerOptions`
-- Migrates `apiVersion`, `jvmTarget`, and `allWarningsAsErrors` to the new DSL syntax
-- Disables `allWarningsAsErrors` to prevent build failures from deprecation warnings
-
-This fixes the error: "Using 'kotlinOptions' is an error. Please migrate to the compilerOptions DSL."
-
-### settings-plugin-build.gradle.kts.patch
-
-Migrates the settings-plugin build script to use Kotlin 2.2.0's new `compilerOptions` DSL (same fix as build.gradle.kts.patch but for the settings-plugin).
-
-### ReactPlugin.kt.patch
-
-Fixes the Kotlin warning: "Unnecessary safe call on a non-null receiver of type Jvm!"
-
-**Change**: Removes unnecessary safe call operator on `Jvm.current()` (which is non-null)
-
-- Before: `Jvm.current()?.javaVersion?.majorVersion`
-- After: `Jvm.current().javaVersion?.majorVersion`
-
-### BundleHermesCTask.kt.patch
-
-Fixes the Kotlin warning: "'exec(Action<in ExecSpec!>!): ExecResult!' is deprecated"
-
-**Change**: Adds `@Suppress("DEPRECATION")` annotation to the `runCommand` function to suppress the deprecation warning
-
-## How Patches Are Applied
-
-Patches are automatically applied during the Android installation process (`npm run install:android`).
-
-The `installandroid.js` script applies these patches after running `npm install` but before building the SDK dependencies.
-
-## Updating Patches
-
-If you need to update a patch:
-
-1. Edit the `.patch` file in this directory
-2. Follow the unified diff format
-3. Test by running `npm run install:android` in a clean environment
+When changing React Native versions, regenerate the versioned patch from a clean
+package installation and rerun the Android and iOS setup flows.

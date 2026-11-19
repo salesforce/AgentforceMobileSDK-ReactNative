@@ -39,7 +39,9 @@ import com.salesforce.android.agentforceservice.voice.AgentforceVoiceSessionOpti
 import kotlin.time.Duration.Companion.seconds
 import com.salesforce.android.reactagentforce.models.AgentMode as LocalAgentMode
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
+import com.salesforce.android.reactagentforce.models.EmployeeClientConfigurationPlan
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
+import com.salesforce.android.reactagentforce.models.VoiceOptionsSnapshot
 import com.salesforce.android.reactagentforce.providers.BridgeSplashScreenBuilder
 import com.salesforce.android.reactagentforce.providers.BridgeViewProvider
 import com.salesforce.android.reactagentforce.providers.UnifiedCredentialProvider
@@ -128,10 +130,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     // Defaults to all-off (`AgentforceVoiceSessionOptions()`).
     private var voiceSessionOptions: AgentforceVoiceSessionOptions = AgentforceVoiceSessionOptions()
 
-    // Normalized voice options applied to the currently-live client. Compared against a fresh
-    // snapshot on reconfigure so a voice-options change forces a new client (the SDK reads voice
-    // options only at client creation). `null` when no client is live. Mirrors the iOS bridge.
-    private var appliedVoiceOptions: VoiceOptionsSnapshot? = null
+    // Resolved creation-time settings applied to the currently-live Employee client.
+    // A repeated configure call may reuse the client only when this plan is unchanged.
+    private var appliedEmployeeConfiguration: EmployeeClientConfigurationPlan? = null
 
     // Coroutine scope for async operations
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -198,6 +199,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             promise.reject("CONFIG_ERROR", e.message, e)
             return
         }
+
         
         Log.d(TAG, "Configuring Service Agent - Org: ${serviceConfig.organizationId}")
         
@@ -218,6 +220,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             // "Method recordObserver must be called on the main thread" error
             AgentforceConversationOverlay.destroy()
             AgentforceClientHolder.clear()
+            appliedEmployeeConfiguration = null
             try {
                 // Build ServiceUISettings from JS config (use SDK defaults for omitted keys)
                 val uiSettings = serviceConfig.serviceUISettings?.let { raw ->
@@ -327,13 +330,14 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
         Log.d(TAG, "Configuring Employee Agent - Org: ${employeeConfig.organizationId}, User: ${employeeConfig.userId}")
 
-        // Rebuild the client only when switching from Service mode, the agentId changed, or no
-        // client exists yet (mirrors iOS's needsNewClient). Otherwise reuse it: rebuilding while
-        // preserving the conversation orphans that conversation on the old client and breaks
-        // re-launch with a 404. See [[project_rn_android_bootstrap_fix]].
+        // Account/source, agent, and creation-time settings determine whether the client can
+        // be reused. Token rotation updates the shared provider without closing the conversation.
         val currentEmployeeMode = currentMode as? LocalAgentMode.Employee
         val switchingModes = AgentforceClientHolder.isServiceAgent
         val agentIdChanged = currentEmployeeMode?.config?.agentId != employeeConfig.agentId
+        val identityChanged = currentEmployeeMode?.config?.let { previous ->
+            !previous.hasSameIdentityAs(employeeConfig)
+        } ?: false
 
         // Cross-activity re-launch: reuse is only safe while the overlay is still attached to the
         // SAME host Activity, because the SDK scopes its conversation ViewModel + one-shot bootstrap
@@ -350,32 +354,38 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             activity != null &&
             !AgentforceConversationOverlay.isAttachedTo(activity)
 
-        // A live client only reads its voice options at creation, so a change to them must force a
-        // rebuild. Only meaningful when a client already exists. Mirrors the iOS bridge.
+        // Resolve every creation-time setting before deciding whether the live client is reusable.
         val currentVoiceOptions = voiceOptionsSnapshot(config)
-        val voiceOptionsChanged = AgentforceClientHolder.agentforceClient != null &&
-            appliedVoiceOptions != currentVoiceOptions
+        val flags = getFeatureFlagsFromConfigOrPrefs(config)
+        val currentClientConfiguration = employeeConfig.clientConfigurationPlan(
+            requestedEnableMultiAgent = flags.enableMultiAgent,
+            enableMultiModalInput = flags.enableMultiModalInput,
+            enablePDFUpload = flags.enablePDFUpload,
+            enableVoice = flags.enableVoice,
+            voiceOptions = currentVoiceOptions,
+            internalFlags = internalFlagsForSDK(config)
+        )
+        val clientConfigurationChanged = AgentforceClientHolder.agentforceClient != null &&
+            currentClientConfiguration.requiresClientRebuild(appliedEmployeeConfiguration)
 
-        val needsNewClient = switchingModes || agentIdChanged || voiceOptionsChanged ||
+        val needsNewClient = switchingModes || agentIdChanged || identityChanged || clientConfigurationChanged ||
             AgentforceClientHolder.agentforceClient == null || activityChanged
 
         if (activityChanged) {
             Log.d(TAG, "Host Activity changed since last attach - forcing fresh client to avoid re-launch hang")
         }
-        if (voiceOptionsChanged) {
-            Log.d(TAG, "Voice options changed - forcing fresh client to apply them")
+        if (clientConfigurationChanged) {
+            Log.d(TAG, "Client configuration changed - forcing fresh client to apply it")
         }
 
         // Configure unified credential provider for Employee Agent mode
         // UnifiedCredentialProvider will fetch fresh tokens from Mobile SDK automatically
-        credentialProvider.configure(employeeConfig)
-        currentMode = LocalAgentMode.Employee(employeeConfig)
-
-        // Persist employee agentId (editable in Settings tab)
-        employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
-
         scope.launch(Dispatchers.Main) {
-            val flags = getFeatureFlagsFromConfigOrPrefs(config)
+            credentialProvider.configure(employeeConfig)
+            currentMode = LocalAgentMode.Employee(employeeConfig)
+            // Persist employee agentId (editable in Settings tab)
+            employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, employeeConfig.agentId ?: "").apply()
+
             saveFeatureFlagsToPrefs(flags)
 
             if (!needsNewClient) {
@@ -392,31 +402,34 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
             // Tear down the previous overlay/client/conversation before building a fresh one, so
             // launchConversation() recreates a conversation paired with the new client.
-            Log.d(TAG, "Switching modes or agentId changed - clearing client and conversation")
+            Log.d(TAG, "Client identity or configuration changed - clearing client and conversation")
             AgentforceConversationOverlay.destroy()
             AgentforceClientHolder.clear()
+            appliedEmployeeConfiguration = null
             try {
                 // Create AgentforceConfiguration for FullConfig mode
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
-                    .enableMultiAgent(flags.enableMultiAgent)
-                    .enableMultiModalInput(flags.enableMultiModalInput)
-                    .enablePDFUpload(flags.enablePDFUpload)
-                    .enableVoice(flags.enableVoice)
+                    .enableMultiAgent(currentClientConfiguration.enableMultiAgent)
+                    .enableMultiModalInput(currentClientConfiguration.enableMultiModalInput)
+                    .enablePDFUpload(currentClientConfiguration.enablePDFUpload)
+                    .enableVoice(currentClientConfiguration.enableVoice)
                     // Speech-to-text (dictation) is not working as intended on Android, so
                     // keep it disabled regardless of the SDK default (which is true).
                     .enableSpeechToText(false)
-                    .setupFlags(internalFlagsForSDK(config))
+                    .setupFlags(currentClientConfiguration.internalFlags)
                     .build()
 
                 val cameraUriProvider = AgentforceClientCameraUriProvider(reactApplicationContext.applicationContext)
                 val permissions = AgentforceClientPermissions(application)
 
-                // Employee Agent uses BridgeNetwork with RestClient for authenticated requests
-                val restClient = SalesforceSDKManager.getInstance().clientManager.peekRestClient()
-                if (restClient == null) {
-                    Log.w(TAG, "RestClient is null - user may not be logged in. Record rendering may fail.")
+                // Mobile SDK OAuth uses RestClient for authenticated Salesforce API calls.
+                val network = if (employeeConfig.authentication.usesMobileSDKNetwork) {
+                    val restClient = SalesforceSDKManager.getInstance().clientManager.peekRestClient()
+                    restClient?.let { BridgeNetwork(it) }
+                        ?: AgentforceNetworkImpl(credentialProvider, employeeConfig.instanceUrl)
+                } else {
+                    AgentforceNetworkImpl(credentialProvider, employeeConfig.instanceUrl)
                 }
-                val network = restClient?.let { BridgeNetwork(it) } ?: AgentforceNetworkImpl()
                 val dataProvider = AgentforceDataProviderImpl(network)
 
                 val agentforceConfigBuilder = AgentforceConfiguration
@@ -428,11 +441,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setCameraUriProvider(cameraUriProvider)
                     .setLogger(bridgeLogger)
                     .setNavigation(bridgeNavigation)
-                    // Route bootstrap (BotsAPI connect calls) through the authenticated
-                    // RestClient-backed network, matching the iOS bridge (which passes
-                    // salesforceNetwork). Without this, the SDK falls back to a default
-                    // AgentforceNetworkImpl() with no salesforceDomain, so the bootstrap
-                    // connect call 404s and the client never gets connectionInfo.
+                    // Route bootstrap and record data through the network chosen above.
                     .setNetwork(network)
                     .setDataProvider(dataProvider)
                     // Set the User/Org so the SDK knows the orgId. The SDK derives the
@@ -484,7 +493,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 
                 AgentforceClientHolder.setClient(client)
                 AgentforceClientHolder.setMode(LocalAgentMode.Employee(employeeConfig))
-                appliedVoiceOptions = currentVoiceOptions
+                appliedEmployeeConfiguration = currentClientConfiguration
 
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("success", true)
@@ -797,12 +806,6 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
      * so cosmetic differences in the raw JS payload don't spuriously rebuild the
      * client. Mirrors the iOS bridge's VoiceOptionsSnapshot.
      */
-    private data class VoiceOptionsSnapshot(
-        val userSilenceTimeoutSeconds: Double?,
-        val autoEndWhileMuted: Boolean,
-        val defaultClosedCaptionsEnabled: Boolean,
-    )
-
     private fun voiceOptionsSnapshot(config: ReadableMap): VoiceOptionsSnapshot {
         if (!config.hasKey("voiceOptions")) return VoiceOptionsSnapshot(null, false, false)
         val voiceOpts = config.getMap("voiceOptions") ?: return VoiceOptionsSnapshot(null, false, false)
@@ -1164,7 +1167,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             AgentforceClientHolder.clear()
             viewModel?.resetConfiguration()
             currentMode = null
-            appliedVoiceOptions = null
+            appliedEmployeeConfiguration = null
             credentialProvider.reset()
             bridgeViewProvider.reset()
             bridgeSplashScreenBuilder.reset()

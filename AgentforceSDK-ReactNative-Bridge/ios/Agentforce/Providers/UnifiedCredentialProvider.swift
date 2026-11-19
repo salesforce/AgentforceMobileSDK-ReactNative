@@ -5,19 +5,29 @@
  */
 
 import Foundation
-import AgentforceSDK
+#if canImport(AgentforceService)
 import AgentforceService
-import SalesforceUser
+#endif
 
 #if canImport(SalesforceSDKCore)
 import SalesforceSDKCore
 #endif
 
-/// Unified credential provider that handles both Service Agent and Employee Agent modes.
-/// Returns .OAuth credentials for both modes:
-/// - Service Agent: empty token and userId (guest access)
-/// - Employee Agent: real token and userId (authenticated access)
-class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
+/// Credentials read together from one authentication source.
+struct OAuthCredentialSnapshot: Equatable {
+    let authToken: String
+    let orgId: String
+    let userId: String
+
+    var isUsable: Bool {
+        [authToken, orgId, userId].allSatisfy {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+}
+
+/// Resolves guest or Employee OAuth credentials and validates required Mobile SDK sessions.
+class UnifiedCredentialProvider {
     
     // MARK: - Properties
 
@@ -28,11 +38,16 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
     private var directToken: String?
     private var directOrgId: String?
     private var directUserId: String?
+
+    private let loadMobileSDKCredentials: () -> OAuthCredentialSnapshot?
+
+    /// Reports failures from SDK callbacks, whose synchronous protocol cannot throw.
+    var onCredentialError: ((Error) -> Void)?
     
     // MARK: - Initialization
     
-    init() {
-        // Starts unconfigured
+    init(mobileSDKCredentials: (() -> OAuthCredentialSnapshot?)? = nil) {
+        self.loadMobileSDKCredentials = mobileSDKCredentials ?? Self.currentMobileSDKCredentials
     }
     
     // MARK: - Configuration
@@ -49,57 +64,93 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
 
     /// Configure for Employee Agent mode
     /// - Parameter config: Employee Agent configuration
-    func configure(employeeAgent config: EmployeeAgentModeConfig) {
+    func configure(employeeAgent config: EmployeeAgentModeConfig) throws {
+        // Validate before changing mode or replacing credentials on an existing client.
+        try validate(employeeAgent: config)
         self.mode = .employee(config: config)
-        self.directToken = config.accessToken
+        switch config.authentication {
+        case .directOAuth(let token): self.directToken = token
+        case .legacy(let token): self.directToken = token
+        case .mobileSDKOAuth: self.directToken = nil
+        }
         self.directOrgId = config.organizationId
         self.directUserId = config.userId
 
     }
     
-    // MARK: - AgentforceAuthCredentialProviding
+    // MARK: - Credential Resolution
 
-    func getAuthCredentials() -> AgentforceAuthCredentials {
+    func validate(employeeAgent config: EmployeeAgentModeConfig) throws {
+        if case .mobileSDKOAuth = config.authentication, mobileSDKCredentials() == nil {
+            throw AgentConfigError.mobileSDKSessionUnavailable
+        }
+    }
+
+    func validateCredentials() throws {
+        _ = try resolvedCredentials()
+    }
+
+    func resolvedCredentials() throws -> OAuthCredentialSnapshot {
         guard let mode = mode else {
-            fatalError("UnifiedCredentialProvider not configured. Call configure() first.")
+            throw AgentConfigError.notConfigured
         }
 
         switch mode {
         case .service(let config):
             // Service Agent uses OAuth with EMPTY token (guest access)
-            return .OAuth(
+            return OAuthCredentialSnapshot(
                 authToken: "",
                 orgId: config.organizationId,
                 userId: ""
             )
 
         case .employee(let config):
-            // Employee Agent uses OAuth with REAL token
-            // Get fresh credentials from Mobile SDK each time (Mobile SDK handles refresh internally)
-            #if canImport(SalesforceSDKCore)
-            if let currentUser = UserAccountManager.shared.currentUserAccount,
-               let accessToken = currentUser.credentials.accessToken,
-               let orgId = currentUser.credentials.organizationId,
-               let userId = currentUser.credentials.userId {
-                return .OAuth(
-                    authToken: accessToken,
-                    orgId: orgId,
-                    userId: userId
-                )
-            }
-            #endif
-
-            // Fallback to cached token if Mobile SDK not available
-            if let token = directToken {
-                return .OAuth(
-                    authToken: token,
-                    orgId: directOrgId ?? config.organizationId,
-                    userId: directUserId ?? config.userId
-                )
-            } else {
-                fatalError("Employee Agent mode requires either Mobile SDK or cached token")
+            switch config.authentication {
+            case .directOAuth(let token):
+                return OAuthCredentialSnapshot(authToken: directToken ?? token, orgId: config.organizationId, userId: config.userId)
+            case .mobileSDKOAuth:
+                guard let credentials = mobileSDKCredentials() else {
+                    throw AgentConfigError.mobileSDKSessionUnavailable
+                }
+                return credentials
+            case .legacy:
+                if let credentials = mobileSDKCredentials() { return credentials }
+                guard let token = directToken else { throw AgentConfigError.tokenRequired }
+                return OAuthCredentialSnapshot(authToken: token, orgId: config.organizationId, userId: config.userId)
             }
         }
+    }
+
+    /// SDK callbacks have no error return. Withhold the token after session loss;
+    /// never reuse a previously read Mobile SDK token or terminate the host process.
+    func credentialsForSDK() -> OAuthCredentialSnapshot {
+        do {
+            return try resolvedCredentials()
+        } catch {
+            onCredentialError?(error)
+            return OAuthCredentialSnapshot(authToken: "", orgId: directOrgId ?? "", userId: directUserId ?? "")
+        }
+    }
+
+    private func mobileSDKCredentials() -> OAuthCredentialSnapshot? {
+        guard let credentials = loadMobileSDKCredentials(), credentials.isUsable else { return nil }
+        return credentials
+    }
+
+    private static func currentMobileSDKCredentials() -> OAuthCredentialSnapshot? {
+        #if canImport(SalesforceSDKCore)
+        if let currentUser = UserAccountManager.shared.currentUserAccount,
+           let accessToken = currentUser.credentials.accessToken,
+           let orgId = currentUser.credentials.organizationId,
+           let userId = currentUser.credentials.userId {
+            return OAuthCredentialSnapshot(
+                authToken: accessToken,
+                orgId: orgId,
+                userId: userId
+            )
+        }
+        #endif
+        return nil
     }
     
     // MARK: - Token Management (Employee Agent only)
@@ -159,3 +210,13 @@ class UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
         directUserId = nil
     }
 }
+
+// Keep SDK adaptation separate from the credential resolution and validation logic.
+#if canImport(AgentforceService)
+extension UnifiedCredentialProvider: AgentforceAuthCredentialProviding {
+    func getAuthCredentials() -> AgentforceAuthCredentials {
+        let credentials = credentialsForSDK()
+        return .OAuth(authToken: credentials.authToken, orgId: credentials.orgId, userId: credentials.userId)
+    }
+}
+#endif

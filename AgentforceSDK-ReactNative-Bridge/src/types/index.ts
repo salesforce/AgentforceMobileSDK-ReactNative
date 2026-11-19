@@ -9,6 +9,7 @@ export {
   ServiceAgentConfig,
   ServiceUISettings,
   EmployeeAgentConfig,
+  EmployeeAuthentication,
   AgentConfig,
   FeatureFlags,
   InternalFlags,
@@ -17,6 +18,7 @@ export {
   ConfigurationInfo,
   isServiceAgentConfig,
   isEmployeeAgentConfig,
+  validateEmployeeAuthentication,
   isLegacyConfig,
 } from './AgentConfig';
 

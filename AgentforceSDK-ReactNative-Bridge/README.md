@@ -1,6 +1,6 @@
 # Agentforce React Native Bridge
 
-This directory contains the Agentforce bridge module: JavaScript API layer, sample app, and native iOS/Android code. It has **no Mobile SDK dependency**; a host app that adds the Mobile SDK can use the included auth bridge for Employee Agent.
+This directory contains the Agentforce bridge module: JavaScript API layer, sample app, and native iOS/Android code. Salesforce Mobile SDK is optional when the host supplies Employee Agent credentials directly.
 
 ## Installation
 
@@ -20,12 +20,57 @@ In your app’s `Podfile`:
 pod 'ReactNativeAgentforce', :path => '../node_modules/@salesforce/react-native-agentforce/ios'
 ```
 
-Your app must also include the Agentforce iOS SDK in the Podfile so the bridge can link. For **Employee Agent**, the host app must additionally include the Salesforce Mobile SDK and perform bootconfig + SDK initialization.
+Your app must also include the Agentforce iOS SDK in the Podfile so the bridge can link. For Mobile SDK sourced Employee Agent credentials, include Salesforce Mobile SDK and perform bootconfig + SDK initialization.
+
+### iOS (SwiftPM experimental)
+
+The npm package also ships `ios/Package.swift` for React Native's experimental
+SwiftPM integration (introduced in React Native 0.87). The manifest uses the
+Agentforce iOS `264.1.0` release, which selects its SwiftPM-specific SDK,
+Service, and Voice XCFrameworks. Set the consuming app's iOS deployment target
+to 17 or later before opting into React Native's SwiftPM integration. The React
+Native 0.77.3 sample app in this repository continues to use CocoaPods.
+
+The SwiftPM product currently supports Service Agent and host-supplied Employee
+Agent credentials. Salesforce Mobile SDK sourced Employee Agent credentials
+remain on the CocoaPods path; the SwiftPM product does not link
+`SalesforceSDKCore`.
+
+React Native 0.87.1 generates an autolinked aggregate package targeting iOS 15,
+which cannot depend on this iOS 17 bridge even when the app targets iOS 17.
+If your app must use SwiftPM with React Native 0.87.1, set its iOS deployment
+target to 17 or later and patch the installed React Native generator at
+`node_modules/react-native/scripts/spm/generate-spm-autolinking.js`:
+
+```diff
+-    platforms: [.iOS(.v15)],
++    platforms: [.iOS(.v17)],
+```
+
+Change the `platforms` line inside `generateAutolinkedPackageSwift`, which
+generates the top-level `Autolinked` package. Do not edit the generated
+`ios/build/generated/autolinking/Package.swift` directly; React Native
+regenerates it. Keep the generator edit in your app's package-manager patch
+mechanism so dependency reinstalls preserve it. After applying the patch, run
+`npx react-native spm update` in an already integrated app, or run the normal
+SwiftPM integration command for a new app. Confirm that the generated
+`Autolinked` manifest declares iOS 17 before building. This workaround passed
+a clean iOS simulator app build with React Native 0.87.1, but has not had a
+runtime bridge smoke test. Installing this bridge does not apply the patch.
+Alternatively, use CocoaPods with 0.87.1 or a React Native release whose
+SwiftPM generator reads the app's iOS deployment target.
+
+A clean iOS simulator app build passed with React Native `0.88.0-rc.4`, this
+bridge installed from its npm tarball, and no React Native patch. That release
+candidate includes the [deployment-target generator fix](https://github.com/react/react-native/commit/92564f33fdaa8f0e9968712863e7e00f7073cdf7).
+SwiftPM remains experimental until a stable React Native release and a runtime
+bridge smoke test are validated. CocoaPods remains the supported installation
+path in the meantime.
 
 ### Android
 
 - Link the Android library and register `AgentforcePackage` in your app.
-- For **Employee Agent** (see below), the host app must add the Salesforce React dependency and bootconfig + SDK init.
+- For Mobile SDK sourced Employee Agent credentials (see below), the host app must add the Salesforce React dependency and bootconfig + SDK init.
 
 ### JavaScript
 
@@ -41,7 +86,7 @@ Use the sample app in `app/` as reference or replace with your own UI.
 
 ## Employee Agent: host app requirements
 
-For **Employee Agent** (authenticated) mode, the host app must provide the Salesforce Mobile SDK and initialize it. This bridge does not bundle the SDK.
+For **Employee Agent** with `source: 'salesforceMobileSdk'`, the host app must provide and initialize Salesforce Mobile SDK. Direct OAuth uses credentials supplied by the host app.
 
 ### Android
 
@@ -51,15 +96,54 @@ Add the Salesforce React dependency in your app’s `build.gradle` (e.g. `app/bu
 implementation "com.salesforce.mobilesdk:SalesforceReact:13.1.1"
 ```
 
-You must also configure **bootconfig** and perform **SDK initialization** (e.g. via react-native-force or your existing Salesforce Mobile SDK setup). Without these, Employee Agent auth will not work.
+You must also configure **bootconfig** and perform **SDK initialization** (e.g. via react-native-force or your existing Salesforce Mobile SDK setup). Without these, Mobile SDK sourced Employee Agent auth will not work.
 
 ### iOS
 
-Include the Salesforce Mobile SDK pods in your Podfile and perform **bootconfig** and **SDK initialization** as required for your app. The bridge’s Employee Agent auth layer relies on the SDK being initialized at runtime.
+Include the Salesforce Mobile SDK pods in your Podfile and perform **bootconfig** and **SDK initialization** as required for your app when using the Mobile SDK auth source.
 
 ---
 
 ## API Reference
+
+### Employee Agent authentication
+
+Employee Agent supports OAuth through Salesforce Mobile SDK or a host-managed token:
+
+```ts
+{ type: 'oauth', source: 'salesforceMobileSdk' }
+{ type: 'oauth', source: 'direct', accessToken: string }
+```
+
+After Mobile SDK sign-in, configure the bridge with the account identity:
+
+```ts
+const account = await loginForEmployeeAgent();
+await AgentforceService.configure({
+  type: 'employee',
+  instanceUrl: account.instanceUrl,
+  organizationId: account.organizationId,
+  userId: account.userId,
+  authentication: { type: 'oauth', source: 'salesforceMobileSdk' },
+});
+```
+
+For a host-managed OAuth flow, supply the access token with
+`{ type: 'oauth', source: 'direct', accessToken }` and reconfigure when it changes.
+Reconfiguring with only a refreshed token preserves the existing client and
+conversation history. Changes to the user, organization, instance URL, authentication
+source, agent, or creation-time settings can still rebuild the client.
+Keep tokens in memory and omit them from logs. Call `AgentforceService.resetSettings()`
+on host-managed logout or account switch. `logoutEmployeeAgent()` resets Agentforce
+state before signing out of Mobile SDK. The legacy top-level `accessToken` remains
+supported as a deprecated OAuth alias.
+
+On iOS, the `salesforceMobileSdk` source requires the optional Mobile SDK integration
+and a signed-in session before `configure()`. Missing session credentials reject
+configuration without replacing the existing configuration. If the session disappears
+later, conversation launch and send operations reject with a recoverable error;
+SDK credential callbacks withhold the token and report the error through the logger
+when log forwarding is enabled. Sign in and configure again before retrying.
 
 ### Appearance Customization
 
@@ -227,6 +311,9 @@ async function registerAgentforceViews() {
 
 The component receives `definition` and `properties` props. If the app already
 sets a root view style provider, add the conditional styling to that provider.
+
+The React Native 0.77.3 sample uses a legacy `RCTBridge`, so it keeps
+using the existing `RCTRootView` path without factory registration.
 
 ### Custom Splash Screen
 

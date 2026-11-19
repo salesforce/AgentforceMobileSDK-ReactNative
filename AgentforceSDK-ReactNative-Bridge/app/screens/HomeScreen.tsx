@@ -138,7 +138,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               organizationId: creds.organizationId,
               userId: creds.userId,
               agentId: agentId || undefined,
-              accessToken: creds.accessToken,
+              authentication: { type: 'oauth' as const, source: 'salesforceMobileSdk' as const },
             }
           : { ...EMPLOYEE_AGENT_CONFIG, agentId: agentId || undefined };
         await AgentforceService.configure(config);

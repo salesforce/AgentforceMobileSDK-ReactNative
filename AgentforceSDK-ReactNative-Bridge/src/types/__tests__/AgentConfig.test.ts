@@ -5,6 +5,7 @@ import {
   ServiceAgentConfig,
   EmployeeAgentConfig,
   LegacyServiceAgentConfig,
+  validateEmployeeAuthentication,
 } from '../AgentConfig';
 import type { AgentforceAppearance } from '../AgentforceAppearance';
 
@@ -93,5 +94,43 @@ describe('AgentConfig type guards', () => {
       type: 'generic',
       family: 'serif',
     });
+  });
+});
+
+describe('employee authentication contract', () => {
+  const base = { ...employeeConfig, accessToken: undefined };
+
+  it.each([
+    { type: 'oauth', source: 'salesforceMobileSdk' },
+    { type: 'oauth', source: 'direct', accessToken: 'oauth-token' },
+  ])('accepts $type from $source', authentication => {
+    expect(() =>
+      validateEmployeeAuthentication({ ...base, authentication } as unknown as EmployeeAgentConfig),
+    ).not.toThrow();
+  });
+
+  it('keeps the legacy accessToken shape', () => {
+    expect(() => validateEmployeeAuthentication(employeeConfig)).not.toThrow();
+  });
+
+  it.each([
+    { type: 'orgJwt', source: 'direct', token: 'unsupported-token' },
+    { type: 'oauth', source: 'direct', accessToken: ' ' },
+    { type: 'orgJwt', source: 'salesforceMobileSdk' },
+    { type: 'oauth', source: 'direct', accessToken: 'oauth', token: 'unexpected' },
+    { type: 'other', source: 'direct', token: 'token' },
+  ])('rejects invalid authentication %#', authentication => {
+    expect(() =>
+      validateEmployeeAuthentication({ ...base, authentication } as unknown as EmployeeAgentConfig),
+    ).toThrow('INVALID_CONFIG');
+  });
+
+  it('rejects the explicit and legacy shapes together', () => {
+    expect(() =>
+      validateEmployeeAuthentication({
+        ...employeeConfig,
+        authentication: { type: 'oauth', source: 'direct', accessToken: 'oauth' },
+      } as unknown as EmployeeAgentConfig),
+    ).toThrow('INVALID_CONFIG');
   });
 });

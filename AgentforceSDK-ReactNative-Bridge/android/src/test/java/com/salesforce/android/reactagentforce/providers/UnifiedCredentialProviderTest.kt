@@ -2,6 +2,7 @@ package com.salesforce.android.reactagentforce.providers
 
 import com.salesforce.android.agentforceservice.AgentforceAuthCredentials
 import com.salesforce.android.reactagentforce.models.EmployeeAgentModeConfig
+import com.salesforce.android.reactagentforce.models.EmployeeAuthentication
 import com.salesforce.android.reactagentforce.models.ServiceAgentModeConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -67,6 +68,40 @@ class UnifiedCredentialProviderTest {
 
         val creds = provider.getAuthCredentials() as AgentforceAuthCredentials.OAuth
         assertEquals("refreshed-token", creds.authToken)
+    }
+
+    @Test
+    fun `direct OAuth uses the supplied token`() {
+        val provider = UnifiedCredentialProvider()
+        provider.configure(employeeConfig.copy(
+            accessToken = "",
+            authentication = EmployeeAuthentication.DirectOAuth("direct-token")
+        ))
+
+        val credentials = provider.getAuthCredentials() as AgentforceAuthCredentials.OAuth
+        assertEquals("direct-token", credentials.authToken)
+    }
+
+    @Test
+    fun `reconfiguring a host token refreshes credentials without changing client identity`() {
+        for ((previousAuth, refreshedAuth) in listOf(
+            EmployeeAuthentication.DirectOAuth("old-token") to EmployeeAuthentication.DirectOAuth("new-token"),
+            EmployeeAuthentication.Legacy("old-token") to EmployeeAuthentication.Legacy("new-token"),
+        )) {
+            val provider = UnifiedCredentialProvider()
+            val previous = employeeConfig.copy(accessToken = "old-token", authentication = previousAuth)
+            val refreshed = employeeConfig.copy(accessToken = "new-token", authentication = refreshedAuth)
+            provider.configure(previous)
+            assertEquals("old-token", (provider.getAuthCredentials() as AgentforceAuthCredentials.OAuth).authToken)
+
+            // configure() updates the shared provider even when the module reuses its client.
+            assertTrue(previous.hasSameIdentityAs(refreshed))
+            provider.configure(refreshed)
+            val credentials = provider.getAuthCredentials() as AgentforceAuthCredentials.OAuth
+            assertEquals("new-token", credentials.authToken)
+            assertEquals("00DEmp", credentials.orgId)
+            assertEquals("005User", credentials.userId)
+        }
     }
 
     @Test

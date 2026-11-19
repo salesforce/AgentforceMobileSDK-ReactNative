@@ -1,19 +1,19 @@
 diff --git a/node_modules/react-native/sdks/hermes-engine/hermes-utils.rb b/node_modules/react-native/sdks/hermes-engine/hermes-utils.rb
-index c0c7613..eda20e9 100644
+index 5356dc1..3cb308e 100644
 --- a/node_modules/react-native/sdks/hermes-engine/hermes-utils.rb
 +++ b/node_modules/react-native/sdks/hermes-engine/hermes-utils.rb
 @@ -5,6 +5,7 @@
-
+ 
  require 'net/http'
  require 'rexml/document'
 +require 'fileutils'
-
+ 
  HERMES_GITHUB_URL = "https://github.com/facebook/hermes.git"
  ENV_BUILD_FROM_SOURCE = "RCT_BUILD_HERMES_FROM_SOURCE"
-@@ -217,14 +218,49 @@ def download_hermes_tarball(react_native_path, tarball_url, version, configurati
+@@ -221,14 +222,49 @@ def download_hermes_tarball(react_native_path, tarball_url, version, configurati
          "#{artifacts_dir()}/hermes-ios-#{version}.tar.gz" :
          "#{artifacts_dir()}/hermes-ios-#{version}-#{configuration}.tar.gz"
-
+ 
 -    unless File.exist?(destination_path)
 -      # Download to a temporary file first so we don't cache incomplete downloads.
 -      tmp_file = "#{artifacts_dir()}/hermes-ios.download"
@@ -54,7 +54,7 @@ index c0c7613..eda20e9 100644
 +
      return destination_path
  end
-
+ 
 +def valid_hermes_tarball?(tarball_path)
 +    return false unless File.file?(tarball_path) && File.size?(tarball_path)
 +
@@ -69,18 +69,18 @@ index f727aeb..4720eed 100644
 --- a/node_modules/react-native/sdks/hermes-engine/utils/replace_hermes_version.js
 +++ b/node_modules/react-native/sdks/hermes-engine/utils/replace_hermes_version.js
 @@ -9,7 +9,7 @@
-
+ 
  'use strict';
-
+ 
 -const {execSync} = require('child_process');
 +const {execFileSync} = require('child_process');
  const fs = require('fs');
  const yargs = require('yargs');
-
+ 
 @@ -55,13 +55,48 @@ function shouldReplaceHermesConfiguration(configuration) {
  function replaceHermesConfiguration(configuration, version, podsRoot) {
    const tarballURLPath = `${podsRoot}/hermes-engine-artifacts/hermes-ios-${version.toLowerCase()}-${configuration.toLowerCase()}.tar.gz`;
-
+ 
 +  validateHermesTarball(tarballURLPath);
 +
    const finalLocation = 'hermes-engine';
@@ -115,7 +115,7 @@ index f727aeb..4720eed 100644
 +    fs.rmSync(temporaryLocation, {force: true, recursive: true});
 +  }
 +}
-
+ 
 -  console.log('Extracting the tarball');
 -  execSync(`tar -xf ${tarballURLPath} -C ${finalLocation}`);
 +function validateHermesTarball(tarballPath) {
@@ -129,54 +129,33 @@ index f727aeb..4720eed 100644
 +    throw new Error(`Hermes archive is invalid: ${tarballPath}`);
 +  }
  }
-
+ 
  function updateLastBuildConfiguration(configuration) {
 diff --git a/node_modules/react-native/third-party-podspecs/boost.podspec b/node_modules/react-native/third-party-podspecs/boost.podspec
-index 8e924af..edd3a44 100644
+index e30a230..6f35121 100644
 --- a/node_modules/react-native/third-party-podspecs/boost.podspec
 +++ b/node_modules/react-native/third-party-podspecs/boost.podspec
-@@ -5,13 +5,24 @@
-
+@@ -6,6 +6,12 @@
+ boost_config = get_boost_config()
+ boost_git_url = boost_config[:git]
+ 
++# Keep the privacy resource from the pod source while using locally installed headers.
++brew_prefix = `brew --prefix boost 2>/dev/null`.strip
++if brew_prefix.empty? || !File.directory?("#{brew_prefix}/include/boost")
++  raise 'Boost headers not found. Run: brew install boost'
++end
++
  Pod::Spec.new do |spec|
    spec.name = 'boost'
-   spec.version = '1.83.0'
--  spec.license = { :type => 'Boost Software License', :file => "LICENSE_1_0.txt" }
-+  spec.license = { :type => 'Boost Software License' }
-   spec.homepage = 'http://www.boost.org'
--  spec.summary = 'Boost provides free peer-reviewed portable C++ source libraries.'
--  spec.authors = 'Rene Rivera'
--  spec.source = { :http => 'https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.bz2',
--                  :sha256 => '6478edfe2f3305127cffe8caf73ea0176c53769f4bf1585be237eb30798c3b8e' }
-+  spec.summary = 'Boost C++ libraries via Homebrew'
-+  spec.authors = 'Boost authors'
-+
-+  # Detect Homebrew boost installation
-+  brew_prefix = `brew --prefix boost 2>/dev/null`.strip
-+
-+  if brew_prefix.empty? || !File.directory?(brew_prefix)
-+    raise "\n\n❌ Boost not found via Homebrew!\n\nInstall with: brew install boost\n\n"
-+  end
-+
-+  # Dummy git source to satisfy CocoaPods validation
-+  spec.source = {
-+    :git => 'https://github.com/boostorg/boost.git',
-+    :tag => 'boost-1.83.0'
-+  }
-
-   # Pinning to the same version as React.podspec.
-   spec.platforms = min_supported_versions
-@@ -19,5 +30,13 @@ Pod::Spec.new do |spec|
-
+   spec.version = '1.84.0'
+@@ -24,6 +30,10 @@ Pod::Spec.new do |spec|
    spec.module_name = 'boost'
    spec.header_dir = 'boost'
--  spec.preserve_path = 'boost'
-+
-+  # Remove any git-cloned content and symlink to Homebrew boost headers
-+  # The prepare_command runs after the source is fetched
+   spec.preserve_path = 'boost'
 +  spec.prepare_command = <<-CMD
-+    rm -rf boost
-+    ln -sf #{brew_prefix}/include/boost boost
++    rm -rf boost/boost
++    ln -sf "#{brew_prefix}/include/boost" boost/boost
 +  CMD
-+
-+  spec.preserve_paths = 'boost'
- end
+   spec.header_mappings_dir = 'boost/boost'
+ 
+   spec.resource_bundles = {'boost_privacy' => 'boost/PrivacyInfo.xcprivacy'}
