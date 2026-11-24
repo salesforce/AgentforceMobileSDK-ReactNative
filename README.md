@@ -44,6 +44,7 @@ The Agentforce Mobile SDK empowers you to integrate Salesforce's trusted AI plat
 - **Cross-Platform** - Single codebase for both iOS and Android with native SDK integration
 - **Persistent Configuration** - Settings are saved and restored automatically
 - **Conversation Continuity** - Conversations persist across app launches
+- **Custom Voice Transcription (STT)** - Event-driven Speech-to-Text integration (e.g., OpenAI Whisper) with native audio recording and JS callbacks
 - **98% Code Reuse** - Maximum code sharing between apps
 
 ## 🏗️ Architecture

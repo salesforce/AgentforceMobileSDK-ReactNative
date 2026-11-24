@@ -50,4 +50,18 @@ export interface VoiceOptions {
    * Has no effect when the native SDK's closed-captions feature gate is off.
    */
   defaultClosedCaptionsEnabled?: boolean;
+
+  /**
+   * Whether custom voice transcription is enabled.
+   */
+  customVoiceTranscribe?: boolean;
+}
+
+/**
+ * Event payload emitted when audio recording completes.
+ */
+export interface SpeechAudioRecordedEvent {
+  audioUri: string;
+  filePath?: string;
+  requestId?: string;
 }

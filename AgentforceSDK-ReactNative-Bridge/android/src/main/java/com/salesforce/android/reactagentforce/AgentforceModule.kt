@@ -20,6 +20,8 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.ReadableType
+import com.facebook.react.bridge.WritableMap
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.salesforce.android.agentforcesdk.components.models.DefaultTopAppBarBuilder
 import com.salesforce.android.agentforcesdkimpl.AgentforceClient
 import com.salesforce.android.agentforcesdkimpl.configuration.AgentforceConfiguration
@@ -119,6 +121,11 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
 
     // Bridge UI delegate for forwarding SDK UI events to JS
     private val bridgeUIDelegate = BridgeUIDelegate(reactContext)
+
+    // Bridge speech transcriber for custom voice STT
+    private val bridgeSpeechTranscriber = BridgeSpeechTranscriber(reactContext).apply {
+        module = this@AgentforceModule
+    }
 
     // Behavioral options applied to the next voice session.
     // Populated from `voiceOptions` on the JS-side configuration map and
@@ -242,14 +249,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                 // registered below via setBridgeVoiceModule().
                 val flags = getFeatureFlagsFromConfigOrPrefs(config)
                 saveFeatureFlagsToPrefs(flags)
+                val customVoiceTranscribe = isCustomVoiceTranscribeEnabled(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
                     .enableVoice(flags.enableVoice)
-                    // Speech-to-text (dictation) is not working as intended on Android, so
-                    // keep it disabled regardless of the SDK default (which is true).
-                    .enableSpeechToText(false)
+                    .enableSpeechToText(customVoiceTranscribe)
                     .setupFlags(internalFlagsForSDK(config))
                     .build()
 
@@ -268,6 +274,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
+                if (customVoiceTranscribe) {
+                    agentforceConfigBuilder.setVoiceManaging(bridgeSpeechTranscriber)
+                }
                 theming?.let(agentforceConfigBuilder::setTheming)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
@@ -398,14 +407,13 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
             AgentforceClientHolder.clear()
             try {
                 // Create AgentforceConfiguration for FullConfig mode
+                val customVoiceTranscribe = isCustomVoiceTranscribeEnabled(config)
                 val featureFlagSettings = AgentforceFeatureFlagSettings.builder()
                     .enableMultiAgent(flags.enableMultiAgent)
                     .enableMultiModalInput(flags.enableMultiModalInput)
                     .enablePDFUpload(flags.enablePDFUpload)
                     .enableVoice(flags.enableVoice)
-                    // Speech-to-text (dictation) is not working as intended on Android, so
-                    // keep it disabled regardless of the SDK default (which is true).
-                    .enableSpeechToText(false)
+                    .enableSpeechToText(customVoiceTranscribe)
                     .setupFlags(internalFlagsForSDK(config))
                     .build()
 
@@ -451,6 +459,9 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
                     .setVoiceSessionOptions(voiceSessionOptions)
                 agentforceConfigBuilder.setPermission(permissions)
                 agentforceConfigBuilder.setBridgeVoiceModule()
+                if (customVoiceTranscribe) {
+                    agentforceConfigBuilder.setVoiceManaging(bridgeSpeechTranscriber)
+                }
                 theming?.let(agentforceConfigBuilder::setTheming)
                 // Always attach bridgeViewProvider so late registrations take effect.
                 // canHandle() returns false when the map is empty, matching no-provider behavior.
@@ -747,6 +758,25 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     fun setEmployeeAgentId(agentId: String, promise: Promise) {
         employeePrefs.edit().putString(KEY_EMPLOYEE_AGENT_ID, agentId ?: "").apply()
         promise.resolve(null)
+    }
+
+    /**
+     * Determines whether custom voice transcription (Whisper / 3rd-party STT) is enabled.
+     * Checks both top-level config and nested `voiceOptions`, tolerating typos.
+     */
+    private fun isCustomVoiceTranscribeEnabled(config: ReadableMap): Boolean {
+        if (config.hasKey("customVoiceTranscribe") && config.getType("customVoiceTranscribe") == ReadableType.Boolean) {
+            return config.getBoolean("customVoiceTranscribe")
+        }
+        if (config.hasKey("voiceOptions") && config.getType("voiceOptions") == ReadableType.Map) {
+            val voiceOpts = config.getMap("voiceOptions")
+            if (voiceOpts != null) {
+                if (voiceOpts.hasKey("customVoiceTranscribe") && voiceOpts.getType("customVoiceTranscribe") == ReadableType.Boolean) {
+                    return voiceOpts.getBoolean("customVoiceTranscribe")
+                }
+            }
+        }
+        return false
     }
 
     /**
@@ -1303,6 +1333,37 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
         // Required for RN event emitter
     }
 
+    // region Speech Transcriber
+
+    fun emitSpeechRecordingStarted() {
+        Log.d(TAG, "📤 emitSpeechRecordingStarted")
+        val params = Arguments.createMap()
+        reactApplicationContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onSpeechRecordingStarted", params)
+    }
+
+    fun emitSpeechAudioRecorded(params: WritableMap) {
+        Log.d(TAG, "📤 emitSpeechAudioRecorded: $params")
+        reactApplicationContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onSpeechAudioRecorded", params)
+    }
+
+    @ReactMethod
+    fun setSpeechTranscript(transcript: String, promise: Promise) {
+        Log.d(TAG, "📥 setSpeechTranscript (1-arg) called with: '$transcript'")
+        bridgeSpeechTranscriber.setTranscript(transcript, null, promise)
+    }
+
+    @ReactMethod
+    fun setSpeechTranscriptWithRequestId(transcript: String, requestId: String?, promise: Promise) {
+        Log.d(TAG, "📥 setSpeechTranscriptWithRequestId called with length: ${transcript.length}, requestId: $requestId")
+        bridgeSpeechTranscriber.setTranscript(transcript, requestId, promise)
+    }
+
+    // endregion
+
     // endregion
 
     // region Helper Methods
@@ -1346,6 +1407,7 @@ class AgentforceModule(reactContext: ReactApplicationContext) :
     override fun invalidate() {
         super.invalidate()
         scope.cancel()
+        bridgeSpeechTranscriber.stopVoiceInput()
         viewModel = null
     }
 

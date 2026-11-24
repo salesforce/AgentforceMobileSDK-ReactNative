@@ -45,6 +45,7 @@ export type {
   AgentSwitchEvent,
   ModifyUtteranceRequest,
   VoiceOptions,
+  SpeechAudioRecordedEvent,
   LaunchOptions,
   AgentforceAppearance,
   AgentforceThemeMode,

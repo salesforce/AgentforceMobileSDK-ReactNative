@@ -160,4 +160,15 @@ RCT_EXTERN_METHOD(provideModifiedUtterance:(NSString *)requestId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// MARK: - Speech Transcription
+
+RCT_EXTERN_METHOD(setSpeechTranscript:(NSString *)transcript
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(setSpeechTranscriptWithRequestId:(NSString *)transcript
+                  requestId:(NSString *)requestId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end

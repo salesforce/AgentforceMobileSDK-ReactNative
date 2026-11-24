@@ -360,3 +360,114 @@ integrated Voice behavior. `'dismissContainer'` dismisses the entire Agentforce
 presentation when Voice closes. Android retains its existing Voice close behavior.
 
 ---
+
+### Custom Voice Transcription (Speech-to-Text / Whisper)
+
+The Agentforce bridge supports custom voice recording and third-party Speech-to-Text (STT) services (such as OpenAI Whisper, Azure Speech, or Google Cloud Speech) via a clean, decoupled callback architecture.
+
+#### Background & Architecture
+- **iOS:** In recent releases of the Agentforce iOS SDK, the microphone button is hidden unless a custom `speechRecognizer` conforming to `AgentforceSpeechTranscriber` is provided.
+- **Android:** Built-in speech recognition can be unavailable or unreliable across diverse OEM Android devices. To display the microphone button and capture speech, a custom `AgentforceVoiceManaging` implementation and `enableSpeechToText(true)` are required.
+- **Decoupled Architecture:** Instead of hardcoding third-party API keys, networking, and multipart requests deep inside native Swift and Kotlin code:
+  1. **Native recording layer:** Uses native platform audio recording (`AVAudioRecorder` on iOS, `MediaRecorder` on Android) to capture speech locally into a compact `.m4a` file (AAC 16kHz mono) when the user taps the microphone button.
+  2. **React Native callback events:** Emits `onSpeechRecordingStarted` when recording begins and `onSpeechAudioRecorded({ audioUri, filePath, requestId })` when the user finishes speaking.
+  3. **React Native transcription:** The consuming React Native app receives the audio file URI, executes the transcription request (e.g. OpenAI Whisper API) using standard `fetch` / `FormData` in TypeScript/JavaScript, and passes the transcript back into Agentforce via `AgentforceService.setSpeechTranscript(transcript)`.
+  4. **Zero Impact on Default Behavior:** Governed by `customVoiceTranscribe: true`. When omitted or `false`, the SDK remains on 100% original code.
+
+#### Enabling Custom Voice Transcription
+
+Specify `customVoiceTranscribe: true` either at the top-level of `AgentforceService.configure({...})` or inside `voiceOptions: {...}`:
+
+```typescript
+await AgentforceService.configure({
+  type: 'employee',
+  instanceUrl: 'https://myorg.my.salesforce.com',
+  organizationId: '00Dxx0000001234',
+  userId: credentials.userId,
+  agentId: '0Xx...',
+  accessToken: credentials.accessToken,
+  customVoiceTranscribe: true, // <-- Activates custom voice transcriber
+});
+```
+
+#### Required App Permissions
+
+- **Android:**
+  Ensure `RECORD_AUDIO` permission is declared in your app's `android/app/src/main/AndroidManifest.xml` (the bridge's library manifest also merges it automatically):
+  ```xml
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  ```
+
+- **iOS:**
+  Ensure `NSMicrophoneUsageDescription` is present in your app's `ios/<App>/Info.plist`:
+  ```xml
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Need microphone access for Voice to Text functionality</string>
+  ```
+
+#### React Native Integration Example
+
+In your React Native component, subscribe to `onSpeechAudioRecorded` and inject the transcript via `AgentforceService.setSpeechTranscript`:
+
+```typescript
+import React, { useEffect } from 'react';
+import {
+  AgentforceService,
+  SpeechAudioRecordedEvent,
+} from '@salesforce/react-native-agentforce';
+
+export function AgentforceChatScreen() {
+  useEffect(() => {
+    // 1. Listen for audio recording completion event
+    const subscription = AgentforceService.onSpeechAudioRecorded(
+      async ({ audioUri, requestId }: SpeechAudioRecordedEvent) => {
+        try {
+          console.log('[Agentforce] Audio recording received:', audioUri);
+
+          // 2. Prepare FormData for Whisper API or any custom STT endpoint
+          const formData = new FormData();
+          formData.append('file', {
+            uri: audioUri,
+            type: 'audio/m4a',
+            name: 'agentforce_speech.m4a',
+          } as any);
+          formData.append('model', 'whisper-1');
+
+          const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${OPENAI_API_KEY}`,
+            },
+            body: formData,
+          });
+
+          const data = await response.json();
+          const transcript = data?.text || '';
+
+          // 3. Inject transcript directly into the Agentforce chat input prompt
+          await AgentforceService.setSpeechTranscript(transcript, requestId);
+          console.log('[Agentforce] Transcript populated successfully:', transcript);
+        } catch (error) {
+          console.error('[Agentforce] Speech transcription error:', error);
+          // Pass empty string on failure to release the transcribing UI state
+          await AgentforceService.setSpeechTranscript('', requestId);
+        }
+      },
+    );
+
+    // Optional: Listen for recording start to trigger UI feedback or haptics
+    const recordingStartedSub = AgentforceService.onSpeechRecordingStarted(() => {
+      console.log('[Agentforce] Speech recording started');
+    });
+
+    return () => {
+      subscription?.remove();
+      recordingStartedSub?.remove();
+    };
+  }, []);
+
+  return null;
+}
+```
+
+---
