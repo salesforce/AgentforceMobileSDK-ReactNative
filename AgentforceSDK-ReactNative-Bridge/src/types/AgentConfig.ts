@@ -69,6 +69,11 @@ interface BaseAgentConfig {
 
   /** Optional cross-platform visual customization for the native Agentforce UI. */
   appearance?: AgentforceAppearance;
+
+  /**
+   * Optional flag to enable custom voice transcription.
+   */
+  customVoiceTranscribe?: boolean;
 }
 
 /**

@@ -36,7 +36,7 @@ import type {
   AgentSwitchEvent,
   ModifyUtteranceRequest,
 } from '../types/UIDelegate';
-import type { VoiceOptions } from '../types/VoiceOptions';
+import type { VoiceOptions, SpeechAudioRecordedEvent } from '../types/VoiceOptions';
 import type { LaunchOptions } from '../types/LaunchOptions';
 
 const { AgentforceModule } = NativeModules;
@@ -56,7 +56,7 @@ export type {
   AgentSwitchEvent,
   ModifyUtteranceRequest,
 };
-export type { VoiceOptions };
+export type { VoiceOptions, SpeechAudioRecordedEvent };
 export type { LaunchOptions };
 
 /**
@@ -69,6 +69,8 @@ const EVENTS = {
   UTTERANCE_SENT: 'onUtteranceSent',
   AGENT_SWITCH: 'onAgentSwitch',
   MODIFY_UTTERANCE_REQUEST: 'onModifyUtteranceRequest',
+  SPEECH_RECORDING_STARTED: 'onSpeechRecordingStarted',
+  SPEECH_AUDIO_RECORDED: 'onSpeechAudioRecorded',
 } as const;
 
 /**
@@ -1368,6 +1370,50 @@ class AgentforceService {
       console.error('[AgentforceService] Failed to reset settings:', error);
       return false;
     }
+  }
+
+  /**
+   * Subscribe to speech recording started events.
+   *
+   * @param callback - Function called when speech recording begins
+   * @returns Subscription that can be removed
+   */
+  onSpeechRecordingStarted(callback: () => void): EmitterSubscription | null {
+    if (!this.eventEmitter) {
+      return null;
+    }
+    return this.eventEmitter.addListener(EVENTS.SPEECH_RECORDING_STARTED, callback);
+  }
+
+  /**
+   * Subscribe to speech audio recorded events.
+   *
+   * @param callback - Function called with audio file URI when recording stops
+   * @returns Subscription that can be removed
+   */
+  onSpeechAudioRecorded(
+    callback: (event: SpeechAudioRecordedEvent) => void,
+  ): EmitterSubscription | null {
+    if (!this.eventEmitter) {
+      return null;
+    }
+    return this.eventEmitter.addListener(EVENTS.SPEECH_AUDIO_RECORDED, callback);
+  }
+
+  /**
+   * Set the speech transcript to populate in the Agentforce prompt.
+   *
+   * @param transcript - Transcribed text string
+   * @param requestId - Optional request ID to tie to the recording session
+   */
+  async setSpeechTranscript(transcript: string, requestId?: string): Promise<void> {
+    if (typeof AgentforceModule?.setSpeechTranscript !== 'function') {
+      throw new Error('Custom STT native method is not linked');
+    }
+    if (requestId && typeof AgentforceModule?.setSpeechTranscriptWithRequestId === 'function') {
+      return AgentforceModule.setSpeechTranscriptWithRequestId(transcript, requestId);
+    }
+    return AgentforceModule.setSpeechTranscript(transcript, requestId ?? null);
   }
 
   /**
