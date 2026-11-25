@@ -56,6 +56,12 @@ class AgentforceModule: RCTEventEmitter {
     /// when no client is live.
     private var appliedVoiceOptions: VoiceOptionsSnapshot?
 
+    private lazy var bridgeSpeechTranscriber: BridgeSpeechTranscriber = {
+        let transcriber = BridgeSpeechTranscriber()
+        transcriber.module = self
+        return transcriber
+    }()
+
     /// Value snapshot of the voice options that actually affect client behavior,
     /// normalized the same way the SDK treats them: a missing, non-positive, or
     /// non-finite timeout collapses to `nil` ("never auto-end"), so cosmetic
@@ -152,6 +158,8 @@ class AgentforceModule: RCTEventEmitter {
             "onAgentSwitch",
             "onAgentResponse",
             "onModifyUtteranceRequest",
+            "onSpeechRecordingStarted",
+            "onSpeechAudioRecorded",
         ]
     }
 
@@ -263,6 +271,14 @@ class AgentforceModule: RCTEventEmitter {
         return (voiceOpts["defaultClosedCaptionsEnabled"] as? NSNumber)?.boolValue ?? false
     }
 
+    private static func isCustomVoiceTranscribeEnabled(from configDict: [String: Any]) -> Bool {
+        if let val = configDict["customVoiceTranscribe"] as? Bool { return val }
+        if let voiceOpts = configDict["voiceOptions"] as? [String: Any] {
+            if let val = voiceOpts["customVoiceTranscribe"] as? Bool { return val }
+        }
+        return false
+    }
+
     // MARK: - Service Agent Configuration
 
     @MainActor
@@ -325,6 +341,7 @@ class AgentforceModule: RCTEventEmitter {
         let flags = getFeatureFlagsFromConfigOrUserDefaults(configDict)
         let defaultClosedCaptionsEnabled = Self.defaultClosedCaptionsEnabled(from: configDict)
         saveFeatureFlagsToUserDefaults(flags)
+        let customVoiceTranscribe = Self.isCustomVoiceTranscribeEnabled(from: configDict)
         let featureFlagSettings = AgentforceFeatureFlagSettings(
             enableMultiModalInput: flags.enableMultiModalInput,
             enablePDFFileUpload: flags.enablePDFUpload,
@@ -348,6 +365,14 @@ class AgentforceModule: RCTEventEmitter {
         .withLogger(bridgeLogger)
         .withNavigation(bridgeNavigation)
         .withVoiceSessionOptions(voiceSessionOptions)
+
+        if customVoiceTranscribe {
+            serviceConfig = serviceConfig.withOverrides(
+                AgentforceConfigurationOverrides(
+                    speechRecognizer: bridgeSpeechTranscriber
+                )
+            )
+        }
 
         if let mode = try AppearanceConfiguration.themeMode(from: configDict) {
             if AppearanceConfiguration.hasOverrides(from: configDict) {
@@ -470,6 +495,8 @@ class AgentforceModule: RCTEventEmitter {
         let network = createAuthenticatedNetwork()
         let dataProvider = createDataProvider(network: network)
 
+        let customVoiceTranscribe = Self.isCustomVoiceTranscribeEnabled(from: configDict)
+
         var fullConfiguration = AgentforceConfiguration(
             user: user,
             authProvider: credentialProvider,
@@ -480,6 +507,7 @@ class AgentforceModule: RCTEventEmitter {
             salesforceNetwork: network,
             salesforceNavigation: bridgeNavigation,
             salesforceLogger: bridgeLogger,
+            speechRecognizer: customVoiceTranscribe ? bridgeSpeechTranscriber : nil,
             voiceSessionOptions: voiceSessionOptions
         )
 
@@ -1190,6 +1218,47 @@ class AgentforceModule: RCTEventEmitter {
     func emitAgentResponseEvent(_ payload: [String: Any]) {
         guard listenerLock.withLock({ _hasListeners }) else { return }
         sendEvent(withName: "onAgentResponse", body: payload)
+    }
+
+    func emitSpeechRecordingStarted() {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onSpeechRecordingStarted", body: [:])
+    }
+
+    func emitSpeechAudioRecorded(_ payload: [String: Any]) {
+        guard listenerLock.withLock({ _hasListeners }) else { return }
+        sendEvent(withName: "onSpeechAudioRecorded", body: payload)
+    }
+
+    @objc(setSpeechTranscript:resolver:rejecter:)
+    func setSpeechTranscript(
+        _ transcript: String,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            if bridgeSpeechTranscriber.setTranscript(transcript, requestId: nil) {
+                resolve(nil)
+            } else {
+                reject("STT_DELIVERY_FAILED", "Speech transcriber delegate is absent or transcription request is inactive", nil)
+            }
+        }
+    }
+
+    @objc(setSpeechTranscriptWithRequestId:requestId:resolver:rejecter:)
+    func setSpeechTranscriptWithRequestId(
+        _ transcript: String,
+        requestId: String?,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        Task { @MainActor in
+            if bridgeSpeechTranscriber.setTranscript(transcript, requestId: requestId) {
+                resolve(nil)
+            } else {
+                reject("STT_DELIVERY_FAILED", "Speech transcriber delegate is absent or requestId is stale", nil)
+            }
+        }
     }
 
     // MARK: - View Provider

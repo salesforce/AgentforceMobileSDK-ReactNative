@@ -43,7 +43,7 @@ export type { SplashScreenDelegate, SplashScreenComponentProps } from './SplashS
 export type { HiddenPreChatFields } from './HiddenPreChatFields';
 
 // Voice configuration types
-export type { VoiceOptions } from './VoiceOptions';
+export type { VoiceOptions, SpeechAudioRecordedEvent } from './VoiceOptions';
 
 // Conversation launch option types
 export type { LaunchOptions } from './LaunchOptions';
